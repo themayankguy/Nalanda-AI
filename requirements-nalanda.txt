@@ -1,0 +1,6 @@
+paddlepaddle==3.2.2
+paddleocr[doc-parser]
+PyMuPDF
+pillow
+beautifulsoup4
+lxml

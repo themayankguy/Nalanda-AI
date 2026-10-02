@@ -1,0 +1,213 @@
+{
+  "filename": "UNIT 5 BDA.pdf",
+  "file_type": "pdf",
+  "file_sha256": "90067090b50bbab9b04de5d4be85bfe927c164959d31eab545429c49256e7526",
+  "total_pages": 16,
+  "pages": [
+    {
+      "page": 1,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2611,
+      "processing_time": 0.018046874999527063,
+      "text": "1. Need for Visualization\nWhat is Data Visualization?\n- Data Visualization is the process of representing data in a visual form such as charts, graphs,\nmaps, and diagrams so that patterns, trends, relationships, and important information can be\nunderstood easily.\n- In Big Data, the amount of data is very large and it may be difficult to understand it by looking at\nrows and columns of raw data. Visualization converts this large and complex data into an easy-to-\nunderstand visual format.\nExample: Instead of analysing thousands of sales records in a table, a line chart can show how sales\nchanged month by month.\n\nWhy is Visualization Needed in Big Data?\nBig Data contains a large volume of information, often stored across multiple servers. Looking directly at\nsuch data in tabular form makes it difficult to identify useful information. Visualization helps users\nunderstand this data quickly. The main needs for visualization are:\n1. Easy understanding of large data\nVisualization represents large datasets using graphs and charts, making the information easier to\nunderstand than raw tables.\n2. Identifying patterns and trends\nGraphs help users quickly identify increasing, decreasing, or changing patterns in data. For example, a line\nchart can show changes in sales over time.\n3. Finding relationships\nVisualization can help identify relationships between different variables. For example, a scatter plot can\nbe used to observe the relationship between two numerical variables.\n4. Faster decision-making\nBig Data analytics often produces results for managers and decision-makers. Visual representations allow\nthem to understand important insights quickly and support better decision-making.\n5. Better communication of information\nCharts, graphs, and dashboards can communicate complex information to people who may not have\ntechnical knowledge.\n6. Finding important information in one place\nVisualization tools can create dashboards and reports that combine multiple insights in a single place.\nThese can also be shared across an organization.\n7. Handling complex Big Data\nBig Data may contain different types of information and may be too large to fit on a single screen.\nVisualization tools help users make sense of such large and complex datasets.\n\nImportance of Visualization in Big Data\n- The importance of visualization can be summarized as:\nRaw Big Data → Visualization → Patterns/Insights → Decision Making\n- For example: Large sales dataset → Bar/Line Chart → Identify sales trend → Business decision\n- Thus, visualization acts as a bridge between large amounts of data and meaningful insights.",
+      "tables": []
+    },
+    {
+      "page": 2,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2473,
+      "processing_time": 0.002176583000618848,
+      "text": "Applications of Big Data Visualization\nBig Data visualization can be used in many industries, such as:\n- Airlines – analysing flight performance and customer feedback.\n- IoT – monitoring sensor data.\n- Energy – analysing energy consumption.\n- Media and Entertainment – analysing audience behaviour.\n- Automotive – analysing vehicle-related data.\n- Sports – analysing player and team performance.\n- Manufacturing – monitoring production and operational data.\n\n2. Creating Visualization\nWhat is Creating Visualization?\n- Creating visualization is the process of converting raw or processed data into a visual\nrepresentation such as charts, graphs, maps, or dashboards so that useful information can be\nunderstood easily.\n- The type of visualization should be selected according to the purpose of analysis and the type of\ndata.\n- The visualization can range from simple charts such as line charts, histograms and pie charts to\nmore complex visualizations such as scatter plots, heat maps, treemaps and 3-D graphs.\n\nSteps for Creating a Visualization\n1. Understand the Data\nFirst, understand what type of data is available and what information it contains.\nFor example, data may contain:\n- Numerical values\n- Categories\n- Time-based information\n- Geographic information\n- Relationships between different variables\n2. Define the Purpose\nBefore creating a visualization, determine what you want to find or communicate from the data.\nFor example:\n- To show changes over time → Line chart\n- To compare different categories → Bar chart\n- To show proportions → Pie chart\n- To show frequency distribution → Histogram\n- To identify relationships between variables → Scatter plot\n- To show intensity or density → Heat map\n3. Select an Appropriate Visualization Technique\n- Choose the chart or graph that best represents the required information.\n- For example, if we want to analyse monthly sales, a line chart can be used because it helps\nidentify trends over time. The line charts as useful for identifying trends and relationships\nbetween variables.\n4. Prepare and Process the Data\n- Big Data may contain a very large number of records. Therefore, the data may need to be filtered,\naggregated, or summarized before visualization.\n- For example, instead of displaying millions of individual sales records, we can calculate total sales\nfor each month and visualize those values.\n- The aggregation and summarization techniques are used for reducing the amount of data shown\nat one time.",
+      "tables": []
+    },
+    {
+      "page": 3,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 1926,
+      "processing_time": 0.0018973329997606925,
+      "text": "5. Create the Visualization\nAfter selecting the technique and preparing the data, the appropriate chart, graph, map, or dashboard is\ncreated.\nExamples include:\n- Line charts\n- Bar charts\n- Pie charts\n- Histograms\n- Heat maps\n- Scatter plots\n- Dashboards\n6. Add Interactivity if Required\nFor Big Data, interactive visualizations can be useful because users may need to explore different parts of\nthe dataset.\nCommon interactive features include:\n- Filtering – selecting only relevant data.\n- Drill-down – moving from summary information to more detailed information.\n- Slicing – viewing selected categories or ranges.\n- Dynamic updates – updating the visualization when new data becomes available.\n7. Analyse and Interpret the Visualization\nFinally, the visualization is used to identify:\n- Patterns\n- Trends\n- Relationships\n- Differences\n- Anomalies\n- Important insights\nThe purpose is not simply to create a beautiful graph, but to understand the information represented\nby the data.\n\nExample : Suppose a company has a large dataset containing monthly sales of different products.\n1. Collect the sales data.\n2. Group the data by month and product.\n3. Calculate total sales.\n4. Select a line chart to observe sales trends.\n5. Add filters for different products.\n6. Analyse which products have increasing or decreasing sales.\nThus, the visualization makes the large sales dataset easier to analyse.\n\nTools Used for Creating Visualizations\nThe PPT mentions several tools and platforms:\n- Tableau – interactive dashboards and visualization.\n- Power BI – interactive reporting and integration with different data sources.\n- Apache Superset – open-source data visualization and exploration.\n- Kibana – visualization of Elasticsearch data.\n- Matplotlib and Seaborn – Python visualization libraries.\n- Plotly – interactive plots and dashboards.\n- D3.js – highly customizable web-based visualizations.\n- Three.js – 3-D visualizations.",
+      "tables": []
+    },
+    {
+      "page": 4,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2392,
+      "processing_time": 0.0021824160003234283,
+      "text": "3. Existing Visualization Techniques\nBig Data can be represented using different visualization techniques depending on the type of data and\npurpose of analysis. Common techniques include line charts, histograms, bar charts, pie charts, heat maps,\nscatter plots, and box plots.\n\n3.1 Line Chart\nA line chart represents data points using points connected by lines. It is mainly used to show changes or\ntrends over time and relationships between two variables.\nExample: Monthly sales of a company can be represented using a line chart to see whether sales are\nincreasing or decreasing.\nUsed for:\n- Time-based data\n- Identifying trends\n- Comparing changes over time\n3.2 Histogram\n- A histogram represents the frequency distribution of numerical data. It divides data into different\nranges or intervals and shows how many data points fall within each range.\n- It helps understand the distribution of data. The distribution can be symmetric, right-skewed, or\nleft-skewed.\nExample: A histogram can show how many students fall into different age ranges.\nUsed for:\n- Frequency distribution\n- Understanding data distribution\n- Identifying the concentration of values\n3.3 Bar Chart\nA bar chart represents categorical data using rectangular bars. The length or height of each bar represents\nthe value or quantity of that category. Bars can be vertical or horizontal.\nExample: A bar chart can show the number of people who prefer different types of movies.\nUsed for:\n- Comparing categories\n- Comparing quantities\n- Showing rankings or differences between groups\n3.4 Pie Chart\nA pie chart represents data as a circle divided into different slices. Each slice represents a proportion of\nthe total data, and its size depends on the relative value of that category.\nExample: A company's total expenditure can be divided into categories such as salaries, marketing,\ninfrastructure, and transportation.\nUsed for:\n- Showing proportions\n- Showing percentage distribution\n- Comparing parts of a whole\n3.5 Heat Map\nA heat map uses colours to represent values or ranges of values in a two-dimensional representation.\nDifferent colours or colour intensities help users quickly identify high and low values.\nExample: A heat map can show temperature variations across different cities and months.\nUsed for:\n- Showing intensity\n- Finding high and low values\n- Identifying patterns in large datasets\n- Showing data density",
+      "tables": []
+    },
+    {
+      "page": 5,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2187,
+      "processing_time": 0.0019974999995611142,
+      "text": "3.6 Scatter Plot\n- A scatter plot uses individual dots or points to represent numerical values. The position of each\npoint on the X-axis and Y-axis represents the values of two variables.\n- It is useful for observing whether there is a relationship or pattern between two numerical\nvariables.\nExample: A scatter plot can show the relationship between a person's height and weight.\nUsed for:\n- Relationship between two variables\n- Identifying patterns\n- Identifying clusters or unusual observations\n3.7 Box Plot\nA box plot is used to represent the distribution of numerical data using important statistical values. It\nprovides a compact way to understand the spread and central tendency of the data.\nIt can help in understanding values such as:\n- Median\n- Lower and upper quartiles\n- Minimum and maximum values\n- Spread of data\n- Possible outliers\nThe PPT includes box plot as one of the visualization types and also relates it to the relationship between\nmedian, mean and mode.\nExample: A box plot can be used to compare the distribution of salaries among different departments.\n\nRelationship between Mean, Median and Mode\nMean, Median and Mode are three important measures used to describe the central tendency of a\ndataset.\n- Mean: The average value of all observations.\n- Median: The middle value when the data is arranged in ascending or descending order.\n- Mode: The value that occurs most frequently.\nTheir relationship depends on the shape or distribution of the data.\n1. Symmetrical Distribution\nWhen the data is symmetrically distributed: Mean = Median = Mode\nThe three measures are located approximately at the centre of the distribution.\n2. Positively Skewed Distribution\nWhen the distribution is right-skewed, the larger values pull the mean towards the right.\nTherefore: Mode < Median < Mean\n3. Negatively Skewed Distribution\nWhen the distribution is left-skewed, the smaller values pull the mean towards the left.\nTherefore: Mean < Median < Mode\n\nDistribution\nRelationship\nSymmetrical\nMean = Median = Mode\nRight/Positive Skew\nMode < Median < Mean\nLeft/Negative Skew\nMean < Median < Mode\nExam point: This relationship helps us understand the shape and skewness of a dataset.",
+      "tables": [
+        {
+          "table_index": 1,
+          "source": "PyMuPDF",
+          "data": [
+            [
+              "Distribution",
+              "Relationship"
+            ],
+            [
+              "Symmetrical",
+              "Mean = Median = Mode"
+            ],
+            [
+              "Right/Positive Skew",
+              "Mode < Median < Mean"
+            ],
+            [
+              "Left/Negative Skew",
+              "Mean < Median < Mode"
+            ]
+          ],
+          "markdown": "| Distribution | Relationship |\n| --- | --- |\n| Symmetrical | Mean = Median = Mode |\n| Right/Positive Skew | Mode < Median < Mean |\n| Left/Negative Skew | Mean < Median < Mode |",
+          "html": "<table><tr><th>Distribution</th><th>Relationship</th></tr><tr><td>Symmetrical</td><td>Mean = Median = Mode</td></tr><tr><td>Right/Positive Skew</td><td>Mode &lt; Median &lt; Mean</td></tr><tr><td>Left/Negative Skew</td><td>Mean &lt; Median &lt; Mode</td></tr></table>",
+          "bbox": [
+            73.2959976196289,
+            623.6599934895834,
+            396.83799438476564,
+            692.1000162760416
+          ],
+          "page": 5
+        }
+      ]
+    },
+    {
+      "page": 6,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2759,
+      "processing_time": 0.002425874999971711,
+      "text": "4. Big Data Visualization Challenges\nBig Data visualization is difficult because Big Data contains very large volumes of complex and\ncontinuously generated data. Traditional visualization methods may not be sufficient to handle such\ndatasets effectively.\n4.1 Data Volume\nChallenge: Big Data contains a huge number of records. Visualizing all the data at once can cause\nperformance problems and make it difficult to identify meaningful information.\nTechnique/Solution: Use:\n- Sampling – represent the dataset using a suitable subset.\n- Aggregation – summarize data using operations such as sum or average.\n- Filtering – display only relevant data.\n4.2 Data Variety\nChallenge: Big Data can come in different formats such as structured, semi-structured, and unstructured\ndata and may come from multiple sources. Combining and visualizing these different types of data can be\ndifficult.\nTechnique/Solution: Use data preprocessing, normalization, and integration to make data from different\nsources suitable for visualization.\n4.3 Data Velocity\nChallenge: Big Data can be generated at a very high speed. In real-time applications, data must be\nprocessed and visualized quickly.\nTechnique/Solution: Use stream processing and real-time analytics platforms to process and visualize\ncontinuously generated data.\nExample: Apache Kafka and Apache Flink can be used for real-time data processing.\n4.4 Data Complexity\nChallenge: Big Data may contain multiple dimensions, variables, and relationships, making it difficult to\nrepresent everything clearly in a single visualization.\nTechnique/Solution:\nUse:\n- Dimensionality reduction, such as PCA.\n- Multi-dimensional charts.\n- Interactive dashboards.\nThese techniques simplify complex datasets while retaining important information.\n4.5 Perceptual Scalability\nChallenge: Human users cannot easily understand all relevant information when a visualization contains\na very large amount of data. Even the size of the screen can limit how much information can be displayed\nat once.\nSolution:\nUse techniques such as:\n- Data aggregation\n- Filtering\n- Sampling\n- Data reduction\nThis reduces visual overload and makes the visualization easier to understand.\n4.6 Real-Time Scalability\nChallenge: Users often expect information to be available in real time, but processing and visualizing\nlarge datasets takes time. Therefore, providing real-time visualization for Big Data can be difficult.\nSolution: Use real-time data streaming and processing technologies to handle continuously generated\ndata.\n4.7 Interactive Scalability\nChallenge: Interactive visualization allows users to explore datasets, but as the size of the dataset\nincreases, the visualization may take longer to respond. In extreme cases, the system may freeze or crash.",
+      "tables": []
+    },
+    {
+      "page": 7,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2018,
+      "processing_time": 0.002562040999691817,
+      "text": "Solution: Use scalable visualization frameworks, filtering, aggregation, and efficient data processing to\nimprove response time.\n4.8 Data Quality\nChallenge: Incomplete, incorrect, or inaccurate data can produce misleading visualizations and incorrect\nconclusions.\nSolution:\nPerform:\n- Data cleaning\n- Data validation\n- Data preprocessing\nVisualization can also be used to identify anomalies or unusual data values.\n4.9 User Experience\nChallenge: A visualization should be understandable to users with different levels of technical\nknowledge. A complicated or poorly designed visualization can make interpretation difficult.\nSolution:\nFollow user-centered design principles and create visualizations that are:\n- Clear\n- Simple\n- Concise\n- Easy to interpret\nContext and guidance can also be provided to help users understand the information.\n4.10 Scalability\nChallenge: Visualization tools must continue to work efficiently even when the size of the dataset\nincreases significantly.\nSolution:\nUse:\n- Scalable visualization frameworks\n- Distributed computing resources\n- Tools such as D3.js and Apache Superset\nThese can support visualization of large-scale datasets.\n\n5. Techniques for Visualizing Big Data\n- Big Data contains a very large amount of information, so traditional charts alone may not always\nbe sufficient.\n- Big Data visualization techniques help reduce complexity, represent large datasets effectively, and\nmake important patterns and insights easier to identify.\n- The PPT lists several techniques for effective Big Data visualization.\n5.1 Aggregation and Summarization\n- Aggregation and summarization reduce the amount of information displayed by combining large\nnumbers of data values into meaningful summaries.\n- For example, instead of displaying the sales of every transaction, we can show the total or average\nsales for each month.\nCommon operations include:\n- Grouping data\n- Calculating averages\n- Calculating sums\n- Summarizing data\nThis makes large datasets easier to visualize and understand.",
+      "tables": []
+    },
+    {
+      "page": 8,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2377,
+      "processing_time": 0.002380249999987427,
+      "text": "5.2 Heat Maps and Geographic Maps\n1. Heat Maps - represents values using different colours or colour intensities. It is useful for showing data\ndensity or intensity.\nExample: A heat map can show areas with high and low website activity.\n2. Geographic Maps - used when the data is related to locations or geographical areas.\nExample: A company can use a map to visualize the number of customers in different cities.\n\n5.3 Interactive Dashboards\nAn interactive dashboard combines different visualizations into a single interface and allows users to\nexplore the data.\nUsers can:\n- Apply filters\n- Select categories\n- Explore different parts of the data\n- View updated information\nTools such as Tableau, Power BI, and Looker can be used to create interactive dashboards.\nExample: A business dashboard can display sales, profit, customer count, and regional performance\ntogether.\n\n5.4 Hierarchical and Network Visualizations\nThese techniques are useful for representing relationships, structures, and connections within data.\n1. Hierarchical Visualization - It represents data arranged in different levels or categories.\nExamples:\n- Treemap\n- Sunburst diagram\nA treemap represents hierarchical data using nested rectangles.\nExample: A company's organizational structure can be represented hierarchically.\n2. Network Visualization - A network graph represents relationships or connections between\ndifferent entities.\nExample: A social network can represent people as nodes and their connections as links.\n\n5.5 Advanced Graphing Techniques\nAdvanced graphing techniques are used when the dataset is complex and simple charts are not sufficient.\nThe PPT mentions:\n- 3D visualizations\n- Parallel coordinates\n- Multi-dimensional scaling\nThese techniques help represent complex or multi-dimensional datasets visually.\nExample: A 3D visualization can represent three dimensions of data simultaneously.\n\n5.6 Real-Time Data Streaming\n- In some applications, data is generated continuously and needs to be visualized as it arrives.\n- Real-time data streaming allows continuously generated data to be processed and visualized with\nminimum delay.\nTechnologies mentioned in the PPT include:\n- Apache Kafka\n- Apache Flink\nThese technologies support real-time data streaming and processing.\nExample: An IoT system can continuously receive sensor data and display the current readings on a\ndashboard.",
+      "tables": []
+    },
+    {
+      "page": 9,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2252,
+      "processing_time": 0.001944584000739269,
+      "text": "5.7 Custom Visualization Solutions\nSometimes standard visualization tools may not provide exactly what is required. In such cases, custom\nvisualizations can be developed according to specific requirements.\nThe PPT mentions:\n- D3.js – used to create highly customizable and interactive web-based visualizations.\n- Three.js – used for 3D visualizations.\nExample:\nA company may develop a customized interactive web visualization for a specialized dataset instead of\nusing a standard chart.\n\n6. Key Techniques for Visualizing Big Data\n- The key techniques that make Big Data visualization more manageable, interactive, and useful for\nanalysis.\n- These techniques include data aggregation and filtering, interactive visualization, advanced chart\ntypes, geographic visualization, temporal analysis, dimensionality reduction, and custom\nvisualization.\n\n6.1 Data Aggregation and Filtering\nData Aggregation - Data aggregation means combining a large number of data values into a smaller and\nmeaningful summary.\n- For example, instead of displaying sales for every individual transaction, we can calculate the\ntotal sales for each month.\nCommon aggregation operations include:\n- Sum\n- Average\n- Count\n- Minimum\n- Maximum\nAggregation helps reduce the amount of data that needs to be displayed and improves visualization\nperformance.\nData Filtering - Data filtering means displaying only the relevant portion of a dataset.\n- For example, from a dataset containing sales from all countries, we can filter and display only\nsales from India.\nFiltering helps:\n- Reduce information overload.\n- Focus on relevant data.\n- Make visualization easier to understand.\n\n6.2 Interactive Visualizations\nInteractive visualization allows users to explore the data instead of only viewing a static chart.\nThe PPT mentions three important interactive features:\na. Drill-Down\nDrill-down allows users to move from a high-level summary to more detailed information.\nExample: Country → State → City → Individual store\nSo, the user can start with overall sales and click further to see detailed sales for a particular region.\nb. Filtering and Slicing\nUsers can select a particular category, range, or subset of data to view.\nExample: A sales dashboard can be filtered by:\n- Year\n- Product",
+      "tables": []
+    },
+    {
+      "page": 10,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2556,
+      "processing_time": 0.002276749999509775,
+      "text": "- Region\nThis allows users to focus only on the information they need.\nc. Dynamic Updates - Dynamic updates allow the visualization to change when new data becomes\navailable.\nThis is especially useful for real-time or continuously changing data.\n\n6.3 Advanced Chart Types\nAdvanced charts are useful for representing complex Big Data that may not be easily represented using\nbasic charts.\na. Heat Map - A heat map uses colour gradients to represent the density or intensity of data.\nExample: Showing areas with high and low customer activity.\nb. Tree Map - A treemap represents hierarchical data using nested rectangles.\nThe size of the rectangles can represent the value of a particular category.\nExample: Representing a company's sales by country → state → city.\nc. Network Graph\nA network graph represents relationships and connections between different entities.\nFor example, in a social network:\n- People can be represented as nodes.\n- Connections between people can be represented as links.\nd. Bubble Chart\nA bubble chart represents three dimensions of data using position and size.\nFor example:\n- X-axis → Sales\n- Y-axis → Profit\n- Bubble size → Number of customers\nThus, a bubble chart can represent multiple dimensions in one visualization.\n\n6.4 Geographic and Spatial Visualization\nGeographic and spatial visualization is used when data is associated with locations or geographical areas.\n1. Maps - Maps can be used to represent location-based data and spatial patterns.\nExample: A company can display the distribution of customers across different cities on a map.\n2. Geospatial Analysis - Geospatial analysis combines data with Geographic Information Systems\n(GIS) to perform more advanced analysis of geographical information.\n\n6.5 Temporal Analysis - Temporal analysis means analysing how data changes over time.\na. Time-Series Charts - Time-series charts show changes in data over a period of time.\nCommon examples include:\n- Line charts\n- Area charts\nExample: Monthly sales from January to December can be shown using a time-series chart.\nb. Animations - Animated charts can be used to show changes and trends dynamically over time.\nFor example, population changes across different years can be represented using animation.\n\n6.6 Dimensionality Reduction\n- Big Data can contain a large number of variables or dimensions. Visualizing all these dimensions\ndirectly can be difficult.\n- Dimensionality reduction reduces the number of dimensions while trying to retain important\ninformation from the original data.\nThe PPT mentions two techniques:",
+      "tables": []
+    },
+    {
+      "page": 11,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2712,
+      "processing_time": 0.002411584000583389,
+      "text": "a. Principal Component Analysis (PCA) - PCA reduces the number of dimensions in a dataset while\npreserving as much of its important variation as possible. It is useful when a dataset contains many\nvariables and we want to represent the data using fewer dimensions.\nExample: A dataset with 10 variables can potentially be transformed into a smaller number of principal\ncomponents for easier visualization.\nb. t-SNE\nt-Distributed Stochastic Neighbor Embedding (t-SNE) is used to visualize high-dimensional data in lower\ndimensions.\nIt is often useful for identifying:\n- Clusters\n- Patterns\n- Groups of similar data points\n\n6.7 Custom Visualizations - Sometimes standard charts and visualization tools are not sufficient for a\nspecific requirement. In such cases, custom visualizations can be created.\n- D3.js - D3.js is a JavaScript library used to create highly customizable and interactive web-based\nvisualizations.\n- Three.js - Three.js can be used to create 3D visualizations, allowing complex data to be\nrepresented in an immersive visual form.\n\n7. Visual Analysis of Big Data\n7.1 Meaning of Visual Analysis\n- Visual Analysis of Big Data is the process of using charts, graphs, maps, dashboards, and\ninteractive visualizations to explore, understand, and interpret large and complex datasets.\n- Instead of examining thousands or millions of individual records, visual analysis represents the\ndata graphically so that patterns, trends, relationships, and unusual values can be identified more\neasily.\nExample: A company can use a dashboard to visualize sales data and identify which products have high\nsales, which regions are performing poorly, and how sales change over time.\n\n7.2 Main Purposes of Visual Analysis\nVisual analysis mainly helps in three types of analysis:\n1. Exploratory Analysis\n- Exploratory analysis is used to explore the data and discover patterns, trends, relationships, and\nanomalies.\n- It is generally performed before making final conclusions.\nExample: A retailer uses a scatter plot to find whether advertising expenditure is related to sales.\nMain purpose: To find “What is happening in the data?”\n\n2. Explanatory Analysis\n- Explanatory analysis is used to present and communicate the important findings from data to\nother people such as managers, customers, or decision-makers.\n- The visualization should be clear and easy to understand.\nExample: A bar chart showing the yearly revenue of a company can be presented to management.\nMain purpose: To explain “What did we find?”\n\n3. Diagnostic Analysis\n- Diagnostic analysis is used to identify the reasons or causes behind a particular pattern, problem,\nor result.\n- It goes deeper into the data to understand why something happened.",
+      "tables": []
+    },
+    {
+      "page": 12,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2010,
+      "processing_time": 0.001937500000167347,
+      "text": "Example: If sales suddenly decrease, diagnostic analysis can help determine whether the reason was low\ndemand, increased price, supply problems, or poor customer service.\nMain purpose: To understand “Why did it happen?”\n\n7.3 Principles of Visual Analysis\nEffective visual analysis should follow four important principles.\n1. Clarity\nThe visualization should be simple, clear, and easy to understand.\n- Avoid unnecessary elements.\n- Use proper labels and titles.\n- Choose suitable charts.\nExample: A simple bar chart is better than a complicated graph when comparing product sales.\n2. Relevance\n- The visualization should show information that is relevant to the objective of the analysis.\n- Unnecessary data should be avoided.\n- Example: If the objective is to compare sales by region, the visualization should focus on regional\nsales.\n3. Accuracy\n- The visualization must represent the data correctly and without distortion.\n- Incorrect scales, misleading charts, or poor-quality data can result in wrong conclusions.\n- Example: Using an inappropriate scale in a bar chart may make a small difference look very\nlarge.\n4. Interactivity\nInteractive visualization allows users to explore the data dynamically.\nUsers can:\n- Filter data\n- Zoom in or out\n- Drill down into details\n- Select specific categories\n- Change time periods\nExample: In a sales dashboard, a manager can select a particular year and region to view only that data.\n\n7.4 Data Visualization Types Used in Visual Analysis\nDifferent types of charts are used depending on the type of information that needs to be analyzed.\n1. Line Chart - A line chart shows how values change over time.\nUsed for:\n- Trends\n- Time-series data\n- Growth or decline\nExample: Monthly sales of a company.\n\n2. Bar Chart - A bar chart compares values between different categories.\nUsed for:\n- Category comparison\n- Ranking\n- Frequency comparison\nExample: Sales of different products.\n\n3. Pie Chart - A pie chart represents parts of a whole using different slices.\nUsed for:",
+      "tables": []
+    },
+    {
+      "page": 13,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 1733,
+      "processing_time": 0.0017672499998298008,
+      "text": "- Proportions\n- Percentages\n- Composition\nExample: Percentage of customers using different payment methods.\n\n4. Histogram - A histogram represents the frequency distribution of numerical data by grouping values\ninto ranges.\nUsed for:\n- Distribution\n- Frequency\n- Understanding data shape\nExample: Distribution of students' marks.\n\n5. Scatter Plot - A scatter plot represents the relationship between two numerical variables.\nUsed for:\n- Correlation\n- Relationships\n- Outlier detection\nExample: Relationship between advertising expenditure and sales.\n\n6. Heat Map - A heat map uses colors to represent the magnitude of values.\nUsed for:\n- Large datasets\n- Pattern identification\n- Comparing values across two dimensions\nExample: Website activity by day and hour.\n\n7. Box Plot - A box plot summarizes the distribution of numerical data using values such as:\n- Minimum\n- First quartile\n- Median\n- Third quartile\n- Maximum\nIt is also useful for identifying outliers.\nExample: Comparing salary distributions of different departments.\n\n7.5 Advanced Visualization Techniques\nBig Data often contains many dimensions and complex relationships. Advanced techniques help represent\nsuch data effectively.\n1. 3D Visualization\n- 3D visualization represents data using three dimensions: X-axis, Y-axis, and Z-axis.\n- It is useful when multiple numerical dimensions need to be viewed together.\nExample: Visualizing sales according to product, region, and time.\nTools such as Three.js and WebGL can be used for 3D visualization.\n2. Time-Series Visualization - represents how data changes over a period of time.\nCommon methods include:\n- Line charts\n- Animated charts\n- Sliding time windows\nExample: Monitoring temperature every hour for several days.",
+      "tables": []
+    },
+    {
+      "page": 14,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2525,
+      "processing_time": 0.0021682500000679283,
+      "text": "3. Hierarchical Visualization - represents data arranged in levels or parent-child relationships.\nCommon techniques include:\n- Treemap\n- Sunburst chart\n- Dendrogram\nExample: Representing an organization's structure from company → departments → teams → employees.\n\n4. Dendrogram\n- A dendrogram is a tree-like diagram used to represent hierarchical relationships or clusters.\n- It is commonly used in hierarchical clustering.\nExample: Grouping customers based on similar purchasing behavior.\n\n7.6 Interactive Exploration\nInteractive exploration allows users to directly interact with visualized data and examine different parts\nof a large dataset.\nImportant operations include:\n1. Filtering - Shows only the required subset of data.\nExample: Display sales only for Mumbai.\n2. Drill-down - Moves from summarized information to more detailed information.\nExample: Country → State → City → Store.\n3. Zooming - Allows users to focus on a particular part of the visualization.\n4. Panning - Allows users to move around a large visualization to examine different sections.\nThese features make large datasets easier to explore and understand.\n\n7.7 Big Data Platforms for Visual Analysis\nBig Data platforms help process and analyze large datasets before or along with visualization.\n1. Apache Hadoop - Apache Hadoop is a framework used for storing and processing very large\ndatasets across distributed systems. It can be combined with visualization tools to analyze large\namounts of data.\n2. Apache Spark - Apache Spark is a distributed data processing framework used for fast\nprocessing and analysis of large datasets. It can process data and integrate with different\nvisualization tools for analysis.\n\nCASE STUDIES\nCase Study 1: Smartphone Reviews Analysis\nA customer service team has a large dataset of smartphone reviews, ratings, and timestamps. The\nobjective is to understand customer sentiment, identify common issues, and study how opinions change\nover time.\nSuitable visualizations:\n1. Pie Chart / Stacked Bar Chart – Sentiment Distribution\nUsed to show the proportion of:\n- Positive reviews\n- Neutral reviews\n- Negative reviews\nThis helps the company quickly understand the overall customer sentiment.\n2. Word Cloud – Common Issues\nA word cloud can show frequently occurring words or topics in reviews. It can be created separately for\npositive and negative reviews to identify common customer concerns.\n3. Line Chart – Sentiment Over Time\nA line chart can show how positive, neutral, and negative sentiment changes over time.",
+      "tables": [
+        {
+          "table_index": 1,
+          "source": "PyMuPDF",
+          "data": [
+            [
+              "",
+              "CASE STUDIES",
+              ""
+            ],
+            [
+              "Case Study 1: Smartphone Reviews Analysis",
+              "",
+              ""
+            ]
+          ],
+          "markdown": "|  | CASE STUDIES |  |\n| --- | --- | --- |\n| Case Study 1: Smartphone Reviews Analysis |  |  |",
+          "html": "<table><tr><th></th><th>CASE STUDIES</th><th></th></tr><tr><td>Case Study 1: Smartphone Reviews Analysis</td><td></td><td></td></tr></table>",
+          "bbox": [
+            72.0640017191569,
+            522.9099731445312,
+            330.1940002441406,
+            548.3499755859375
+          ],
+          "page": 14
+        }
+      ]
+    },
+    {
+      "page": 15,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 2377,
+      "processing_time": 0.002070625000669679,
+      "text": "Example: If negative reviews suddenly increase after a product update, the company can investigate the\nreason.\nExam Point:\nPie/Stacked Bar → overall sentiment\nWord Cloud → common issues/topics\nLine Chart → sentiment trend over time\n\nCase Study 2: News Media Sentiment Analysis\nA news organization wants to analyze how sentiment related to different political figures changes over\ntime and how different media sources or platforms differ in their coverage.\nSuitable visualizations:\n1. Multiple Line Charts – Sentiment Over Time\nA separate line can represent each figure, allowing sentiment trends to be observed over different time\nperiods.\n2. Stacked Area Chart / Heat Map – Comparison\nThese can be used to compare sentiment patterns across multiple figures simultaneously.\n3. Bar Chart / Heat Map – Media Source Comparison\nThese can be used to compare sentiment or coverage patterns across different media sources or\nplatforms.\nExam Point:\nLine Chart → sentiment over time\nStacked Area/Heat Map → compare multiple figures\nBar/Heat Map → compare media sources\n\nCase Study 3: Retailer Social Media Sentiment\nA retailer wants to analyze customer sentiment across Twitter, Instagram, and Facebook, understand\nproduct sentiment over time, and study the relationship between engagement and sentiment.\nSuitable visualizations:\n1. Line Chart – Platform Trends\nSeparate lines can represent Twitter, Instagram, and Facebook to compare sentiment trends over time.\n2. Multi-Line Chart / Stacked Area Chart – Product Sentiment\nThese charts can show how sentiment for different products changes over time.\n3. Scatter Plot – Engagement vs Sentiment\nA scatter plot can show whether there is a relationship between social media engagement and customer\nsentiment.\nFor example, engagement can be plotted on one axis and sentiment score on the other.\nExam Point:\nLine Chart → platform trends\nMulti-Line/Stacked Area → product sentiment\nScatter Plot → engagement vs sentiment\n\nCase Study 4: Airline Customer Sentiment\nAn airline wants to analyze customer sentiment regarding different factors such as service, timeliness,\ncleanliness, and comfort and compare its performance with competitors.\nSuitable visualizations:\n1. Radar Chart – Sentiment by Factors\nA radar chart can compare customer sentiment across different service factors such as:\n- Service quality\n- Timeliness\n- Cleanliness\n- Comfort",
+      "tables": []
+    },
+    {
+      "page": 16,
+      "method": "PyMuPDF",
+      "ocr": false,
+      "characters": 495,
+      "processing_time": 0.0004755829995701788,
+      "text": "It gives an overall visual profile of different aspects of the airline experience.\n2. Line Chart – Trends Over Time\nA line chart can show how sentiment for each factor changes over time.\n3. Grouped/Clustered Bar Chart – Competitor Comparison\nA grouped bar chart can compare the airline's performance with competitors or industry averages across\ndifferent factors.\nExam Point:\nRadar Chart → compare service factors\nLine Chart → changes over time\nGrouped Bar Chart → compare airlines/competitors\n.",
+      "tables": []
+    }
+  ],
+  "total_direct_time": 0.04872099900057947,
+  "total_ocr_time": 0.0,
+  "total_processing_time": 0.48662249999961205
+}
