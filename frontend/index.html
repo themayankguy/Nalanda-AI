@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nalanda AI — Document & Folder Management</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation Header -->
+  <nav class="navbar">
+    <div class="brand">
+      <div class="brand-logo">N</div>
+      <span class="brand-name">Nalanda AI</span>
+      <span class="brand-tag">Document Ingestion</span>
+    </div>
+    <div class="nav-actions">
+      <div class="user-badge" id="user-profile-badge" style="display: none;">
+        <div class="user-avatar" id="user-avatar-text">U</div>
+        <span id="user-display-name">user</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="btn-switch-account" onclick="openAuthModal()">Switch User</button>
+      <button class="btn btn-secondary btn-sm" id="btn-logout" onclick="logout()" style="display: none;">Logout</button>
+    </div>
+  </nav>
+
+  <!-- Application Body -->
+  <div class="app-container">
+    <!-- Folders Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">Knowledge Folders</span>
+        <button class="btn btn-primary btn-sm" onclick="openCreateFolderModal()">+ New Folder</button>
+      </div>
+      <div class="folder-list" id="folder-list-container">
+        <!-- Rendered dynamically -->
+        <div class="empty-state" style="padding: 20px;">
+          <p class="empty-hint">Loading folders...</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Documents View -->
+    <main class="main-content">
+      <div class="view-header">
+        <div class="view-title-group">
+          <h1 id="active-folder-title">Select a Folder</h1>
+          <p class="view-subtitle" id="active-folder-subtitle">Organize and process course documents</p>
+        </div>
+        <div>
+          <button class="btn btn-primary" id="btn-trigger-upload" onclick="triggerFileInput()" style="display: none;">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/></svg>
+            Upload Document
+          </button>
+        </div>
+      </div>
+
+      <!-- Upload Dropzone -->
+      <div class="upload-card" id="upload-dropzone" style="display: none;">
+        <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff">
+        <div class="upload-icon">📄</div>
+        <h3 class="upload-title">Drag & drop documents here, or click to browse</h3>
+        <p class="upload-hint">Supported formats: PDF, PNG, JPG, JPEG, WEBP, BMP, TIFF (up to 50MB)</p>
+      </div>
+
+      <!-- Document Metadata Table -->
+      <div class="table-container" id="documents-table-container" style="display: none;">
+        <table class="document-table">
+          <thead>
+            <tr>
+              <th>Document Name</th>
+              <th>Format</th>
+              <th>File Size</th>
+              <th>Upload Date</th>
+              <th>Processing Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="document-table-body">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty / Placeholder State -->
+      <div class="empty-state" id="empty-state-container">
+        <div class="empty-icon">📁</div>
+        <h3 class="empty-title" id="empty-state-title">No Folder Selected</h3>
+        <p class="empty-hint" id="empty-state-desc">Select a folder from the sidebar or create a new one to begin uploading documents.</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- Create Folder Modal -->
+  <div class="modal-overlay" id="create-folder-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Create New Folder</h3>
+        <button class="btn btn-secondary btn-sm" onclick="closeCreateFolderModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="new-folder-name">Folder Name</label>
+          <input type="text" id="new-folder-name" class="form-input" placeholder="e.g. Machine Learning" autofocus>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCreateFolderModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="handleCreateFolder()">Create Folder</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Authentication Modal -->
+  <div class="modal-overlay" id="auth-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="auth-modal-title">Sign In to Nalanda AI</h3>
+        <button class="btn btn-secondary btn-sm" onclick="closeAuthModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" id="username-group" style="display: none;">
+          <label class="form-label" for="auth-username">Username</label>
+          <input type="text" id="auth-username" class="form-input" placeholder="Your username">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="auth-email">Email or Username</label>
+          <input type="text" id="auth-email" class="form-input" placeholder="user@nalanda.ai">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="auth-password">Password</label>
+          <input type="password" id="auth-password" class="form-input" placeholder="••••••••">
+        </div>
+        <div style="margin-top: 10px; font-size: 0.85rem; color: var(--text-secondary); text-align: center;">
+          <a href="#" id="auth-toggle-link" onclick="toggleAuthMode(event)" style="color: var(--accent-primary); text-decoration: none;">Need an account? Register here</a>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="handleDemoLogin()">Quick Demo User</button>
+        <button class="btn btn-primary" id="btn-auth-submit" onclick="handleAuthSubmit()">Sign In</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>
