@@ -303,6 +303,110 @@ body {
   display: none;
 }
 
+.rag-panel {
+  margin-bottom: 32px;
+  padding: 22px 24px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.rag-heading,
+.rag-result-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rag-heading h2 {
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.rag-heading p,
+.rag-status,
+.rag-results p {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.rag-scope {
+  max-width: 35%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rag-form {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.rag-form .form-input {
+  min-width: 0;
+  flex: 1;
+}
+
+.rag-form .btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.rag-response {
+  margin-top: 14px;
+}
+
+.rag-results {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  list-style: none;
+}
+
+.rag-results li {
+  padding: 12px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.rag-result-heading strong {
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+
+.rag-score {
+  flex: 0 0 auto;
+  color: var(--status-completed-text);
+  font-size: 0.75rem;
+}
+
+.rag-results p {
+  margin-top: 4px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 600px) {
+  .rag-panel {
+    padding: 18px 16px;
+  }
+}
+
 /* Document Table */
 .table-container {
   background: var(--bg-secondary);

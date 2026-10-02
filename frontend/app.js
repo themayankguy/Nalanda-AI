@@ -15,6 +15,7 @@ let activeFolderId = null;
 let documents = [];
 let pollingTimer = null;
 let isRegisterMode = false;
+let searchController = null;
 
 // Helpers
 function showToast(message, type = "success") {
@@ -330,10 +331,85 @@ async function handleCreateFolder() {
 }
 
 async function selectFolder(folderId) {
+  if (searchController) {
+    searchController.abort();
+    searchController = null;
+    document.getElementById("rag-submit").disabled = false;
+  }
+  document.getElementById("rag-status").textContent = "Enter a question to find relevant sources.";
+  document.getElementById("rag-results").replaceChildren();
   activeFolderId = folderId;
   renderFolders();
   renderActiveView();
   await loadDocuments(folderId);
+}
+
+async function handleSemanticSearch(event) {
+  event.preventDefault();
+  const queryInput = document.getElementById("rag-query");
+  const submitButton = document.getElementById("rag-submit");
+  const status = document.getElementById("rag-status");
+  const results = document.getElementById("rag-results");
+  const query = queryInput.value.trim();
+  const folderId = activeFolderId;
+
+  if (!query || !folderId) return;
+
+  if (searchController) searchController.abort();
+  const controller = new AbortController();
+  searchController = controller;
+  submitButton.disabled = true;
+  status.textContent = "Searching this folder...";
+  results.replaceChildren();
+
+  try {
+    const response = await apiFetch("/api/search/semantic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, folder_id: folderId, top_k: 5 }),
+      signal: controller.signal,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Search failed.");
+    if (folderId !== activeFolderId) return;
+
+    status.textContent = data.total_results
+      ? `${data.total_results} relevant source${data.total_results === 1 ? "" : "s"}`
+      : "No relevant sources found in this folder.";
+
+    data.results.forEach((result) => {
+      const item = document.createElement("li");
+      const heading = document.createElement("div");
+      heading.className = "rag-result-heading";
+
+      const filename = document.createElement("strong");
+      filename.textContent = result.source_filename;
+      heading.appendChild(filename);
+
+      const score = document.createElement("span");
+      score.className = "rag-score";
+      score.textContent = `${Math.round(result.relevance_score * 100)}% match`;
+      heading.appendChild(score);
+      item.appendChild(heading);
+
+      const details = [];
+      if (result.page_number != null) details.push(`Page ${result.page_number}`);
+      if (result.section_title) details.push(result.section_title);
+      const detail = document.createElement("p");
+      detail.textContent = details.length ? details.join(" · ") : "Source document";
+      item.appendChild(detail);
+      results.appendChild(item);
+    });
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      status.textContent = error.message || "Search is unavailable. Please try again.";
+    }
+  } finally {
+    if (searchController === controller) {
+      searchController = null;
+      submitButton.disabled = false;
+    }
+  }
 }
 
 // Documents Management
@@ -365,12 +441,15 @@ function renderActiveView() {
     subtitle.textContent = `${documents.length} document${documents.length === 1 ? "" : "s"} in this folder`;
     uploadBtn.style.display = "inline-flex";
     dropzone.style.display = "block";
+    document.getElementById("rag-panel").style.display = "block";
+    document.getElementById("rag-scope-label").textContent = activeFolder.name;
     renderDocumentsTable();
   } else {
     title.textContent = "Select a Folder";
     subtitle.textContent = "Organize and process course documents";
     uploadBtn.style.display = "none";
     dropzone.style.display = "none";
+    document.getElementById("rag-panel").style.display = "none";
     tableContainer.style.display = "none";
     emptyState.style.display = "block";
     document.getElementById("empty-state-title").textContent = "No Folder Selected";
@@ -553,6 +632,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const fileInput = document.getElementById("file-input");
   const dropzone = document.getElementById("upload-dropzone");
+  document.getElementById("rag-form").addEventListener("submit", handleSemanticSearch);
 
   fileInput.addEventListener("change", (e) => {
     if (e.target.files.length > 0) {
