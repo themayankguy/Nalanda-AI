@@ -10,13 +10,13 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 logger = logging.getLogger("nalanda.chunking")
 
 # Constants for text splitting
-DEFAULT_TARGET_CHUNK_CHARS = 1400  # ~450 tokens
-DEFAULT_OVERLAP_CHARS = 250        # ~75 tokens
+DEFAULT_TARGET_CHUNK_CHARS = 1400  # ~400 tokens (allows complete multi-step sections)
+DEFAULT_OVERLAP_CHARS = 150        # ~45 tokens
 MIN_CHUNK_CHARS = 15
 
 
@@ -26,33 +26,122 @@ def compute_sha256(text: str) -> str:
 
 
 def detect_section_heading(text_block: str) -> Optional[str]:
-    """Detect section heading or title in a text block."""
-    for line in text_block.splitlines():
+    """Detect section heading or title in a text block with high precision."""
+    candidates: List[Tuple[str, int]] = []
+    for idx, line in enumerate(text_block.splitlines()):
         line = line.strip()
-        if not line:
+        if not line or len(line) < 3 or len(line) > 120:
             continue
-        # Markdown headings (e.g., "# Title", "## Section")
+        # Reject table rows, bullets, code, quotes, examples
+        if "|" in line or line.startswith(("-", "•", "*", "+", ">", "Example", "grunt>", "$", "http")):
+            continue
+        # Reject formulas, equations, code brackets
+        if any(ch in line for ch in ["=", "<", ">", "→", "{", "}", "[", "]", "\\"]):
+            continue
+        # If line has a colon or dash/hyphen with explanation, only consider title part before separator
+        for sep in [": ", " - ", " – ", " — "]:
+            if sep in line:
+                parts = line.split(sep, 1)
+                if len(parts[1].strip().split()) >= 2:
+                    potential_title = parts[0].strip()
+                    if potential_title and len(potential_title) >= 3:
+                        line = potential_title
+                        break
+
+        words = line.split()
+        if len(words) > 10:
+            continue
+
+        # Major all-caps section header at first line (e.g. 'DOCKER CONTAINER LIFECYCLE', 'HIVE ARCHITECTURE')
+        if idx == 0 and line.isupper() and any(c.isalpha() for c in line) and 2 <= len(words) <= 8 and not line.endswith((".", ";", ",")):
+            candidates.append((line.strip(), 7))
+            continue
+
+        # Major numbered headings (e.g. '8. HIVE JOB EXECUTION FLOW', '25. Data Processing Operators', '7. Execution Modes of Apache Pig')
+        num_major = re.match(r"^(?:\d+[\.\)]|\d+(?:\.\d+)*\.?)\s+([A-Za-z][\w\s\-/:,\?]{2,80})$", line)
+        if num_major and not line.endswith("."):
+            title_part = num_major.group(1).strip()
+            if (title_part.isupper() or
+                re.search(r"\b(?:architecture|working|execution|flow|workflow|operators?|versus|\bvs\b|difference|comparison|mechanisms?|models?|components?|features?|types?|lifecycle|overview|introduction)\b", title_part, re.I)):
+                candidates.append((line.strip(), 7))
+                continue
+
+        # Major structural headings (e.g. 'Working / Architecture of Apache Pig', 'Steps for Creating a Visualization', '9. Pig vs MapReduce')
+        if (re.search(r"\b(?:architecture|working\s*/\s*architecture|working\s+of|versus|\bvs\b|difference|comparison|execution\s+modes?|execution\s+flow)\b", line, flags=re.I) or
+            re.match(r"^(?:steps?|phases?|stages?|process|procedure|methods?|techniques?|workflow|lifecycle|components?|characteristics?|features?|types?|advantages?|disadvantages?|overview|introduction|modes?)\b", line, flags=re.I)) and len(words) <= 10:
+            candidates.append((line.strip(), 6))
+            continue
+
+        # 1. Markdown headings (e.g. '# Title', '## Section')
         md_match = re.match(r"^#{1,4}\s+(.+)$", line)
         if md_match:
-            return md_match.group(1).strip()
-        # Numbered headings (e.g., "1. Introduction", "3.2 Histogram")
-        num_match = re.match(r"^\d+(\.\d+)*\s+([A-Z][\w\s\-]{3,60})$", line)
-        if num_match:
-            return line[:60].strip()
-        # All caps or short title line
-        if len(line) < 60 and line.isupper() and len(line) > 3:
-            return line.strip()
-    return None
+            candidates.append((md_match.group(1).strip(), 5))
+            continue
+
+        # 2. Numbered headings (e.g., '1. Introduction', '1. Need for Visualization', '3.7 Box Plot')
+        num_match = re.match(r"^(?:\d+[\.\)]|\d+(?:\.\d+)*\.?)\s+([A-Za-z][\w\s\-/:,\?]{2,70})$", line)
+        if num_match and not line.endswith("."):
+            candidates.append((line.strip(), 5))
+            continue
+
+        # 3. Question titles (with or without '?', e.g. 'What is a Container', 'Why Pig is needed?')
+        if (line.endswith("?") or re.match(r"^(?:what|why|how|when|where|which|who)\b", line, flags=re.I)) and len(words) <= 9:
+            candidates.append((line.strip(), 4))
+            continue
+
+        # 4. Unit / Module prefix lines (e.g. 'UNIT 5 – CONTAINERIZATION & DOCKER')
+        unit_match = re.match(r"^(?:UNIT|MODULE|CHAPTER|PART)\s+\d+[\s:–-]+(.+)$", line, flags=re.I)
+        if unit_match and len(unit_match.group(1).strip().split()) <= 8:
+            candidates.append((unit_match.group(1).strip(), 3))
+            continue
+
+        # 5. Standalone short acronyms (e.g. 'APDD', 'BDA') - low priority fallback
+        if len(words) == 1 and len(line) <= 5 and line.isupper():
+            candidates.append((line.strip(), 1))
+            continue
+
+        # 6. Short title-case or all-caps lines (e.g. 'APACHE PIG', 'Main Components of Apache Pig')
+        if not line.endswith((".", ";", ",")):
+            if line.isupper() and any(c.isalpha() for c in line) and len(line) > 3:
+                candidates.append((line.strip(), 4))
+                continue
+            content_words = [w for w in words if w.lower() not in {"a", "an", "the", "in", "on", "of", "for", "to", "and", "is", "are"}]
+            if content_words and len(content_words) >= 2:
+                cap_content = [w for w in content_words if w[0].isupper()]
+                if len(cap_content) >= len(content_words) * 0.7:
+                    candidates.append((line.strip(), 4))
+                    continue
+
+    if not candidates:
+        return None
+    # Sort by priority score descending, preserving order among equal priority
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    return candidates[0][0]
 
 
 def split_text_into_paragraphs(text: str) -> List[str]:
-    """Split text into distinct non-empty paragraphs."""
+    """Split text into distinct non-empty paragraphs and heading blocks."""
     if not text:
         return []
     # Split on two or more newlines
-    paragraphs = re.split(r"\n\s*\n", text)
-    cleaned = [p.strip() for p in paragraphs if p.strip()]
-    return cleaned
+    raw_blocks = re.split(r"\n\s*\n", text)
+    cleaned: List[str] = []
+    for block in raw_blocks:
+        lines = block.splitlines()
+        curr_lines = []
+        for line in lines:
+            line_str = line.strip()
+            # Only split on high-confidence structural/numbered headings (avoiding table column headers)
+            h = detect_section_heading(line_str)
+            is_strong_heading = bool(h and (re.match(r"^(?:#{1,4}\s+|\d+[\.\)]|\d+(?:\.\d+)+)", line_str) or re.search(r"\b(vs|versus|difference|comparison|architecture|working)\b", line_str, re.I)))
+            if curr_lines and is_strong_heading and not line_str.startswith(("-", "•", "*", "+")):
+                cleaned.append("\n".join(curr_lines).strip())
+                curr_lines = [line]
+            else:
+                curr_lines.append(line)
+        if curr_lines:
+            cleaned.append("\n".join(curr_lines).strip())
+    return [p for p in cleaned if p.strip()]
 
 
 def create_chunks_from_paragraphs(
@@ -60,7 +149,7 @@ def create_chunks_from_paragraphs(
     target_size: int = DEFAULT_TARGET_CHUNK_CHARS,
     overlap_size: int = DEFAULT_OVERLAP_CHARS,
 ) -> List[str]:
-    """Combine paragraphs into chunks respecting target size and overlap."""
+    """Combine paragraphs into chunks respecting target size, section boundaries, and overlap."""
     if not paragraphs:
         return []
 
@@ -70,8 +159,34 @@ def create_chunks_from_paragraphs(
 
     for para in paragraphs:
         para_len = len(para)
+        para_heading = detect_section_heading(para)
 
-        # If a single paragraph is larger than target_size, split by sentences or lines
+        # Check if this paragraph is a numbered item continuing a list in the current chunk
+        is_list_continuation = False
+        if para_heading and current_chunk:
+            is_num_heading = bool(re.match(r"^(?:\d+[\.\)]|\d+(?:\.\d+)+)", para.strip()))
+            is_major_topic = bool(re.search(r"\b(vs|versus|difference|comparison|architecture|working|overview|introduction|modes?|execution|models?|components?|features?|applications?|techniques?|mechanisms?|types?|evolution|need)\b", para_heading, flags=re.I))
+            if is_num_heading and not is_major_topic:
+                all_nums = [int(m.group(1)) for m in re.finditer(r"(?:^|\n)\s*(\d+)[\.\)]", "\n".join(current_chunk))]
+                curr_num_m = re.match(r"^(\d+)[\.\)]", para.strip())
+                curr_num = int(curr_num_m.group(1)) if curr_num_m else None
+                if curr_num is not None:
+                    if all_nums:
+                        last_num = all_nums[-1]
+                        if 1 <= (curr_num - last_num) <= 2 and curr_num <= 20:
+                            is_list_continuation = True
+                    elif curr_num <= 2:
+                        is_list_continuation = True
+
+        # If this paragraph starts a brand new section heading and we already have content,
+        # flush the previous chunk to ensure section isolation (unless continuing a list within target_size).
+        # Never flush short banner titles (< 90 chars) into isolated empty chunks.
+        if para_heading and not is_list_continuation and current_chunk and current_length >= 90:
+            chunks.append("\n\n".join(current_chunk))
+            current_chunk = []
+            current_length = 0
+
+        # If a single paragraph is larger than target_size * 1.5, split by sentences or lines
         if para_len > target_size * 1.5:
             if current_chunk:
                 chunks.append("\n\n".join(current_chunk))
@@ -95,7 +210,8 @@ def create_chunks_from_paragraphs(
                 chunks.append(" ".join(sub_accum))
             continue
 
-        if current_length + para_len > target_size and current_chunk:
+        max_allowed_size = int(target_size * 1.5) if is_list_continuation else target_size
+        if current_length + para_len > max_allowed_size and current_chunk:
             combined = "\n\n".join(current_chunk)
             chunks.append(combined)
 
@@ -170,13 +286,38 @@ def chunk_document_data(
             if table_md_snippets:
                 page_text += "\n\n" + "\n\n".join(table_md_snippets)
 
+            # Check if page contains any figures/diagrams with meaningful captions
+            figures = page_data.get("figures", []) or []
+            meaningful_captions = [
+                f"Figure: {f.get('caption', '')}"
+                for f in figures
+                if f.get("caption") and not re.match(r"^figure\s+on\s+page\s+\d+$", f.get("caption", "").strip(), re.I)
+            ]
+            if meaningful_captions:
+                page_text += "\n\n" + "\n\n".join(meaningful_captions)
+
             paragraphs = split_text_into_paragraphs(page_text)
             page_chunks = create_chunks_from_paragraphs(paragraphs, target_size, overlap_size)
 
             for chunk_str in page_chunks:
                 detected_heading = detect_section_heading(chunk_str)
                 if detected_heading:
-                    current_section = detected_heading
+                    is_decimal_sec = bool(re.match(r"^\d+\.\d+", detected_heading.strip()))
+                    is_major_topic = bool(re.search(r"\b(vs|versus|difference|comparison|architecture|working|overview|introduction|modes?|execution|models?|components?|features?|applications?|techniques?|mechanisms?|types?|evolution|lifecycle|need|operators?|commands?|tables?|functions?|udf|big sql)\b", detected_heading, re.I))
+                    is_step_syntax = bool(re.match(r"^\s*(?:Step|Phase|Stage)\s+\d+", detected_heading, re.I))
+
+                    is_cont_step = False
+                    if not is_decimal_sec and not is_major_topic:
+                        if is_step_syntax and current_section and re.search(r"\b(steps?|workflow|flow|procedure|phases?|stages?|working)\b", current_section, re.I):
+                            is_cont_step = True
+                        elif re.match(r"^\s*[4-9][\.\)]\s+", detected_heading.strip()) and current_section and re.search(r"\b(steps?|procedure|phases?|stages?)\b", current_section, re.I):
+                            is_cont_step = True
+
+                    if is_cont_step and current_section and not re.match(r"^\d+[\.\)]", current_section):
+                        base_sec = current_section.replace(" (Contd.)", "")
+                        current_section = f"{base_sec} (Contd.)"
+                    elif not is_cont_step:
+                        current_section = detected_heading
 
                 chunk_id = f"{document_id}_p{page_num}_{global_chunk_idx}"
                 all_chunks.append({
@@ -190,6 +331,8 @@ def chunk_document_data(
                     "chunk_index": global_chunk_idx,
                     "text_hash": compute_sha256(chunk_str),
                     "text": chunk_str,
+                    "figures": figures,
+                    "tables": tables,
                 })
                 global_chunk_idx += 1
     elif fallback_text:

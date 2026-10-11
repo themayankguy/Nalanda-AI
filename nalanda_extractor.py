@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -40,6 +41,7 @@ def make_output_dirs(output_dir: Path) -> dict[str, Path]:
         "json": output_dir / "json",
         "tables": output_dir / "tables",
         "pages": output_dir / "pages",
+        "figures": output_dir / "figures",
     }
     for directory in dirs.values():
         directory.mkdir(parents=True, exist_ok=True)
@@ -155,6 +157,57 @@ def extract_native_pdf_tables(page) -> list[dict]:
     return tables
 
 
+def detect_figure_caption(text: str) -> str | None:
+    """Detect figure caption from page text if present."""
+    if not text:
+        return None
+    for line in text.splitlines():
+        line = line.strip()
+        if re.match(r"^(?:Figure|Fig\.?)\s*\d+.*", line, re.IGNORECASE):
+            return line[:160]
+    return None
+
+
+def extract_native_pdf_figures(doc, page, page_number: int, dirs: dict[str, Path], stem: str, page_text: str = "") -> list[dict]:
+    """Extract embedded raster diagrams and images from a PDF page using PyMuPDF."""
+    figures = []
+    caption = detect_figure_caption(page_text)
+    try:
+        image_list = page.get_images(full=True)
+        for index, img_info in enumerate(image_list, start=1):
+            xref = img_info[0]
+            try:
+                base_image = doc.extract_image(xref)
+                if not base_image:
+                    continue
+                width = base_image.get("width", 0)
+                height = base_image.get("height", 0)
+                # Ignore tiny icon, bullet or spacer artifacts
+                if width < 100 or height < 100:
+                    continue
+                image_bytes = base_image.get("image")
+                if not image_bytes:
+                    continue
+                ext = base_image.get("ext", "png")
+                filename = f"{stem}_p{page_number}_fig_{index}.{ext}"
+                fig_path = dirs["figures"] / filename
+                fig_path.write_bytes(image_bytes)
+                figures.append({
+                    "figure_index": index,
+                    "page": page_number,
+                    "filename": filename,
+                    "caption": caption or f"Figure on page {page_number}",
+                    "source": "PyMuPDF",
+                    "width": width,
+                    "height": height,
+                })
+            except Exception:
+                continue
+    except Exception as exc:
+        print(f"  Native figure extraction skipped: {str(exc)[:160]}")
+    return figures
+
+
 def run_ppstructure(pipeline, image_path: Path, page_number: int | None = None) -> dict:
     started = time.perf_counter()
     results = pipeline.predict(input=str(image_path))
@@ -240,7 +293,8 @@ def process_pdf(pdf_path: Path, pipeline, dirs: dict[str, Path]) -> dict:
                 ocr_time_total += ocr["processing_time"]
                 method, used_ocr, elapsed = "PP-StructureV3", True, ocr["processing_time"]
 
-            print(f"  Page {page_number}/{total_pages}: {method}; {len(text)} chars; {len(tables)} tables; {elapsed:.2f}s")
+            figures = extract_native_pdf_figures(document, page, page_number, dirs, pdf_path.stem, text)
+            print(f"  Page {page_number}/{total_pages}: {method}; {len(text)} chars; {len(tables)} tables; {len(figures)} figures; {elapsed:.2f}s")
             pages.append({
                 "page": page_number,
                 "method": method,
@@ -249,6 +303,7 @@ def process_pdf(pdf_path: Path, pipeline, dirs: dict[str, Path]) -> dict:
                 "processing_time": elapsed,
                 "text": text,
                 "tables": tables,
+                "figures": figures,
             })
     finally:
         document.close()
@@ -264,11 +319,28 @@ def process_pdf(pdf_path: Path, pipeline, dirs: dict[str, Path]) -> dict:
     }
 
 
-def process_image(image_path: Path, pipeline) -> dict:
+def process_image(image_path: Path, pipeline, dirs: dict[str, Path] | None = None) -> dict:
     started = time.perf_counter()
     print(f"\nProcessing image: {image_path.name}")
     result = run_ppstructure(pipeline, image_path, page_number=1)
-    print(f"  OCR: {len(result['text'])} chars; {len(result['tables'])} tables; {result['processing_time']:.2f}s")
+    figures = []
+    if dirs and "figures" in dirs:
+        try:
+            dest_fig = dirs["figures"] / f"{image_path.stem}_p1_fig_1{image_path.suffix}"
+            shutil.copy2(image_path, dest_fig)
+            figures.append({
+                "figure_index": 1,
+                "page": 1,
+                "filename": dest_fig.name,
+                "caption": image_path.stem.replace("_", " ").title(),
+                "source": "Image",
+                "width": None,
+                "height": None,
+            })
+        except Exception as exc:
+            print(f"  Image figure registration skipped: {exc}")
+
+    print(f"  OCR: {len(result['text'])} chars; {len(result['tables'])} tables; {len(figures)} figures; {result['processing_time']:.2f}s")
     return {
         "filename": image_path.name,
         "file_type": "image",
@@ -282,6 +354,7 @@ def process_image(image_path: Path, pipeline) -> dict:
             "processing_time": result["processing_time"],
             "text": result["text"],
             "tables": result["tables"],
+            "figures": figures,
         }],
         "total_direct_time": 0.0,
         "total_ocr_time": result["processing_time"],
@@ -424,7 +497,7 @@ def main() -> int:
     failures = []
     for file_path in files:
         try:
-            result = process_pdf(file_path, pipeline, dirs) if file_path.suffix.lower() == ".pdf" else process_image(file_path, pipeline)
+            result = process_pdf(file_path, pipeline, dirs) if file_path.suffix.lower() == ".pdf" else process_image(file_path, pipeline, dirs)
             result["saved"] = save_outputs(result, dirs)
             successful += 1
             print("  Saved Markdown:", result["saved"]["markdown_path"])

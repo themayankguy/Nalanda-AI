@@ -17,7 +17,7 @@ from backend.services.NLP.vector_index_service import (
     FolderVectorIndex,
     get_embedding_model,
 )
-from backend.services.NLP.semantic_search_service import sync_folder_index
+from backend.services.NLP.semantic_search_service import sync_folder_index, extract_direct_answer
 
 
 @pytest.fixture(autouse=True)
@@ -156,6 +156,111 @@ def test_vector_index_persistence_and_update(tmp_path):
     reloaded_index.remove_document("d1")
     assert len(reloaded_index.chunks) == 0
     assert len(reloaded_index.search("identify outliers")) == 0
+
+
+def test_definition_queries_rank_intro_over_why_needed(tmp_path):
+    """Definition questions should prefer the intro/definition section over a 'why needed' explanation."""
+    index_dir = tmp_path / "definition_ranking"
+    index = FolderVectorIndex(index_dir)
+
+    sample_chunks = [
+        {
+            "chunk_id": "intro",
+            "document_id": "d_intro",
+            "user_id": "u1",
+            "folder_id": "f1",
+            "source_filename": "intro.pdf",
+            "page_number": 1,
+            "section_title": "Introduction",
+            "chunk_index": 0,
+            "text_hash": "hash_intro",
+            "text": "Apache Pig is a platform for analyzing large datasets with a high-level scripting language.",
+        },
+        {
+            "chunk_id": "why",
+            "document_id": "d_why",
+            "user_id": "u1",
+            "folder_id": "f1",
+            "source_filename": "why.pdf",
+            "page_number": 1,
+            "section_title": "Why Pig is needed?",
+            "chunk_index": 1,
+            "text_hash": "hash_why",
+            "text": "Pig is needed because it reduces the complexity of writing MapReduce code.",
+        },
+    ]
+
+    index.add_document_chunks(sample_chunks)
+    results = index.search("What is Pig?", top_k=2)
+
+    assert results[0][0]["section_title"] == "Introduction"
+    assert results[0][1] > results[1][1]
+
+
+def test_definition_answer_prefers_definition_sentence_over_why_section():
+    """For 'what is ...' questions, the direct answer should prefer the actual definition sentence."""
+    chunk = (
+        "What is Data Visualization? Data Visualization is the process of representing data in a visual form such as charts, graphs, maps, and diagrams. "
+        "Why is Visualization Needed in Big Data? Visualization helps users understand this data quickly and identify patterns and trends."
+    )
+
+    answer = extract_direct_answer("what is data visualization", chunk)
+    assert answer is not None
+    assert "Data Visualization is the process" in answer
+    assert "Why is Visualization Needed" not in answer
+
+
+def test_working_and_application_queries_rank_relevant_sections(tmp_path):
+    """How-questions should prefer working sections; where/used questions should prefer applications."""
+    index_dir = tmp_path / "intent_ranking"
+    index = FolderVectorIndex(index_dir)
+
+    sample_chunks = [
+        {
+            "chunk_id": "working",
+            "document_id": "d_working",
+            "user_id": "u1",
+            "folder_id": "f1",
+            "source_filename": "working.pdf",
+            "page_number": 2,
+            "section_title": "How Apache Pig Works",
+            "chunk_index": 0,
+            "text_hash": "hash_working",
+            "text": "Apache Pig works by converting Pig Latin scripts into a sequence of MapReduce operations.",
+        },
+        {
+            "chunk_id": "applications",
+            "document_id": "d_app",
+            "user_id": "u1",
+            "folder_id": "f1",
+            "source_filename": "app.pdf",
+            "page_number": 4,
+            "section_title": "Applications of Apache Pig",
+            "chunk_index": 1,
+            "text_hash": "hash_app",
+            "text": "Apache Pig is used in data processing pipelines, ETL jobs, and log analysis for big data systems.",
+        },
+        {
+            "chunk_id": "intro",
+            "document_id": "d_intro",
+            "user_id": "u1",
+            "folder_id": "f1",
+            "source_filename": "intro.pdf",
+            "page_number": 1,
+            "section_title": "Introduction",
+            "chunk_index": 2,
+            "text_hash": "hash_intro",
+            "text": "Apache Pig is a high-level data flow language for large datasets.",
+        },
+    ]
+
+    index.add_document_chunks(sample_chunks)
+
+    working_results = index.search("How does Apache Pig work?", top_k=3)
+    assert working_results[0][0]["section_title"] == "How Apache Pig Works"
+
+    app_results = index.search("Where is Apache Pig used?", top_k=3)
+    assert app_results[0][0]["section_title"] == "Applications of Apache Pig"
 
 
 # --- 3. Integration Tests: API & Strict User/Folder Isolation ---

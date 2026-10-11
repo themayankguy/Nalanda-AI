@@ -79,3 +79,23 @@ def get_document_paths(user_id: str, folder_id: str, document_id: str, filename:
         "original_file_path": original_file_path,
         "safe_filename": safe_name,
     }
+
+
+def get_figure_file_path(user_id: str, folder_id: str, document_id: str, filename: str) -> Path | None:
+    """Resolve and validate path for an extracted figure file."""
+    safe_name = sanitize_filename(filename)
+    fig_path = (
+        BASE_STORAGE_DIR
+        / "users"
+        / user_id
+        / "folders"
+        / folder_id
+        / "documents"
+        / document_id
+        / "extracted"
+        / "figures"
+        / safe_name
+    )
+    if fig_path.exists() and fig_path.is_file():
+        return fig_path
+    return None

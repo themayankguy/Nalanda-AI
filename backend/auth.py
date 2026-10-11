@@ -45,19 +45,8 @@ def create_session_token(db: Session, user_id: str, duration_days: int = 7) -> S
     return token
 
 
-def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: Session = Depends(get_db),
-) -> User:
-    """FastAPI dependency to retrieve the authenticated user from the Bearer token."""
-    if not credentials or not credentials.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication credentials were not provided.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token_str = credentials.credentials
+def verify_token_string(token_str: str, db: Session) -> User:
+    """Validate a token string and return the corresponding User."""
     token = db.query(SessionToken).filter(SessionToken.token == token_str).first()
     if not token:
         raise HTTPException(
@@ -84,3 +73,18 @@ def get_current_user(
         )
 
     return user
+
+
+def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db),
+) -> User:
+    """FastAPI dependency to retrieve the authenticated user from the Bearer token."""
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication credentials were not provided.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return verify_token_string(credentials.credentials, db)

@@ -330,37 +330,170 @@ async function handleCreateFolder() {
   }
 }
 
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+const folderChatHistory = {};
+
+function renderChatMessages(folderId) {
+  const container = document.getElementById("chat-messages");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const history = folderChatHistory[folderId] || [];
+  if (history.length === 0) {
+    const welcome = document.createElement("div");
+    welcome.className = "chat-message assistant";
+    welcome.innerHTML = `
+      <div class="chat-avatar">AI</div>
+      <div class="chat-bubble">
+        <p>Hello! Ask me any question about the documents in this folder. You can also request diagrams (e.g. <em>"Show diagram of CNN"</em>) or comparison tables.</p>
+      </div>
+    `;
+    container.appendChild(welcome);
+  } else {
+    history.forEach((msg) => {
+      container.appendChild(msg);
+    });
+  }
+  container.scrollTop = container.scrollHeight;
+}
+
+function clearChatHistory() {
+  if (!activeFolderId) return;
+  folderChatHistory[activeFolderId] = [];
+  renderChatMessages(activeFolderId);
+}
+
+function openFigureModal(url, encodedCaption) {
+  const modal = document.getElementById("figure-modal");
+  const img = document.getElementById("figure-modal-img");
+  const cap = document.getElementById("figure-modal-caption");
+  if (modal && img) {
+    img.src = url;
+    if (cap) cap.textContent = decodeURIComponent(encodedCaption || "");
+    modal.classList.add("active");
+  }
+}
+
+function closeFigureModal() {
+  const modal = document.getElementById("figure-modal");
+  if (modal) modal.classList.remove("active");
+}
+
 async function selectFolder(folderId) {
   if (searchController) {
     searchController.abort();
     searchController = null;
-    document.getElementById("rag-submit").disabled = false;
+    const submitBtn = document.getElementById("rag-submit");
+    if (submitBtn) submitBtn.disabled = false;
   }
-  document.getElementById("rag-status").textContent = "Enter a question to find relevant sources.";
-  document.getElementById("rag-results").replaceChildren();
   activeFolderId = folderId;
   renderFolders();
   renderActiveView();
+  renderChatMessages(folderId);
   await loadDocuments(folderId);
+}
+
+function formatDirectAnswerHtml(text) {
+  if (!text) return "";
+  const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const htmlParts = [];
+  let inList = false;
+
+  for (const line of lines) {
+    const stepMatch = line.match(/^(\d+[\.\)])\s*(.+)$/);
+    const bulletMatch = line.match(/^[-•*+]\s*(.+)$/);
+
+    if (stepMatch) {
+      if (inList) {
+        htmlParts.push("</ul>");
+        inList = false;
+      }
+      const num = stepMatch[1];
+      const rest = stepMatch[2];
+      htmlParts.push(`
+        <div class="direct-answer-step">
+          <span class="direct-answer-step-num">${escapeHtml(num)}</span>
+          <span class="direct-answer-step-text">${escapeHtml(rest)}</span>
+        </div>
+      `);
+    } else if (bulletMatch) {
+      if (!inList) {
+        htmlParts.push('<ul class="direct-answer-bullet-list">');
+        inList = true;
+      }
+      htmlParts.push(`<li>${escapeHtml(bulletMatch[1])}</li>`);
+    } else {
+      if (inList) {
+        htmlParts.push("</ul>");
+        inList = false;
+      }
+      if (line.length < 80 && !/[.:;]$/.test(line) && /^[A-Z]/.test(line)) {
+        htmlParts.push(`<div class="direct-answer-section-header">${escapeHtml(line)}</div>`);
+      } else {
+        htmlParts.push(`<p class="direct-answer-para">${escapeHtml(line)}</p>`);
+      }
+    }
+  }
+
+  if (inList) {
+    htmlParts.push("</ul>");
+  }
+
+  return htmlParts.join("");
 }
 
 async function handleSemanticSearch(event) {
   event.preventDefault();
   const queryInput = document.getElementById("rag-query");
   const submitButton = document.getElementById("rag-submit");
-  const status = document.getElementById("rag-status");
-  const results = document.getElementById("rag-results");
+  const chatMessages = document.getElementById("chat-messages");
   const query = queryInput.value.trim();
   const folderId = activeFolderId;
 
   if (!query || !folderId) return;
 
+  // Append user message bubble
+  const userMsgEl = document.createElement("div");
+  userMsgEl.className = "chat-message user";
+  userMsgEl.innerHTML = `
+    <div class="chat-avatar">You</div>
+    <div class="chat-bubble">
+      <p>${escapeHtml(query)}</p>
+    </div>
+  `;
+  chatMessages.appendChild(userMsgEl);
+
+  if (!folderChatHistory[folderId]) folderChatHistory[folderId] = [];
+  folderChatHistory[folderId].push(userMsgEl);
+
+  queryInput.value = "";
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  // Append Typing Indicator
+  const typingEl = document.createElement("div");
+  typingEl.className = "typing-indicator";
+  typingEl.id = "chat-typing-indicator";
+  typingEl.innerHTML = `
+    <span class="typing-dot"></span>
+    <span class="typing-dot"></span>
+    <span class="typing-dot"></span>
+  `;
+  chatMessages.appendChild(typingEl);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
   if (searchController) searchController.abort();
   const controller = new AbortController();
   searchController = controller;
   submitButton.disabled = true;
-  status.textContent = "Searching this folder...";
-  results.replaceChildren();
 
   try {
     const response = await apiFetch("/api/search/semantic", {
@@ -373,41 +506,105 @@ async function handleSemanticSearch(event) {
     if (!response.ok) throw new Error(data.detail || "Search failed.");
     if (folderId !== activeFolderId) return;
 
-    status.textContent = data.total_results
-      ? `${data.total_results} relevant source${data.total_results === 1 ? "" : "s"}`
-      : "No relevant sources found in this folder.";
+    // Remove typing indicator
+    typingEl.remove();
 
-    data.results.forEach((result) => {
-      const item = document.createElement("li");
-      const heading = document.createElement("div");
-      heading.className = "rag-result-heading";
+    // Create Assistant Response Message
+    const assistantMsgEl = document.createElement("div");
+    assistantMsgEl.className = "chat-message assistant";
 
-      const filename = document.createElement("strong");
-      filename.textContent = result.source_filename;
-      heading.appendChild(filename);
+    let bubbleContent = "";
 
-      const score = document.createElement("span");
-      score.className = "rag-score";
-      score.textContent = `${Math.round(result.relevance_score * 100)}% match`;
-      heading.appendChild(score);
-      item.appendChild(heading);
+    if (data.total_results === 0) {
+      bubbleContent += `<p style="color: var(--text-secondary);">No relevant sources or answers were found for this query in the selected folder.</p>`;
+    } else {
+      // 1. Direct Answer Card
+      if (data.direct_answer) {
+        bubbleContent += `
+          <div class="direct-answer-card">
+            <div class="direct-answer-title">💡 Direct Answer</div>
+            <div class="direct-answer-body">${formatDirectAnswerHtml(data.direct_answer)}</div>
+          </div>
+        `;
+      }
 
-      const details = [];
-      if (result.page_number != null) details.push(`Page ${result.page_number}`);
-      if (result.section_title) details.push(result.section_title);
-      const detail = document.createElement("p");
-      detail.textContent = details.length ? details.join(" · ") : "Source document";
-      item.appendChild(detail);
-      results.appendChild(item);
-    });
+      // 2. Primary Diagram Card
+      if (data.primary_figure) {
+        const fig = data.primary_figure;
+        const figUrl = token ? `${fig.figure_url}?token=${encodeURIComponent(token)}` : fig.figure_url;
+        const encodedCap = encodeURIComponent(fig.caption || "");
+        bubbleContent += `
+          <div class="diagram-card">
+            <div class="diagram-header">
+              <span>🖼️ Extracted Diagram (Page ${fig.page_number || '1'})</span>
+              <span style="font-size:0.75rem; color:var(--text-muted); cursor:pointer;" onclick="openFigureModal('${figUrl}', '${encodedCap}')">Click to zoom</span>
+            </div>
+            <img class="diagram-preview-img" src="${figUrl}" alt="Diagram" onclick="openFigureModal('${figUrl}', '${encodedCap}')">
+            ${fig.caption ? `<div class="diagram-caption">${escapeHtml(fig.caption)}</div>` : ''}
+          </div>
+        `;
+      }
+
+      // 3. Primary Table Card
+      if (data.primary_table && data.primary_table.html) {
+        const tab = data.primary_table;
+        bubbleContent += `
+          <div class="table-card">
+            <div class="diagram-header" style="margin-bottom:6px;">
+              <span>📊 Extracted Table (Page ${tab.page_number || '1'})</span>
+            </div>
+            ${tab.html}
+          </div>
+        `;
+      }
+
+      // 4. Citation Pills
+      if (data.results && data.results.length > 0) {
+        bubbleContent += `
+          <div class="citations-group">
+            <span class="citations-label">Sources:</span>
+            ${data.results.map(r => `
+              <span class="citation-pill" title="${r.section_title ? escapeHtml(r.section_title) : ''}">
+                📄 <strong>${escapeHtml(r.source_filename)}</strong>
+                ${r.page_number != null ? `· p. ${r.page_number}` : ''}
+                ${r.section_title ? `· ${escapeHtml(r.section_title.substring(0, 30))}` : ''}
+                <span style="color:var(--status-completed-text); font-weight:600;">(${Math.round(r.relevance_score * 100)}%)</span>
+              </span>
+            `).join('')}
+          </div>
+        `;
+      }
+    }
+
+    assistantMsgEl.innerHTML = `
+      <div class="chat-avatar">AI</div>
+      <div class="chat-bubble">
+        ${bubbleContent}
+      </div>
+    `;
+
+    chatMessages.appendChild(assistantMsgEl);
+    folderChatHistory[folderId].push(assistantMsgEl);
+
   } catch (error) {
     if (error.name !== "AbortError") {
-      status.textContent = error.message || "Search is unavailable. Please try again.";
+      typingEl.remove();
+      const errorMsgEl = document.createElement("div");
+      errorMsgEl.className = "chat-message assistant";
+      errorMsgEl.innerHTML = `
+        <div class="chat-avatar">AI</div>
+        <div class="chat-bubble">
+          <p style="color: var(--status-failed-text);">${escapeHtml(error.message || "Failed to process question. Please try again.")}</p>
+        </div>
+      `;
+      chatMessages.appendChild(errorMsgEl);
+      if (folderChatHistory[folderId]) folderChatHistory[folderId].push(errorMsgEl);
     }
   } finally {
     if (searchController === controller) {
       searchController = null;
       submitButton.disabled = false;
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
   }
 }

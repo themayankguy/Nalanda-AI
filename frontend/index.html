@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nalanda AI — Document & Folder Management</title>
-  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/styles.css?v=3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -66,23 +66,41 @@
         <p class="upload-hint">Supported formats: PDF, PNG, JPG, JPEG, WEBP, BMP, TIFF (up to 50MB)</p>
       </div>
 
-      <section class="rag-panel" id="rag-panel" aria-labelledby="rag-title" style="display: none;">
-        <div class="rag-heading">
+      <!-- Interactive Chat Interface -->
+      <section class="rag-panel chat-section" id="rag-panel" aria-labelledby="rag-title" style="display: none;">
+        <div class="rag-heading chat-header">
           <div>
-            <h2 id="rag-title">Ask this folder</h2>
-            <p>Search across completed documents in the selected folder.</p>
+            <div class="chat-title-group">
+              <span class="chat-header-icon">💬</span>
+              <h2 id="rag-title">Chat with this Folder</h2>
+            </div>
+            <p>Ask questions, explore course notes, or request diagrams and tables.</p>
           </div>
-          <span class="rag-scope" id="rag-scope-label"></span>
+          <div class="chat-header-actions">
+            <span class="rag-scope" id="rag-scope-label"></span>
+            <button class="btn btn-secondary btn-sm" id="btn-clear-chat" onclick="clearChatHistory()" type="button" title="Clear conversation">Clear</button>
+          </div>
         </div>
-        <form class="rag-form" id="rag-form">
+
+        <!-- Scrollable Chat Stream -->
+        <div class="chat-messages" id="chat-messages" aria-live="polite">
+          <div class="chat-message assistant">
+            <div class="chat-avatar">AI</div>
+            <div class="chat-bubble">
+              <p>Hello! Ask me any question about the documents in this folder. You can also request diagrams (e.g. <em>"Show diagram of CNN"</em>) or comparison tables.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input Form -->
+        <form class="rag-form chat-form" id="rag-form">
           <label class="sr-only" for="rag-query">Question or search query</label>
-          <input class="form-input" id="rag-query" name="query" type="search" maxlength="1000" placeholder="Ask a question about these documents..." required>
-          <button class="btn btn-primary" id="rag-submit" type="submit">Search</button>
+          <input class="form-input" id="rag-query" name="query" type="search" maxlength="1000" placeholder="Ask a question, or ask for a diagram or table..." required autocomplete="off">
+          <button class="btn btn-primary" id="rag-submit" type="submit">
+            <span>Send</span>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-left: 4px;"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.8 14.5a.5.5 0 0 1-.928-.016l-2.48-5.787-5.787-2.48a.5.5 0 0 1-.016-.928l14.5-5.8a.5.5 0 0 1 .54.11zM6.57 9.43l5.96-5.96-10.74 4.3 4.78 2.05v-.39zm1.39 1.39 2.05 4.78 4.3-10.74-5.96 5.96h-.39z"/></svg>
+          </button>
         </form>
-        <div class="rag-response" aria-live="polite">
-          <p class="rag-status" id="rag-status">Enter a question to find relevant sources.</p>
-          <ol class="rag-results" id="rag-results"></ol>
-        </div>
       </section>
 
       <!-- Document Metadata Table -->
@@ -164,9 +182,23 @@
     </div>
   </div>
 
+  <!-- Figure Preview Modal -->
+  <div class="modal-overlay" id="figure-modal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title" id="figure-modal-title">Extracted Diagram</h3>
+        <button class="btn btn-secondary btn-sm" onclick="closeFigureModal()">✕</button>
+      </div>
+      <div class="modal-body" style="text-align: center; max-height: 75vh; overflow-y: auto;">
+        <img id="figure-modal-img" src="" alt="Extracted Diagram" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+        <p id="figure-modal-caption" style="margin-top: 14px; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;"></p>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="/assets/app.js"></script>
+  <script src="/assets/app.js?v=3"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@ CRITICAL REQUIREMENTS:
 """
 import uuid
 import shutil
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 
 from fastapi import (
@@ -19,7 +19,10 @@ from fastapi import (
     File,
     BackgroundTasks,
     status,
+    Query,
 )
+from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -29,10 +32,11 @@ from backend.schemas import (
     DocumentUploadResponse,
     DocumentStatusResponse,
 )
-from backend.auth import get_current_user
+from backend.auth import get_current_user, security, verify_token_string
 from backend.services.storage_service import (
     validate_file,
     get_document_paths,
+    get_figure_file_path,
     MAX_FILE_SIZE_BYTES,
 )
 from backend.services.nalanda_extraction_service import process_document_extraction
@@ -210,3 +214,61 @@ def retry_document_extraction(
 
     background_tasks.add_task(process_document_extraction, document.id)
     return DocumentStatusResponse.model_validate(document)
+
+
+@router.get(
+    "/api/documents/{document_id}/figures/{figure_filename}",
+    summary="Retrieve extracted document diagram or figure",
+)
+def get_document_figure(
+    document_id: str,
+    figure_filename: str,
+    token: Optional[str] = Query(None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Serve extracted figure image with user ownership verification."""
+    token_str = None
+    if credentials and credentials.credentials:
+        token_str = credentials.credentials
+    elif token:
+        token_str = token
+
+    if not token_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication credentials were not provided.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    current_user = verify_token_string(token_str, db)
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or does not belong to you.",
+        )
+
+    fig_path = get_figure_file_path(
+        user_id=current_user.id,
+        folder_id=document.folder_id,
+        document_id=document.id,
+        filename=figure_filename,
+    )
+    if not fig_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Figure not found for this document.",
+        )
+
+    media_type = "image/png"
+    if fig_path.suffix.lower() in [".jpg", ".jpeg"]:
+        media_type = "image/jpeg"
+    elif fig_path.suffix.lower() == ".webp":
+        media_type = "image/webp"
+
+    return FileResponse(str(fig_path), media_type=media_type)

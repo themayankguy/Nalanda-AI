@@ -1,11 +1,4 @@
-"""Pydantic schemas for local semantic search and RAG retrieval.
-
-CRITICAL REQUIREMENTS:
-- Every RAG query must be scoped to an explicitly selected folder_id.
-- Extracted text, OCR output, and raw chunk content remain strictly internal
-  to the backend and are NEVER returned in search API responses.
-- Responses contain only approved source metadata (filename, page, section, score).
-"""
+"""Pydantic schemas for local semantic search, multimodal RAG retrieval, and structured answers."""
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -16,6 +9,28 @@ class SemanticSearchRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=20, description="Maximum number of relevant source passages to return")
 
 
+class FigureItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    figure_index: int
+    page_number: Optional[int] = None
+    filename: str
+    figure_url: str
+    caption: Optional[str] = None
+    source: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+
+
+class TableItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    table_index: int
+    page_number: Optional[int] = None
+    html: Optional[str] = None
+    markdown: Optional[str] = None
+
+
 class SearchResultItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -24,6 +39,10 @@ class SearchResultItem(BaseModel):
     page_number: Optional[int] = None
     section_title: Optional[str] = None
     relevance_score: float = Field(..., description="Cosine similarity score (0.0 to 1.0)")
+    direct_answer: Optional[str] = None
+    formatted_context: Optional[str] = None
+    figures: List[FigureItem] = Field(default_factory=list)
+    tables: List[TableItem] = Field(default_factory=list)
 
 
 class SemanticSearchResponse(BaseModel):
@@ -31,5 +50,9 @@ class SemanticSearchResponse(BaseModel):
 
     query: str
     folder_id: str
+    detected_intent: str = Field(default="conceptual", description="'conceptual', 'visual', or 'tabular'")
+    direct_answer: Optional[str] = None
+    primary_figure: Optional[FigureItem] = None
+    primary_table: Optional[TableItem] = None
     total_results: int
     results: List[SearchResultItem]

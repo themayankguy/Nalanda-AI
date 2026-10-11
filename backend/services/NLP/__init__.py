@@ -3,7 +3,7 @@
 Modules:
 - document_chunking_service: Boundary-aware document text chunking and metadata generation.
 - vector_index_service: SentenceTransformer embedding management and isolated vector indexing.
-- semantic_search_service: End-to-end scoped semantic search and relevance scoring.
+- semantic_search_service: End-to-end scoped semantic search, multimodal asset binding, and relevance scoring.
 """
 from backend.services.NLP.document_chunking_service import (
     chunk_document_data,
@@ -21,6 +21,8 @@ from backend.services.NLP.semantic_search_service import (
     get_or_create_folder_index,
     index_single_document,
     sync_folder_index,
+    detect_query_intent,
+    extract_direct_answer,
 )
 
 __all__ = [
@@ -35,4 +37,6 @@ __all__ = [
     "get_or_create_folder_index",
     "index_single_document",
     "sync_folder_index",
+    "detect_query_intent",
+    "extract_direct_answer",
 ]
