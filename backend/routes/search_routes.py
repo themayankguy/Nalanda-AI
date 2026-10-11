@@ -6,7 +6,7 @@ from backend.database import get_db
 from backend.models import User
 from backend.auth import get_current_user
 from backend.schemas_search import SemanticSearchRequest, SemanticSearchResponse
-from backend.services.semantic_search_service import execute_semantic_search
+from backend.services.NLP.semantic_search_service import execute_semantic_search
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 

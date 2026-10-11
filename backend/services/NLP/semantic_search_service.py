@@ -15,8 +15,8 @@ from fastapi import HTTPException, status
 
 from backend.models import User, Folder, Document, DocumentExtraction
 from backend.services.storage_service import BASE_STORAGE_DIR
-from backend.services.document_chunking_service import chunk_document_data
-from backend.services.vector_index_service import (
+from backend.services.NLP.document_chunking_service import chunk_document_data
+from backend.services.NLP.vector_index_service import (
     get_folder_index_dir,
     FolderVectorIndex,
     get_embedding_model,

@@ -8,16 +8,16 @@ from fastapi.testclient import TestClient
 from backend.main import app
 from backend.database import Base, engine, SessionLocal
 from backend.models import User, Folder, Document, DocumentExtraction
-from backend.services.document_chunking_service import (
+from backend.services.NLP.document_chunking_service import (
     chunk_document_data,
     create_chunks_from_paragraphs,
     detect_section_heading,
 )
-from backend.services.vector_index_service import (
+from backend.services.NLP.vector_index_service import (
     FolderVectorIndex,
     get_embedding_model,
 )
-from backend.services.semantic_search_service import sync_folder_index
+from backend.services.NLP.semantic_search_service import sync_folder_index
 
 
 @pytest.fixture(autouse=True)
