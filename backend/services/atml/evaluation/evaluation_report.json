@@ -1,0 +1,186 @@
+{
+  "summary": {
+    "Direct_Retrieval": {
+      "avg_latency_ms": 0.0,
+      "avg_token_f1": 0.4257,
+      "avg_rouge_l": 0.3714,
+      "avg_factual_consistency": 1.0,
+      "avg_structural_score": 0.96,
+      "avg_unsupported_entity_rate": 0.0
+    },
+    "Transformer_Baseline": {
+      "avg_latency_ms": 1064.71,
+      "avg_token_f1": 0.3705,
+      "avg_rouge_l": 0.3137,
+      "avg_factual_consistency": 0.7667,
+      "avg_structural_score": 0.87,
+      "avg_unsupported_entity_rate": 0.2
+    },
+    "Proposed_ATML_Pipeline": {
+      "avg_latency_ms": 1211.4,
+      "avg_token_f1": 0.5302,
+      "avg_rouge_l": 0.4814,
+      "avg_factual_consistency": 0.78,
+      "avg_structural_score": 0.88,
+      "avg_unsupported_entity_rate": 0.0
+    }
+  },
+  "detailed_runs": {
+    "Direct_Retrieval": [
+      {
+        "id": "tc-01-definition",
+        "answer": "1. Need for Visualization\nWhat is Data Visualization?\n- Data Visualization is the process of representing data in a visual form such as charts, graphs, maps, and diagrams so that patterns, trends, relationships, and important information can be understood easily.\n- In Big Data, the amount of data is very large and it may be difficult to understand it by looking at rows and columns of raw data. Visualization converts this large and complex data into an easy-to-understand visual format.\nExample: Instead of analysing thousands of sales records in a table, a line chart can show how sales changed month by month.",
+        "latency_ms": 0.02,
+        "f1": 0.5638,
+        "rouge_l": 0.4832,
+        "factual_consistency": 1.0,
+        "structural_score": 0.8,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-02-steps",
+        "answer": "Steps for Creating a Visualization\n1. Understand the Data\nFirst, understand what type of data is available and what information it contains. For example: Numerical values, Categories, Time-based information, Geographic information.\n2. Define the Purpose\nDetermine what you want to find or communicate from the data (e.g. changes over time, category comparisons, proportions).\n3. Select an Appropriate Visualization Technique\nChoose the chart or graph that best represents the required information (e.g. line chart for trends).\n4. Prepare and Process the Data\nBig Data contains large records that need to be filtered, aggregated, or summarized before visualization.\n5. Create the Visualization\nCreate the appropriate chart, graph, map, or dashboard.",
+        "latency_ms": 0.0,
+        "f1": 0.5525,
+        "rouge_l": 0.453,
+        "factual_consistency": 1.0,
+        "structural_score": 1.0,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-03-bullets-applications",
+        "answer": "Applications of Big Data Visualization\nBig Data visualization can be used in many industries, such as:\n- Airlines \u2013 analysing flight performance and customer feedback.\n- IoT \u2013 monitoring sensor data.\n- Energy \u2013 analysing energy consumption.\n- Media and Entertainment \u2013 analysing audience behaviour.\n- Automotive \u2013 analysing vehicle-related data.\n- Sports \u2013 analysing player and team performance.\n- Manufacturing \u2013 monitoring production and operational data.",
+        "latency_ms": 0.0,
+        "f1": 0.6154,
+        "rouge_l": 0.6154,
+        "factual_consistency": 1.0,
+        "structural_score": 1.0,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-04-reasons-need",
+        "answer": "Why is Visualization Needed in Big Data?\nBig Data contains a large volume of information, often stored across multiple servers. Looking directly at such data in tabular form makes it difficult to identify useful information.\nThe main needs for visualization are:\n1. Easy understanding of large data\n2. Identifying patterns and trends\n3. Finding relationships between variables\n4. Faster decision-making for managers\n5. Better communication of complex information\n6. Consolidating important insights on dashboards\n7. Handling high-volume, multi-source complex datasets",
+        "latency_ms": 0.0,
+        "f1": 0.3969,
+        "rouge_l": 0.3053,
+        "factual_consistency": 1.0,
+        "structural_score": 1.0,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-05-insufficient-evidence",
+        "answer": "Applications of Big Data Visualization\nBig Data visualization can be used in many industries such as airlines, energy, and manufacturing.",
+        "latency_ms": 0.0,
+        "f1": 0.0,
+        "rouge_l": 0.0,
+        "factual_consistency": 1.0,
+        "structural_score": 1.0,
+        "unsupported_entity_rate": 0.0
+      }
+    ],
+    "Transformer_Baseline": [
+      {
+        "id": "tc-01-definition",
+        "answer": "Data Visualization is the process of representing data in a visual form such as charts, graphs, maps, and diagrams so that patterns, trends, relationships, and important information can be understood easily.",
+        "latency_ms": 1373.34,
+        "f1": 0.6923,
+        "rouge_l": 0.641,
+        "factual_consistency": 1.0,
+        "structural_score": 1.0,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-02-steps",
+        "answer": "Understand the Data First, understand what type of data is available and what information it contains. For example: Numerical values, Categories, Time-based information, Geographic information. 2. Define the Purpose Determine what you want to find or communicate from the data (e.g. changes over time, category comparisons, proportions). 3. Select an Appropriate Visualization Technique Choose the chart or graph that best represents the required information (e.g. line chart for trends). 4. Prepare and Process the Data",
+        "latency_ms": 2774.28,
+        "f1": 0.5405,
+        "rouge_l": 0.4189,
+        "factual_consistency": 1.0,
+        "structural_score": 0.65,
+        "unsupported_entity_rate": 1.0
+      },
+      {
+        "id": "tc-03-bullets-applications",
+        "answer": "Aircraft \u2013 analysing flight performance and customer feedback.",
+        "latency_ms": 214.81,
+        "f1": 0.1754,
+        "rouge_l": 0.1754,
+        "factual_consistency": 0.8333,
+        "structural_score": 0.7,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-04-reasons-need",
+        "answer": "1. Easy understanding of large data 2. Identifying patterns and trends 3. Finding relationships between variables 4. Faster decision-making for managers 5. Better communication of complex information 6. Consolidating important insights on dashboards 7. Handling high-volume, multi-source complex datasets",
+        "latency_ms": 798.72,
+        "f1": 0.4444,
+        "rouge_l": 0.3333,
+        "factual_consistency": 1.0,
+        "structural_score": 1.0,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-05-insufficient-evidence",
+        "answer": "quantum entanglement",
+        "latency_ms": 162.38,
+        "f1": 0.0,
+        "rouge_l": 0.0,
+        "factual_consistency": 0.0,
+        "structural_score": 1.0,
+        "unsupported_entity_rate": 0.0
+      }
+    ],
+    "Proposed_ATML_Pipeline": [
+      {
+        "id": "tc-01-definition",
+        "answer": "the process of representing data in a visual form such as charts, graphs, maps, and diagrams so that patterns, trends, relationships, and important information can be understood easily",
+        "latency_ms": 933.82,
+        "f1": 0.64,
+        "rouge_l": 0.5867,
+        "factual_consistency": 1.0,
+        "structural_score": 1.0,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-02-steps",
+        "answer": "1. Steps for Creating a Visualization\n2. Understand the Data\n3. First, understand what type of data is available and what information it contains. For example:\n4. Numerical values, Categories, Time-based information, Geographic information.\n5. Define the Purpose\n6. Determine what you want to find or communicate from the data (e.g. changes over time, category comparisons, proportions).\n7. Select an Appropriate Visualization Technique\n8. Choose the chart or graph that best represents the required information (e.g. line chart for trends).\n9. Prepare and Process the Data\n10. Big Data contains large records that need to be filtered, aggregated, or summarized before visualization.\n11. Create the Visualization\n12. Create the appropriate chart, graph, map, or dashboard.",
+        "latency_ms": 3775.42,
+        "f1": 0.5319,
+        "rouge_l": 0.3936,
+        "factual_consistency": 1.0,
+        "structural_score": 1.0,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-03-bullets-applications",
+        "answer": "Aircraft \u2013 analysing flight performance and customer feedback. - IoT \u2013 monitoring sensor data.",
+        "latency_ms": 504.52,
+        "f1": 0.2951,
+        "rouge_l": 0.2951,
+        "factual_consistency": 0.9,
+        "structural_score": 0.7,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-04-reasons-need",
+        "answer": "Big Data contains a large volume of information, often stored across multiple servers. Looking directly at such data in tabular form makes it difficult to identify useful information",
+        "latency_ms": 578.81,
+        "f1": 0.1842,
+        "rouge_l": 0.1316,
+        "factual_consistency": 1.0,
+        "structural_score": 0.7,
+        "unsupported_entity_rate": 0.0
+      },
+      {
+        "id": "tc-05-insufficient-evidence",
+        "answer": "The retrieved documents do not provide sufficient information to answer this question.",
+        "latency_ms": 264.45,
+        "f1": 1.0,
+        "rouge_l": 1.0,
+        "factual_consistency": 0.0,
+        "structural_score": 1.0,
+        "unsupported_entity_rate": 0.0
+      }
+    ]
+  }
+}

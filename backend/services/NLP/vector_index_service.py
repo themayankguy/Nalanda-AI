@@ -24,10 +24,11 @@ def infer_question_type(query: str) -> str:
     if not clean_q:
         return "conceptual"
 
-    if re.search(r"\b(where|when|used|applied|application|applications|example|examples|implemented|deployment)\b", clean_q):
-        return "application"
-    if re.search(r"\b(how|works|working|mechanism|process|algorithm|steps|operation|function)\b", clean_q):
+    # Prioritize flow, process, architecture, and procedural mechanisms over generic definitions
+    if re.search(r"\b(flow|flows|workflow|dataflow|pipeline|architecture|architectures|components?|how|works|working|mechanism|process|algorithm|steps?|operation|function|lifecycle)\b", clean_q):
         return "working"
+    if re.search(r"\b(where|when|used|applied|application|applications|example|examples|implemented|deployment|use cases?)\b", clean_q):
+        return "application"
     if re.search(r"\b(what is|what are|what does|define|definition|overview|introduction|describe|explain|meaning|purpose)\b", clean_q):
         return "definition"
     return "conceptual"
@@ -356,18 +357,21 @@ class FolderVectorIndex:
                         intent_bonus += 0.15
 
                 elif question_type == "working":
-                    if any(m in sec_title_lower for m in ["steps", "procedure", "phases", "stages", "working", "mechanism", "process", "architecture", "algorithm", "how", "modes"]):
-                        intent_bonus += 0.22
-                    elif any(m in chunk_head for m in ["steps", "works by", "process of", "mechanism", "architecture", "algorithm"]):
-                        intent_bonus += 0.12
+                    if any(m in sec_title_lower for m in ["steps", "procedure", "phases", "stages", "working", "mechanism", "process", "architecture", "algorithm", "how", "modes", "flow", "workflow", "components", "component"]):
+                        intent_bonus += 0.25
+                    elif any(m in chunk_head for m in ["steps", "works by", "process of", "mechanism", "architecture", "algorithm", "flow", "components"]):
+                        intent_bonus += 0.15
                     if re.search(r"\b(steps?|procedure)\b", clean_q) and not re.search(r"\b(steps?|procedure)\b", sec_title_lower):
                         intent_bonus -= 0.10
+                    # When asking for flow/architecture/process, penalize pure application or use-case sections
+                    if re.search(r"\b(flow|workflow|architecture|process|working|mechanism)\b", clean_q) and re.search(r"\b(applications?|use cases?)\b", sec_title_lower):
+                        intent_bonus -= 0.25
 
                 elif question_type == "application":
                     if any(m in sec_title_lower for m in ["application", "applications", "usage", "use case", "example", "where"]):
-                        intent_bonus += 0.18
+                        intent_bonus += 0.22
                     elif any(m in chunk_head for m in ["used in", "applied in", "application", "use case"]):
-                        intent_bonus += 0.10
+                        intent_bonus += 0.12
 
                 # General topic match bonus: only if subject is not conflicted
                 if re.search(r"\b(modes?|execution)\b", clean_q) and re.search(r"\b(modes?|execution)\b", sec_title_lower):

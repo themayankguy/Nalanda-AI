@@ -1,0 +1,47 @@
+[
+  {
+    "id": "tc-01-definition",
+    "query": "What is Data Visualization?",
+    "expected_format": "paragraphs",
+    "retrieved_passages": [
+      "1. Need for Visualization\nWhat is Data Visualization?\n- Data Visualization is the process of representing data in a visual form such as charts, graphs, maps, and diagrams so that patterns, trends, relationships, and important information can be understood easily.\n- In Big Data, the amount of data is very large and it may be difficult to understand it by looking at rows and columns of raw data. Visualization converts this large and complex data into an easy-to-understand visual format.\nExample: Instead of analysing thousands of sales records in a table, a line chart can show how sales changed month by month."
+    ],
+    "ground_truth_answer": "Data Visualization is the process of representing data in visual formats such as charts, graphs, maps, and diagrams so that patterns, trends, and relationships can be easily understood. In Big Data, it converts large, complex datasets into accessible visual formats instead of scanning raw rows and columns."
+  },
+  {
+    "id": "tc-02-steps",
+    "query": "What are the steps for creating a visualization in big data?",
+    "expected_format": "steps",
+    "retrieved_passages": [
+      "Steps for Creating a Visualization\n1. Understand the Data\nFirst, understand what type of data is available and what information it contains. For example: Numerical values, Categories, Time-based information, Geographic information.\n2. Define the Purpose\nDetermine what you want to find or communicate from the data (e.g. changes over time, category comparisons, proportions).\n3. Select an Appropriate Visualization Technique\nChoose the chart or graph that best represents the required information (e.g. line chart for trends).\n4. Prepare and Process the Data\nBig Data contains large records that need to be filtered, aggregated, or summarized before visualization.\n5. Create the Visualization\nCreate the appropriate chart, graph, map, or dashboard."
+    ],
+    "ground_truth_answer": "1. Understand the Data: Examine the available data types such as numerical values, categories, or time-based data.\n2. Define the Purpose: Determine what insights need to be communicated.\n3. Select an Appropriate Visualization Technique: Choose suitable charts or graphs such as line charts or bar charts.\n4. Prepare and Process the Data: Filter, aggregate, and summarize the dataset.\n5. Create the Visualization: Generate the final chart, graph, or dashboard."
+  },
+  {
+    "id": "tc-03-bullets-applications",
+    "query": "What are the applications of Big Data Visualization?",
+    "expected_format": "bullets",
+    "retrieved_passages": [
+      "Applications of Big Data Visualization\nBig Data visualization can be used in many industries, such as:\n- Airlines – analysing flight performance and customer feedback.\n- IoT – monitoring sensor data.\n- Energy – analysing energy consumption.\n- Media and Entertainment – analysing audience behaviour.\n- Automotive – analysing vehicle-related data.\n- Sports – analysing player and team performance.\n- Manufacturing – monitoring production and operational data."
+    ],
+    "ground_truth_answer": "Big Data visualization is applied across diverse industries:\n- Airlines: Analyzing flight performance and customer feedback.\n- IoT: Monitoring real-time sensor streams.\n- Energy: Tracking power consumption patterns.\n- Media and Entertainment: Analyzing audience behavior.\n- Automotive: Evaluating vehicle telemetry data.\n- Sports: Assessing player and team performance.\n- Manufacturing: Monitoring production lines and operational metrics."
+  },
+  {
+    "id": "tc-04-reasons-need",
+    "query": "Why is visualization needed in Big Data?",
+    "expected_format": "bullets",
+    "retrieved_passages": [
+      "Why is Visualization Needed in Big Data?\nBig Data contains a large volume of information, often stored across multiple servers. Looking directly at such data in tabular form makes it difficult to identify useful information.\nThe main needs for visualization are:\n1. Easy understanding of large data\n2. Identifying patterns and trends\n3. Finding relationships between variables\n4. Faster decision-making for managers\n5. Better communication of complex information\n6. Consolidating important insights on dashboards\n7. Handling high-volume, multi-source complex datasets"
+    ],
+    "ground_truth_answer": "Visualization is critical in Big Data for several reasons:\n- Enables easy understanding of large and complex datasets.\n- Identifies emerging patterns, trends, and anomalies.\n- Discovers relationships and correlations between variables.\n- Accelerates executive decision-making.\n- Simplifies communication of technical insights to non-technical stakeholders.\n- Consolidates distributed data into interactive dashboards."
+  },
+  {
+    "id": "tc-05-insufficient-evidence",
+    "query": "What is quantum entanglement in topological superconductors?",
+    "expected_format": "paragraphs",
+    "retrieved_passages": [
+      "Applications of Big Data Visualization\nBig Data visualization can be used in many industries such as airlines, energy, and manufacturing."
+    ],
+    "ground_truth_answer": "The retrieved documents do not provide sufficient information to answer this question."
+  }
+]

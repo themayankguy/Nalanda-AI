@@ -67,9 +67,16 @@ def detect_section_heading(text_block: str) -> Optional[str]:
                 continue
 
         # Major structural headings (e.g. 'Working / Architecture of Apache Pig', 'Steps for Creating a Visualization', '9. Pig vs MapReduce')
-        if (re.search(r"\b(?:architecture|working\s*/\s*architecture|working\s+of|versus|\bvs\b|difference|comparison|execution\s+modes?|execution\s+flow)\b", line, flags=re.I) or
-            re.match(r"^(?:steps?|phases?|stages?|process|procedure|methods?|techniques?|workflow|lifecycle|components?|characteristics?|features?|types?|advantages?|disadvantages?|overview|introduction|modes?)\b", line, flags=re.I)) and len(words) <= 10:
-            candidates.append((line.strip(), 6))
+        clean_line = re.sub(r"^#{1,4}\s*", "", line).strip()
+        if (re.search(r"\b(?:architecture|working\s*/\s*architecture|working\s+of|versus|\bvs\b|difference|comparison|execution\s+modes?|execution\s+flow)\b", clean_line, flags=re.I) or
+            re.match(r"^(?:steps?|phases?|stages?|process|procedure|methods?|techniques?|workflow|lifecycle|components?|characteristics?|features?|types?|advantages?|disadvantages?|overview|introduction|modes?)\b", clean_line, flags=re.I)) and len(words) <= 10:
+            candidates.append((clean_line, 6))
+            continue
+
+        # 0. Major conceptual titles (e.g. 'Main Features of Big SQL', 'Apache Pig Architecture', 'HBase Example')
+        is_major_concept = bool(re.search(r"\b(vs|versus|difference|comparison|architecture|workflow|working|overview|introduction|components?|features?|applications?|techniques?|mechanisms?|types?|lifecycle|need|modes?|example|examples)\b", clean_line, re.I))
+        if is_major_concept and len(words) <= 9 and not line.endswith((".", ";")):
+            candidates.append((clean_line, 6))
             continue
 
         # 1. Markdown headings (e.g. '# Title', '## Section')

@@ -18,6 +18,9 @@ htmlcov/
 data/*.db
 data/*.db-journal
 data/*.sqlite3
+storage/*.db
+storage/*.db-journal
+storage/*.sqlite3
 storage/users/
 
 # OS generated files

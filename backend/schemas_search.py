@@ -1,5 +1,5 @@
 """Pydantic schemas for local semantic search, multimodal RAG retrieval, and structured answers."""
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -56,3 +56,4 @@ class SemanticSearchResponse(BaseModel):
     primary_table: Optional[TableItem] = None
     total_results: int
     results: List[SearchResultItem]
+    refinement_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Diagnostic ATML answer refinement metadata")

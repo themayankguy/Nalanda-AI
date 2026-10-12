@@ -23,6 +23,7 @@ from backend.services.NLP.vector_index_service import (
     FolderVectorIndex,
     get_embedding_model,
 )
+from backend.services.NLP.figure_ocr_service import get_figure_ocr_text
 from backend.schemas_search import (
     SemanticSearchRequest,
     SearchResultItem,
@@ -43,6 +44,25 @@ TABULAR_KEYWORDS = {
     "table", "compare", "comparison", "difference", "differences",
     "versus", "vs", "matrix", "parameters", "benchmark", "metrics"
 }
+
+
+def normalize_compound(text: str) -> str:
+    """Normalize text by stripping non-alphanumeric chars to match compounds like bigsql <-> big sql."""
+    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+def token_matches_text(token: str, text: str) -> bool:
+    """Check if token matches text with pluralization and compound word normalization."""
+    t = (token or "").lower().strip()
+    if not t:
+        return False
+    target = (text or "").lower()
+    if t in target or (len(t) > 3 and t.rstrip("s") in target):
+        return True
+    norm_t = normalize_compound(t)
+    norm_target = normalize_compound(target)
+    return bool(norm_t and (norm_t in norm_target))
+
 
 
 def detect_query_intent(query: str) -> str:
@@ -107,7 +127,7 @@ def extract_direct_answer(query: str, chunk_text: str, model=None) -> Optional[s
     q_lower = (query or "").lower().strip()
 
     # 1. Procedural, multi-step, list, reasons, features, or structured points: return full chunk content
-    is_list_query = bool(re.search(r"\b(steps?|process|stages?|phases?|how to|procedure|all steps|methods?|techniques?|reasons?|why|characteristics?|features?|components?|types?|states?|lifecycle)\b", q_lower))
+    is_list_query = bool(re.search(r"\b(steps?|process|stages?|phases?|how to|procedure|all steps|methods?|techniques?|reasons?|why|characteristics?|features?|components?|types?|states?|lifecycle|purposes?|goals?|needs?|objectives?|applications?|challenges?|advantages?|disadvantages?)\b", q_lower))
     has_numbered_steps = len(re.findall(r"(?:^|\n)\s*\d+[\.\)]\s+", chunk_text)) >= 2 or bool(re.search(r"\bStep\s+\d+\b", chunk_text, re.I))
     has_multiple_bullets = len(re.findall(r"(?:^|\n)\s*[-•*+]\s+", chunk_text)) >= 2
 
@@ -242,6 +262,110 @@ def sync_folder_index(db: Session, user_id: str, folder_id: str, model=None) -> 
     return index
 
 
+def traverse_and_stitch_continuations(
+    chunk: Dict[str, Any],
+    chunks_by_doc_idx: Dict[Tuple[str, int], Dict[str, Any]],
+    clean_query: str,
+    max_lookahead: int = 12,
+) -> Dict[str, Any]:
+    """Dynamically traverse and stitch subsequent contiguous chunks for complete procedures, lists, architectures, and examples."""
+    doc_id = chunk.get("document_id")
+    c_idx = chunk.get("chunk_index")
+    if doc_id is None or c_idx is None:
+        return chunk
+
+    stitched_chunk = dict(chunk)
+    stitched_texts = [chunk.get("text", "").strip()]
+    stitched_figures = list(chunk.get("figures", []))
+    stitched_tables = list(chunk.get("tables", []))
+
+    curr_idx = c_idx
+    for _ in range(max_lookahead):
+        next_chunk = chunks_by_doc_idx.get((doc_id, curr_idx + 1))
+        if not next_chunk:
+            break
+
+        next_text = next_chunk.get("text", "").strip()
+        if not next_text:
+            break
+
+        curr_page = chunk.get("page_number") or 0
+        next_page = next_chunk.get("page_number") or curr_page
+        if next_page > curr_page + 3:
+            break
+
+        # Guard against crossing over into an entirely new major topic or chapter
+        first_line_next = next_text.splitlines()[0].strip() if next_text else ""
+        if re.search(r"^(?:unit|module|chapter)\s+\d+\b", first_line_next, re.I):
+            break
+        curr_title = (chunk.get("section_title") or "").lower()
+        if re.search(r"\b(?:introduction|what is|overview)\b", first_line_next, re.I) and not re.search(r"\b(contd|part\s+\d+)\b", first_line_next, re.I):
+            curr_subj = set(re.findall(r"\b\w{3,}\b", curr_title))
+            next_subj = set(re.findall(r"\b\w{3,}\b", first_line_next.lower())) - {"introduction", "overview", "what"}
+            if curr_subj and next_subj and not curr_subj.intersection(next_subj):
+                break
+
+        curr_full_text = "\n\n".join(stitched_texts)
+        curr_nums = [int(m) for m in re.findall(r"(?:^|\n)\s*(?:Step\s+)?(\d+)[\.\:\)]", curr_full_text, re.I)]
+        next_nums = [int(m) for m in re.findall(r"(?:^|\n)\s*(?:Step\s+)?(\d+)[\.\:\)]", next_text, re.I)]
+
+        max_curr = max(curr_nums) if curr_nums else 0
+        min_next = min(next_nums) if next_nums else 999
+
+        # 1. Sequential continuation (e.g. 1, 2 followed by 3, 4, then 5, 6, 7...)
+        is_seq_continuation = bool(curr_nums and next_nums and min_next <= max_curr + 2 and max(next_nums) > max_curr)
+
+        # 2. Elaboration breakdown continuation (e.g. overview list of components 1, 2, 3 followed immediately by detailed numbered breakdown restarting at 1)
+        is_elaboration_continuation = bool(
+            curr_nums
+            and next_nums
+            and (1 in next_nums or min_next <= 2)
+            and (len(curr_full_text) < 600 or any(kw in curr_full_text.lower() for kw in ["components", "architecture", "following", "consists", "include", "workflow", "steps"]))
+        )
+
+        # 3. Subordinate bullet points continuation for the preceding numbered component
+        is_bullet_continuation = bool(curr_nums and not next_nums and re.match(r"^\s*[-•*+]\s+", next_text))
+
+        # 4. Introductory overview transitioning into numbered breakdown (e.g. intro describing architecture/process preceding points 1, 2...)
+        is_intro_breakdown = bool(not curr_nums and next_nums and (1 in next_nums or min_next <= 2))
+
+        # 5. Short title/heading snippet continuation (e.g. standalone section header chunks < 180 chars)
+        is_short_snippet = bool(len(curr_full_text) < 180 or curr_full_text.endswith(":"))
+
+        # 6. End-of-process practical example/scenario continuation
+        is_example_continuation = bool(curr_nums and re.search(r"^(?:Example|For example|Case study)\b", next_text, re.I))
+
+        # 7. Continuation section title
+        next_title = (next_chunk.get("section_title") or "").lower()
+        curr_title = (chunk.get("section_title") or "").lower()
+        is_title_continuation = bool(
+            curr_title and len(curr_title) > 5 and ("(contd" in next_title or curr_title in next_title or next_title in curr_title)
+        )
+
+        if (
+            is_seq_continuation
+            or is_elaboration_continuation
+            or is_bullet_continuation
+            or is_intro_breakdown
+            or is_short_snippet
+            or is_example_continuation
+            or is_title_continuation
+        ):
+            stitched_texts.append(next_text)
+            stitched_figures.extend(next_chunk.get("figures", []))
+            stitched_tables.extend(next_chunk.get("tables", []))
+            curr_idx += 1
+        else:
+            break
+
+    if len(stitched_texts) > 1:
+        stitched_chunk["text"] = "\n\n".join(stitched_texts)
+        stitched_chunk["figures"] = stitched_figures
+        stitched_chunk["tables"] = stitched_tables
+
+    return stitched_chunk
+
+
 def execute_semantic_search(
     db: Session,
     current_user: User,
@@ -283,12 +407,76 @@ def execute_semantic_search(
         )
 
     detected_intent = detect_query_intent(clean_query)
+    is_asking_for_examples = bool(re.search(r"\bexamples?\b", clean_query, re.I))
+    is_diagram_query = bool(re.search(r"\b(diagrams?|flowcharts?|illustrations?|drawings?|schematics?|flow\s+diagrams?|(?:show|with|include|give)\s+(?:an?\s+)?(?:diagram|figure|image|chart|flowchart))\b", clean_query, re.I))
 
     # Sync and search folder's isolated vector index
     try:
         model = get_embedding_model()
         index = sync_folder_index(db, current_user.id, folder.id, model=model)
         raw_matches = index.search(query=clean_query, top_k=request.top_k, model=model)
+
+        # Stitch introductory chunks or multi-part sections across chunk boundaries
+        chunks_by_doc_idx = {(c.get("document_id"), c.get("chunk_index")): c for c in index.chunks if c.get("chunk_index") is not None}
+        stitched_matches = []
+        for chunk, relevance in raw_matches:
+            stitched_chunk = traverse_and_stitch_continuations(chunk, chunks_by_doc_idx, clean_query)
+            stitched_matches.append((stitched_chunk, relevance))
+
+        # Boost chunks whose section_title or content directly matches query target keywords
+        q_target_words = set(re.findall(r"\b\w{3,}\b", clean_query.lower())) - {"what", "how", "why", "the", "for", "and", "show", "tell", "explain", "about", "data"}
+        query_word_list = re.findall(r"\b\w{3,}\b", clean_query.lower())
+        is_flow_or_arch_query = bool(re.search(r"\b(flow|flows|workflow|architecture|architectures|dataflow|pipeline|components?)\b", clean_query, re.I))
+        is_feature_query = bool(re.search(r"\b(features?|characteristics?|properties?)\b", clean_query, re.I))
+        arch_synonyms = {"flow", "flows", "architecture", "architectures", "component", "components", "working", "mechanism", "process"}
+
+        boosted_matches = []
+        for c, rel in stitched_matches:
+            sec_clean = re.sub(r"^\d+(?:\.\d+)+\s*", "", c.get("section_title") or "").lower()
+            text_lower = (c.get("text") or "").lower()
+            chunk_headings = [l.lower().strip() for l in c.get("text", "").splitlines()[:6] if len(l.strip()) < 80]
+            combined_headings = f"{sec_clean} {' '.join(chunk_headings)}"
+
+            matched = [w for w in q_target_words if w in combined_headings or (len(w) > 3 and w.rstrip("s") in combined_headings)]
+
+            # Recognize architectural/flow conceptual alignment
+            if is_flow_or_arch_query and any(syn in combined_headings for syn in arch_synonyms):
+                matched.append("architecture_flow")
+
+            # Recognize feature conceptual alignment
+            if is_feature_query and any(syn in combined_headings for syn in ["feature", "features", "characteristic", "characteristics"]):
+                matched.append("features_concept")
+
+            boost = 0.25 * (len(matched) / max(len(q_target_words), 1))
+
+            # Generalized multi-token bigram phrase boost (e.g. "client communication", "main features", "big sql")
+            if len(query_word_list) >= 2:
+                for bi_idx in range(len(query_word_list) - 1):
+                    bigram = f"{query_word_list[bi_idx]} {query_word_list[bi_idx+1]}"
+                    if bigram in text_lower or bigram in combined_headings:
+                        boost += 0.30
+                        break
+
+            # Boost chunks with complete examples when query asks for examples
+            if is_asking_for_examples and re.search(r"\b(example|for example)\b", c.get("text", ""), re.I):
+                boost += 0.20
+
+            # Boost chunks with figures ONLY when query explicitly asks for a diagram
+            if is_diagram_query and c.get("figures"):
+                boost += 0.20
+
+            # If asking for flow or architecture, avoid boosting applications
+            if is_flow_or_arch_query and re.search(r"\b(applications?|use cases?)\b", sec_clean):
+                boost -= 0.30
+
+            # If asking for features, avoid boosting architecture/limitations chunks over feature chunks
+            if is_feature_query and re.search(r"\b(architecture|workflow|limitations?)\b", sec_clean) and "architecture" not in clean_query.lower():
+                boost -= 0.35
+
+            boosted_matches.append((c, rel + boost))
+
+        boosted_matches.sort(key=lambda x: x[1], reverse=True)
+        raw_matches = boosted_matches
     except RuntimeError as exc:
         logger.error("Embedding or indexing failure during search: %s", exc)
         raise HTTPException(
@@ -304,6 +492,11 @@ def execute_semantic_search(
     candidate_tables: List[Tuple[float, TableItem]] = []
 
     query_words = set(re.findall(r"\b\w{3,}\b", clean_query.lower())) - {"what", "how", "why", "the", "for", "and", "show", "tell", "explain", "about"}
+    generic_structure_terms = {
+        "step", "steps", "flow", "flows", "diagram", "diagrams", "process", "architecture",
+        "working", "mechanism", "overview", "application", "applications", "table", "figure"
+    }
+    subj_tokens = query_words - generic_structure_terms
 
     for idx, (chunk, relevance) in enumerate(raw_matches):
         doc_id = chunk.get("document_id", "")
@@ -313,8 +506,12 @@ def execute_semantic_search(
 
         # Extract direct answer from chunk text
         direct_ans = extract_direct_answer(clean_query, chunk_text, model=model)
-        if overall_direct_answer is None and direct_ans:
-            overall_direct_answer = direct_ans
+        is_title_match = bool(query_words and any(w in sec_title for w in query_words) and len(chunk_text) > 200)
+        if overall_direct_answer is None:
+            if is_title_match:
+                overall_direct_answer = chunk_text
+            elif direct_ans:
+                overall_direct_answer = direct_ans
 
         # Build figures list
         chunk_figures: List[FigureItem] = []
@@ -333,27 +530,6 @@ def execute_semantic_search(
                 height=fig_data.get("height"),
             )
             chunk_figures.append(fig_item)
-
-            # Score candidate figure for primary promotion
-            fig_cap = (fig_data.get("caption") or "").lower()
-            is_relevant_caption = bool(query_words and any(w in fig_cap for w in query_words))
-            w = fig_data.get("width") or 0
-            h = fig_data.get("height") or 0
-            aspect = (w / max(h, 1)) if (w and h) else 1.0
-
-            fig_score = relevance
-            if is_relevant_caption:
-                fig_score += 1.0
-            if any(qw in sec_title for qw in query_words):
-                fig_score += 0.5
-            # Deprioritize wide horizontal syllabus banners or headers (aspect ratio > 3.2)
-            if aspect > 3.2:
-                fig_score -= 0.6
-            elif 0.4 <= aspect <= 2.5 and h >= 200:
-                fig_score += 0.4
-
-            if detected_intent == "visual" or is_relevant_caption:
-                candidate_figures.append((fig_score, fig_item))
 
         # Build tables list
         chunk_tables: List[TableItem] = []
@@ -422,63 +598,149 @@ def execute_semantic_search(
             )
         )
 
+    # Precise, OCR-aware multi-page diagram resolution:
+    if is_diagram_query or detected_intent == "visual":
+        top_chunk = raw_matches[0][0] if raw_matches else {}
+        top_doc_id = top_chunk.get("document_id", "")
+        top_page = top_chunk.get("page_number", 0)
+        top_sec = (top_chunk.get("section_title") or "").lower()
+        top_text = (top_chunk.get("text") or "").lower()
+        top_words = set(re.findall(r"\b\w{3,}\b", top_text))
+
+        seen_figure_names = set()
+        candidate_figures: List[Tuple[float, FigureItem]] = []
+
+        # Gather figures from raw_matches first, followed by all remaining document chunks
+        all_candidate_chunks = [m[0] for m in raw_matches] + [c for c in index.chunks if c not in [m[0] for m in raw_matches]]
+
+        for c in all_candidate_chunks:
+            c_doc_id = c.get("document_id") or ""
+            c_sec = (c.get("section_title") or "").lower()
+            c_page = c.get("page_number")
+
+            for fig_data in c.get("figures", []):
+                fname = fig_data.get("filename")
+                if not fname or fname in seen_figure_names:
+                    continue
+                seen_figure_names.add(fname)
+
+                f_page = fig_data.get("page", c_page)
+                f_cap = (fig_data.get("caption") or "").lower()
+                f_w = fig_data.get("width") or 0
+                f_h = fig_data.get("height") or 0
+                f_aspect = (f_w / max(f_h, 1)) if (f_w and f_h) else 1.0
+
+                page_dist = abs(f_page - top_page) if (top_page and c_doc_id == top_doc_id) else 99
+                should_auto_extract = bool(c_doc_id == top_doc_id and page_dist <= 2)
+                fig_ocr = get_figure_ocr_text(current_user.id, folder.id, c_doc_id, fname, auto_extract=should_auto_extract).lower()
+
+                # Check subject alignment
+                fig_context = f"{c_sec} {fig_ocr} {f_cap}"
+                has_subject = not subj_tokens or any(token_matches_text(st, fig_context) for st in subj_tokens)
+                if not has_subject and page_dist <= 1:
+                    has_subject = any(token_matches_text(st, f"{top_sec} {top_text}") for st in subj_tokens)
+
+                if not has_subject and subj_tokens:
+                    continue
+
+                score = 0.0
+                if c_doc_id == top_doc_id:
+                    score += 1.0
+
+                # Adjacency boost to the top answer chunk
+                if page_dist == 0:
+                    score += 2.5
+                elif page_dist == 1:
+                    score += 2.0
+                elif page_dist == 2:
+                    score += 1.0
+
+                # Query match in OCR, section title, or caption
+                matched_query = [qw for qw in query_words if token_matches_text(qw, f"{fig_ocr} {c_sec} {f_cap}")]
+                score += 2.5 * (len(matched_query) / max(len(query_words), 1))
+
+                # Vocabulary overlap with top answer text
+                if fig_ocr:
+                    ocr_words = set(re.findall(r"\b\w{3,}\b", fig_ocr))
+                    overlap = ocr_words.intersection(top_words) - {"page", "figure", "the", "and", "with", "from", "for"}
+                    score += 0.5 * min(len(overlap), 5)
+
+                # Penalize syllabus/outline banner on Page 1 unless query specifically asks for syllabus
+                if f_page == 1 and any(syl in fig_ocr for syl in ["syllabus", "eco system", "course outline", "introduction to pig, execution"]):
+                    if not any(token_matches_text(st, "syllabus outline eco system") for st in subj_tokens):
+                        score -= 4.0
+
+                # Extreme aspect ratio penalty (e.g. thin horizontal syllabus slivers)
+                if f_aspect > 3.2:
+                    score -= 2.0
+                elif 0.4 <= f_aspect <= 2.5 and f_h >= 200:
+                    score += 0.5
+
+                f_item = FigureItem(
+                    figure_index=fig_data.get("figure_index", 1),
+                    page_number=f_page,
+                    filename=fname,
+                    figure_url=f"/api/documents/{c_doc_id}/figures/{fname}",
+                    caption=fig_data.get("caption"),
+                    source=fig_data.get("source"),
+                    width=fig_data.get("width"),
+                    height=fig_data.get("height"),
+                )
+                candidate_figures.append((score, f_item))
+
+        if candidate_figures:
+            candidate_figures.sort(key=lambda x: x[0], reverse=True)
+            primary_figure = candidate_figures[0][1]
+    else:
+        # Conceptual query: user did not request a diagram, so omit the extracted diagram banner
+        primary_figure = None
+
     if detected_intent == "visual":
         candidate_tables = []
-    elif detected_intent == "tabular":
-        candidate_figures = []
-
-    if candidate_figures:
-        candidate_figures.sort(key=lambda x: x[0], reverse=True)
-        primary_figure = candidate_figures[0][1]
 
     if candidate_tables:
         candidate_tables.sort(key=lambda x: x[0], reverse=True)
         primary_table = candidate_tables[0][1]
 
-    # For list/step/procedural queries or when results contain structured section continuations:
-    is_list_query = bool(re.search(r"\b(steps?|process|stages?|phases?|how to|procedure|all steps|methods?|techniques?|reasons?|why|characteristics?|features?|components?|types?|states?|lifecycle)\b", clean_query, flags=re.I))
+    # For list/step/procedural/architectural queries or when results contain structured section continuations:
+    is_list_query = bool(re.search(r"\b(steps?|process|stages?|phases?|how to|procedure|all steps|methods?|techniques?|reasons?|why|characteristics?|features?|components?|types?|states?|lifecycle|purposes?|goals?|needs?|objectives?|applications?|challenges?|advantages?|disadvantages?|examples?|architecture|architectures|workflow|workflows|flow|flows|dataflow|pipeline|breakdown|mechanism|mechanisms|working)\b", clean_query, flags=re.I))
 
-    if raw_matches and (is_list_query or (overall_direct_answer and re.search(r"(?:^|\n)\s*\d+[\.\)]", overall_direct_answer))):
+    if raw_matches:
         top_chunk = raw_matches[0][0]
-        top_title = (top_chunk.get("section_title") or "").replace(" (Contd.)", "").strip().lower()
+        top_text = top_chunk.get("text", "").strip()
+        has_multi_points = len(re.findall(r"(?:^|\n)\s*(?:\d+[\.\)]|[-•*+])\s+", top_text)) >= 2
+        if is_list_query or is_asking_for_examples or has_multi_points or not overall_direct_answer or len(top_text) > len(overall_direct_answer):
+            overall_direct_answer = top_text
+    # ATML Answer Refinement Integration:
+    # Synthesizes, rewrites, structures, and validates answer using Seq2Seq Transformer
+    refinement_metadata: Optional[Dict[str, Any]] = None
+    if raw_matches:
+        try:
+            from backend.services.atml.answer_refiner import AnswerRefinementEngine
+            from backend.services.atml.config import default_config
 
-        # Find all top matches sharing the parent section
-        continuation_chunks = []
-        for c, rel in raw_matches:
-            c_title = (c.get("section_title") or "").replace(" (Contd.)", "").strip().lower()
-            if top_title and (top_title in c_title or c_title in top_title):
-                continuation_chunks.append(c)
+            if default_config.enable_refinement:
+                atml_engine = AnswerRefinementEngine(default_config)
+                top_chunks_for_refinement = [m[0] for m in raw_matches[:default_config.max_context_chunks]]
+                top_rel = float(raw_matches[0][1]) if raw_matches else 0.0
 
-        if len(continuation_chunks) > 1:
-            # Sort by page number and initial step number
-            def sort_key(c):
-                c_nums = [int(m) for m in re.findall(r"(?:^|\n)\s*(?:Step\s+)?(\d+)[\.\:\)]", c.get("text", ""), re.I)]
-                return (c.get("page_number") or 0, min(c_nums) if c_nums else 999)
-
-            continuation_chunks.sort(key=sort_key)
-            seen_texts = set()
-            stitched_parts = []
-            for c in continuation_chunks:
-                t = c.get("text", "").strip()
-                if t and t not in seen_texts:
-                    seen_texts.add(t)
-                    clean_t = "\n".join(l for l in t.splitlines() if not l.strip().startswith("|")).strip()
-                    stitched_parts.append(clean_t)
-
-            if stitched_parts:
-                overall_direct_answer = "\n\n".join(stitched_parts)
-
-    if overall_direct_answer:
-        nums = [int(m) for m in re.findall(r"(?:^|\n)\s*(?:Step\s+)?(\d+)[\.\:\)]", overall_direct_answer, re.I)]
-        if nums:
-            last_num = max(nums)
-            for chunk, _ in raw_matches[1:]:
-                c_text = chunk.get("text", "")
-                c_nums = [int(m) for m in re.findall(r"(?:^|\n)\s*(?:Step\s+)?(\d+)[\.\:\)]", c_text, re.I)]
-                if c_nums and min(c_nums) == last_num + 1:
-                    clean_c = "\n".join(l for l in c_text.splitlines() if not l.strip().startswith("|")).strip()
-                    overall_direct_answer = overall_direct_answer.strip() + "\n\n" + clean_c
-                    last_num = max(c_nums)
+                refinement_result = atml_engine.refine_answer(
+                    query=clean_query,
+                    retrieved_chunks=top_chunks_for_refinement,
+                    fallback_direct_answer=overall_direct_answer,
+                    retrieval_confidence=top_rel,
+                )
+                if refinement_result and refinement_result.answer:
+                    overall_direct_answer = refinement_result.answer
+                    refinement_metadata = {
+                        "is_refined": refinement_result.is_refined,
+                        "model_name": refinement_result.model_name,
+                        "latency_ms": refinement_result.latency_ms,
+                        "grounded": refinement_result.grounded,
+                        "confidence_score": refinement_result.validation.confidence_score,
+                    }
+        except Exception as exc:
+            logger.warning("ATML answer refinement bypassed due to: %s", exc)
 
     return SemanticSearchResponse(
         query=clean_query,
@@ -489,4 +751,6 @@ def execute_semantic_search(
         primary_table=primary_table,
         total_results=len(results),
         results=results,
+        refinement_metadata=refinement_metadata,
     )
+

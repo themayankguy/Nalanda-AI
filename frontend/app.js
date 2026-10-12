@@ -402,6 +402,13 @@ async function selectFolder(folderId) {
   await loadDocuments(folderId);
 }
 
+function formatInlineMarkdown(str) {
+  let esc = escapeHtml(str);
+  esc = esc.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  esc = esc.replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px; font-family:monospace; font-size:0.9em;">$1</code>');
+  return esc;
+}
+
 function formatDirectAnswerHtml(text) {
   if (!text) return "";
   const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
@@ -409,10 +416,23 @@ function formatDirectAnswerHtml(text) {
   let inList = false;
 
   for (const line of lines) {
+    const headingMatch = line.match(/^#{1,4}\s+(.+)$/);
     const stepMatch = line.match(/^(\d+[\.\)])\s*(.+)$/);
-    const bulletMatch = line.match(/^[-•*+]\s*(.+)$/);
+    const bulletMatch = line.match(/^(?:[-•+]|\*(?!\*))\s*(.+)$/);
 
-    if (stepMatch) {
+    if (headingMatch) {
+      if (inList) {
+        htmlParts.push("</ul>");
+        inList = false;
+      }
+      htmlParts.push(`<div class="direct-answer-section-header" style="font-weight:700; margin-top:8px; margin-bottom:4px; color:var(--text-primary);">${formatInlineMarkdown(headingMatch[1])}</div>`);
+    } else if (line.includes(" → ")) {
+      if (inList) {
+        htmlParts.push("</ul>");
+        inList = false;
+      }
+      htmlParts.push(`<div class="direct-answer-flow" style="background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.25); border-radius:8px; padding:10px 14px; margin:10px 0; font-size:0.95rem; line-height:1.6; color:var(--text-primary);">${formatInlineMarkdown(line)}</div>`);
+    } else if (stepMatch) {
       if (inList) {
         htmlParts.push("</ul>");
         inList = false;
@@ -422,7 +442,7 @@ function formatDirectAnswerHtml(text) {
       htmlParts.push(`
         <div class="direct-answer-step">
           <span class="direct-answer-step-num">${escapeHtml(num)}</span>
-          <span class="direct-answer-step-text">${escapeHtml(rest)}</span>
+          <span class="direct-answer-step-text">${formatInlineMarkdown(rest)}</span>
         </div>
       `);
     } else if (bulletMatch) {
@@ -430,16 +450,16 @@ function formatDirectAnswerHtml(text) {
         htmlParts.push('<ul class="direct-answer-bullet-list">');
         inList = true;
       }
-      htmlParts.push(`<li>${escapeHtml(bulletMatch[1])}</li>`);
+      htmlParts.push(`<li>${formatInlineMarkdown(bulletMatch[1])}</li>`);
     } else {
       if (inList) {
         htmlParts.push("</ul>");
         inList = false;
       }
       if (line.length < 80 && !/[.:;]$/.test(line) && /^[A-Z]/.test(line)) {
-        htmlParts.push(`<div class="direct-answer-section-header">${escapeHtml(line)}</div>`);
+        htmlParts.push(`<div class="direct-answer-section-header">${formatInlineMarkdown(line)}</div>`);
       } else {
-        htmlParts.push(`<p class="direct-answer-para">${escapeHtml(line)}</p>`);
+        htmlParts.push(`<p class="direct-answer-para">${formatInlineMarkdown(line)}</p>`);
       }
     }
   }
@@ -520,9 +540,16 @@ async function handleSemanticSearch(event) {
     } else {
       // 1. Direct Answer Card
       if (data.direct_answer) {
+        const isRefined = data.refinement_metadata && data.refinement_metadata.is_refined;
+        const badge = isRefined
+          ? `<span style="display:inline-flex; align-items:center; gap:4px; font-size:0.75rem; background:rgba(99, 102, 241, 0.15); color:#818cf8; border:1px solid rgba(99, 102, 241, 0.3); padding:2px 8px; border-radius:12px; margin-left:8px; font-weight:500;">✨ Refined (Seq2Seq)</span>`
+          : '';
         bubbleContent += `
           <div class="direct-answer-card">
-            <div class="direct-answer-title">💡 Direct Answer</div>
+            <div class="direct-answer-title" style="display:flex; align-items:center;">
+              <span>💡 Direct Answer</span>
+              ${badge}
+            </div>
             <div class="direct-answer-body">${formatDirectAnswerHtml(data.direct_answer)}</div>
           </div>
         `;
