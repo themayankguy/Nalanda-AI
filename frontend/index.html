@@ -231,8 +231,9 @@
           </div>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-primary btn-sm" id="btn-download-pdf" onclick="downloadNotesPDF()" type="button" title="Download formatted PDF document directly to your computer">📥 Download PDF</button>
+          <button class="btn btn-secondary btn-sm" id="btn-print-notes" onclick="printNotesPDF()" type="button" title="Print notes or save as PDF via system dialog with all sections expanded">🖨️ Print / Save PDF</button>
           <button class="btn btn-secondary btn-sm" id="btn-copy-notes" onclick="copyNotesToClipboard()" type="button" title="Copy complete Markdown notes to clipboard">📋 Copy Markdown</button>
-          <button class="btn btn-secondary btn-sm" id="btn-print-notes" onclick="printNotesPDF()" type="button" title="Download or print as formatted PDF">🖨️ Download PDF</button>
           <button class="btn btn-secondary btn-sm" onclick="closeNotesModal()" type="button">✕</button>
         </div>
       </div>
@@ -245,6 +246,6 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="/assets/app.js?v=3"></script>
+  <script src="/assets/app.js?v=5"></script>
 </body>
 </html>

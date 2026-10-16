@@ -1209,11 +1209,89 @@ function copyNotesToClipboard() {
   });
 }
 
+async function downloadNotesPDF() {
+  if (!currentNotesData) {
+    showToast("Please wait for notes to finish generating.", "error");
+    return;
+  }
+
+  const btn = document.getElementById("btn-download-pdf");
+  const originalHtml = btn ? btn.innerHTML : "📥 Download PDF";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner" style="width:12px;height:12px;margin-right:6px;display:inline-block;vertical-align:middle;"></span> Generating PDF...`;
+  }
+
+  try {
+    const token = localStorage.getItem("token") || "";
+    const folderId = currentNotesData.folder_id || currentFolderId;
+
+    const response = await fetch(`/api/folders/${folderId}/notes/export-pdf`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        markdown_content: currentNotesData.markdown_content
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Export failed with HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.style.display = "none";
+    a.href = url;
+    const safeName = (currentNotesData.folder_name || "Course").replace(/[^a-zA-Z0-9_-]/g, "_");
+    a.download = `Study_Guide_${safeName}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+
+    showToast("📥 PDF Study Guide downloaded successfully!", "success");
+  } catch (err) {
+    console.error("PDF download failed:", err);
+    showToast("Failed to download PDF. Please try Print / Save PDF instead.", "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
+function downloadNotesMarkdown() {
+  if (!currentNotesData || !currentNotesData.markdown_content) {
+    showToast("No notes content available to download.", "error");
+    return;
+  }
+  const blob = new Blob([currentNotesData.markdown_content], { type: "text/markdown;charset=utf-8" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.style.display = "none";
+  a.href = url;
+  const safeName = (currentNotesData.folder_name || "Course").replace(/[^a-zA-Z0-9_-]/g, "_");
+  a.download = `Study_Guide_${safeName}.md`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
+  showToast("📝 Markdown file downloaded!", "success");
+}
+
 function printNotesPDF() {
   if (!currentNotesData) {
     showToast("Please wait for notes to finish generating.", "error");
     return;
   }
+  // Expand all details cards so print preview captures all pages and sections without clipping
+  const sectionCards = document.querySelectorAll("#notes-modal-body details");
+  sectionCards.forEach(el => el.setAttribute("open", "true"));
   window.print();
 }
 
@@ -1227,6 +1305,11 @@ function renderMarkdownToHtml(md) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
+  // Fenced Code Blocks (```lang ... ```)
+  html = html.replace(/```(?:[a-zA-Z0-9_\-]+)?\r?\n([\s\S]*?)```/g, function(match, code) {
+    return '<pre class="notes-code-block"><code>' + code.trim() + '</code></pre>';
+  });
+
   // Headers
   html = html.replace(/^#### (.*?)$/gm, '<h4 class="notes-h4">$1</h4>');
   html = html.replace(/^### (.*?)$/gm, '<h3 class="notes-h3">$1</h3>');
@@ -1236,7 +1319,7 @@ function renderMarkdownToHtml(md) {
   // Blockquotes (Callouts)
   html = html.replace(/^&gt; (.*?)$/gm, '<blockquote class="notes-blockquote">$1</blockquote>');
 
-  // Bold & Italic & Code
+  // Bold & Italic & Inline Code
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
   html = html.replace(/`([^`]+)`/g, '<code class="notes-inline-code">$1</code>');

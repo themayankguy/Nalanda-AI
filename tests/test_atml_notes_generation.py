@@ -112,3 +112,129 @@ class TestNotesAPIEndpoint:
         client = TestClient(app)
         response = client.get("/api/folders/fake-id/notes")
         assert response.status_code in [401, 403, 404]
+
+    def test_multi_document_notes_synthesis_includes_all_documents(self, monkeypatch):
+        """Verify that when multiple documents are present, all appear in sections and citations."""
+        from unittest.mock import MagicMock
+        from backend.models import Folder, User, Document
+
+        generator = NotesGenerator()
+
+        mock_user = MagicMock(spec=User)
+        mock_user.id = "user-123"
+
+        mock_folder = MagicMock(spec=Folder)
+        mock_folder.id = "folder-456"
+        mock_folder.name = "Distributed Computing"
+        mock_folder.user_id = "user-123"
+
+        doc1 = MagicMock(spec=Document)
+        doc1.id = "doc-1"
+        doc1.original_filename = "Unit_1_HDFS.pdf"
+        doc1.status = "completed"
+        doc1.extraction = None
+
+        doc2 = MagicMock(spec=Document)
+        doc2.id = "doc-2"
+        doc2.original_filename = "Unit_2_Spark.pdf"
+        doc2.status = "completed"
+        doc2.extraction = None
+
+        mock_db = MagicMock()
+        mock_query = mock_db.query.return_value
+        # First query is for folder, second for completed documents
+        mock_query.filter.return_value.first.return_value = mock_folder
+        mock_query.filter.return_value.all.return_value = [doc1, doc2]
+
+        sample_chunks = [
+            {
+                "document_id": "doc-1",
+                "source_filename": "Unit_1_HDFS.pdf",
+                "page_number": 1,
+                "section_title": "HDFS Overview",
+                "text": "HDFS is defined as a distributed file system designed to run on commodity hardware.",
+            },
+            {
+                "document_id": "doc-2",
+                "source_filename": "Unit_2_Spark.pdf",
+                "page_number": 3,
+                "section_title": "Spark RDDs",
+                "text": "Apache Spark refers to a unified analytics engine for large-scale data processing.",
+            },
+        ]
+
+        # Patch FolderVectorIndex to return sample_chunks
+        class MockIndex:
+            def __init__(self, *args, **kwargs):
+                self.chunks = sample_chunks
+
+        monkeypatch.setattr("backend.services.atml.notes_generator.FolderVectorIndex", MockIndex)
+
+        res = generator.generate_notes_for_folder(mock_db, mock_user, "folder-456")
+
+        assert len(res.documents_analyzed) == 2
+        assert "Unit_1_HDFS.pdf" in res.documents_analyzed
+        assert "Unit_2_Spark.pdf" in res.documents_analyzed
+
+        # Verify that both documents are cited in the guide
+        all_citations = []
+        for s in res.sections:
+            all_citations.extend(s.citations)
+
+        has_doc1 = any("Unit_1_HDFS.pdf" in cit for cit in all_citations)
+        has_doc2 = any("Unit_2_Spark.pdf" in cit for cit in all_citations)
+        assert has_doc1, "Expected Unit_1_HDFS.pdf citations"
+        assert has_doc2, "Expected Unit_2_Spark.pdf citations"
+
+        # Verify markdown content mentions both documents
+        assert "Unit_1_HDFS.pdf" in res.markdown_content
+        assert "Unit_2_Spark.pdf" in res.markdown_content
+
+
+class TestNotesPdfExport:
+    def test_pdf_exporter_generates_valid_pdf_bytes(self):
+        """Verify that NotesPdfExporter produces valid multi-page PDF bytes from markdown."""
+        import fitz
+        from backend.services.atml.pdf_exporter import NotesPdfExporter
+
+        exporter = NotesPdfExporter()
+        sample_md = """
+# Comprehensive Study Guide: Big Data
+## 1. Overview
+This is a comprehensive study guide for testing PDF generation.
+
+## 2. Core Concepts
+### 2.1 HDFS Architecture
+- **Formal Definition:** Distributed filesystem for commodity clusters.
+- **Key Characteristics:** 128MB block size, 3x replication factor.
+> Provenance: Unit 2 (Page 1)
+
+## 3. Comparative Matrix
+| System | Role | Execution |
+| :--- | :--- | :--- |
+| **HDFS** | Storage | Block replication |
+| **Pig** | Processing | MapReduce / Tez |
+"""
+        pdf_bytes = exporter.export_markdown_to_pdf_bytes(sample_md, "Big Data")
+
+        assert isinstance(pdf_bytes, bytes)
+        assert len(pdf_bytes) > 1000
+        assert pdf_bytes.startswith(b"%PDF")
+
+        # Verify PyMuPDF can parse it cleanly
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        assert len(doc) >= 1
+        page_text = doc[0].get_text()
+        assert "Comprehensive Study Guide" in page_text
+        assert "HDFS Architecture" in page_text
+
+    def test_pdf_export_api_unauthorized(self):
+        """Ensure /api/folders/{id}/notes/export-pdf rejects unauthenticated requests with 401."""
+        from fastapi.testclient import TestClient
+        from backend.main import app
+
+        client = TestClient(app)
+        response = client.post("/api/folders/some-folder-id/notes/export-pdf")
+        assert response.status_code == 401
+
+
