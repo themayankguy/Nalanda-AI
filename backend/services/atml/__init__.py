@@ -15,6 +15,7 @@ from .answer_refiner import (
     get_atml_model_and_tokenizer,
 )
 from .quiz_generator import QuizGenerator, QuizQuestion, QuizResponse
+from .notes_generator import NotesGenerator, NotesSection, NotesResponse
 
 __all__ = [
     "ATMLConfig",
@@ -29,4 +30,7 @@ __all__ = [
     "QuizGenerator",
     "QuizQuestion",
     "QuizResponse",
+    "NotesGenerator",
+    "NotesSection",
+    "NotesResponse",
 ]

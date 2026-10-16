@@ -1075,3 +1075,211 @@ function updateQuizScoreBadge() {
   }
 }
 
+// ==========================================
+// Comprehensive Study Notes Logic
+// ==========================================
+let currentNotesData = null;
+
+function openNotesModal() {
+  if (!activeFolderId) {
+    showToast("Please select a folder first.", "error");
+    return;
+  }
+  const modal = document.getElementById("notes-reader-modal");
+  if (modal) {
+    modal.classList.add("active");
+    loadNotes();
+  }
+}
+
+function closeNotesModal() {
+  const modal = document.getElementById("notes-reader-modal");
+  if (modal) modal.classList.remove("active");
+}
+
+async function loadNotes() {
+  if (!activeFolderId) return;
+
+  const bodyEl = document.getElementById("notes-modal-body");
+  const titleEl = document.getElementById("notes-modal-title");
+  const subtitleEl = document.getElementById("notes-modal-subtitle");
+
+  const currentFolder = folders.find(f => f.id === activeFolderId);
+  if (titleEl && currentFolder) {
+    titleEl.textContent = `Study Guide: ${currentFolder.name}`;
+  }
+  if (subtitleEl) {
+    subtitleEl.textContent = "Synthesizing comprehensive course notes with ATML FLAN-T5...";
+  }
+
+  bodyEl.innerHTML = `
+    <div class="quiz-loading-spinner" style="padding: 60px 20px; text-align: center;">
+      <div style="font-size: 2.5rem; animation: spin 1s infinite linear; margin-bottom: 16px;">📚</div>
+      <p style="font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">Synthesizing Comprehensive Study Guide...</p>
+      <p style="font-size: 0.85rem; color: var(--text-secondary); max-width: 500px; margin: 0 auto;">Mining conceptual anchors, cross-slide comparative matrices, and high-yield exam takeaways...</p>
+    </div>
+  `;
+
+  try {
+    const res = await apiFetch(`/api/folders/${activeFolderId}/notes`);
+    if (!res.ok) {
+      const err = await res.json();
+      bodyEl.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+          <p style="color: #ef4444; font-weight: 600; font-size: 1rem;">⚠️ ${escapeHtml(err.detail || "Failed to generate study guide.")}</p>
+          <p style="font-size: 0.85rem; margin-top: 8px;">Ensure you have uploaded and extracted documents in this folder.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const data = await res.json();
+    currentNotesData = data;
+
+    if (subtitleEl) {
+      subtitleEl.textContent = `Generated on ${data.generated_at} · ${data.documents_analyzed.length} documents analyzed`;
+    }
+
+    renderNotes(data);
+  } catch (error) {
+    console.error("Notes generation error:", error);
+    bodyEl.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+        <p style="color: #ef4444; font-weight: 600;">⚠️ Error connecting to server.</p>
+        <p style="font-size: 0.85rem; margin-top: 8px;">${escapeHtml(error.message || "Please try again later.")}</p>
+      </div>
+    `;
+  }
+}
+
+function renderNotes(data) {
+  const bodyEl = document.getElementById("notes-modal-body");
+  if (!bodyEl || !data) return;
+
+  const docsBadge = data.documents_analyzed.map(d => `<span class="notes-doc-badge">📄 ${escapeHtml(d)}</span>`).join("");
+
+  let sectionsHtml = "";
+  if (data.sections && data.sections.length > 0) {
+    sectionsHtml = data.sections.map((sec, idx) => {
+      const sectionHtml = renderMarkdownToHtml(sec.content_markdown);
+      return `
+        <details class="notes-section-card" open id="${escapeHtml(sec.id)}">
+          <summary class="notes-section-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="notes-sec-icon">${sec.icon || '📌'}</span>
+              <span class="notes-sec-title">${escapeHtml(sec.title)}</span>
+            </div>
+            <span class="notes-sec-toggle">▾</span>
+          </summary>
+          <div class="notes-section-content">
+            ${sectionHtml}
+          </div>
+        </details>
+      `;
+    }).join("");
+  } else {
+    sectionsHtml = `<div class="notes-section-content">${renderMarkdownToHtml(data.markdown_content)}</div>`;
+  }
+
+  bodyEl.innerHTML = `
+    <div class="notes-container">
+      <div class="notes-meta-banner">
+        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 6px; font-weight: 500;">Analyzed Course Materials:</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+          ${docsBadge}
+        </div>
+      </div>
+      <div class="notes-sections-list">
+        ${sectionsHtml}
+      </div>
+    </div>
+  `;
+}
+
+function copyNotesToClipboard() {
+  if (!currentNotesData || !currentNotesData.markdown_content) {
+    showToast("No notes content to copy.", "error");
+    return;
+  }
+  navigator.clipboard.writeText(currentNotesData.markdown_content).then(() => {
+    showToast("📋 Study notes copied to clipboard in Markdown format!", "success");
+  }).catch(err => {
+    console.error("Clipboard copy failed:", err);
+    showToast("Failed to copy notes to clipboard.", "error");
+  });
+}
+
+function printNotesPDF() {
+  if (!currentNotesData) {
+    showToast("Please wait for notes to finish generating.", "error");
+    return;
+  }
+  window.print();
+}
+
+function renderMarkdownToHtml(md) {
+  if (!md) return "";
+  let html = md;
+
+  // Escape basic HTML except intentional formatting
+  html = html
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Headers
+  html = html.replace(/^#### (.*?)$/gm, '<h4 class="notes-h4">$1</h4>');
+  html = html.replace(/^### (.*?)$/gm, '<h3 class="notes-h3">$1</h3>');
+  html = html.replace(/^## (.*?)$/gm, '<h2 class="notes-h2">$1</h2>');
+  html = html.replace(/^# (.*?)$/gm, '<h1 class="notes-h1">$1</h1>');
+
+  // Blockquotes (Callouts)
+  html = html.replace(/^&gt; (.*?)$/gm, '<blockquote class="notes-blockquote">$1</blockquote>');
+
+  // Bold & Italic & Code
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  html = html.replace(/`([^`]+)`/g, '<code class="notes-inline-code">$1</code>');
+
+  // Horizontal Rules
+  html = html.replace(/^---$/gm, '<hr class="notes-hr">');
+
+  // Tables
+  html = html.replace(/((?:\|[^\n]+\|\r?\n)+)/g, function(tableMatch) {
+    const lines = tableMatch.trim().split("\n");
+    if (lines.length < 2) return tableMatch;
+
+    let tableHtml = '<div class="notes-table-container"><table class="notes-table">';
+    const headerCells = lines[0].split("|").slice(1, -1);
+    tableHtml += '<thead><tr>' + headerCells.map(c => `<th>${c.trim()}</th>`).join('') + '</tr></thead><tbody>';
+
+    for (let i = 2; i < lines.length; i++) {
+      const rowCells = lines[i].split("|").slice(1, -1);
+      if (rowCells.length > 0) {
+        tableHtml += '<tr>' + rowCells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+      }
+    }
+    tableHtml += '</tbody></table></div>';
+    return tableHtml;
+  });
+
+  // Numbered Lists
+  html = html.replace(/^(\d+)\.\s+(.*?)$/gm, '<div class="notes-list-item numbered"><span class="list-num">$1.</span> <span>$2</span></div>');
+
+  // Bullet Lists
+  html = html.replace(/^-\s+(.*?)$/gm, '<div class="notes-list-item bullet"><span class="list-bullet">•</span> <span>$1</span></div>');
+
+  // Paragraphs
+  const blocks = html.split(/\n\s*\n/);
+  html = blocks.map(b => {
+    b = b.trim();
+    if (!b) return "";
+    if (b.startsWith("<h") || b.startsWith("<div") || b.startsWith("<blockquote") || b.startsWith("<table") || b.startsWith("<hr")) {
+      return b;
+    }
+    return `<p class="notes-p">${b.replace(/\n/g, "<br>")}</p>`;
+  }).join("\n");
+
+  return html;
+}
+

@@ -78,6 +78,7 @@
           </div>
           <div class="chat-header-actions">
             <span class="rag-scope" id="rag-scope-label"></span>
+            <button class="btn btn-secondary btn-sm" id="btn-generate-notes" onclick="openNotesModal()" type="button" title="Generate comprehensive study notes from this folder">📚 Study Notes</button>
             <button class="btn btn-secondary btn-sm" id="btn-practice-quiz" onclick="openPracticeQuizModal()" type="button" title="Generate practice quiz from this folder">📝 Practice Quiz</button>
             <button class="btn btn-secondary btn-sm" id="btn-clear-chat" onclick="clearChatHistory()" type="button" title="Clear conversation">Clear</button>
           </div>
@@ -214,6 +215,29 @@
       <div class="modal-footer" id="quiz-modal-footer" style="justify-content: space-between;">
         <span id="quiz-score-badge" style="font-weight: 600; color: var(--text-secondary); font-size: 0.9rem;"></span>
         <button class="btn btn-primary" id="btn-regenerate-quiz" onclick="loadPracticeQuiz()">🔄 Regenerate Quiz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comprehensive Study Notes Reader Modal -->
+  <div class="modal-overlay" id="notes-reader-modal">
+    <div class="modal modal-lg notes-modal-container" style="max-width: 900px; width: 92vw;">
+      <div class="modal-header" style="justify-content: space-between;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size: 1.35rem;">📚</span>
+          <div>
+            <h3 class="modal-title" id="notes-modal-title" style="margin: 0; font-size: 1.15rem;">Comprehensive Study Guide</h3>
+            <span style="font-size:0.75rem; color: var(--text-muted);" id="notes-modal-subtitle">Synthesizing course materials...</span>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary btn-sm" id="btn-copy-notes" onclick="copyNotesToClipboard()" type="button" title="Copy complete Markdown notes to clipboard">📋 Copy Markdown</button>
+          <button class="btn btn-secondary btn-sm" id="btn-print-notes" onclick="printNotesPDF()" type="button" title="Download or print as formatted PDF">🖨️ Download PDF</button>
+          <button class="btn btn-secondary btn-sm" onclick="closeNotesModal()" type="button">✕</button>
+        </div>
+      </div>
+      <div class="modal-body" id="notes-modal-body" style="max-height: 78vh; overflow-y: auto; padding: 24px;">
+        <!-- Dynamically rendered -->
       </div>
     </div>
   </div>
