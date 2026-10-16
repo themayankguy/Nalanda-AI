@@ -14,6 +14,7 @@ from .answer_refiner import (
     RefinedAnswerResult,
     get_atml_model_and_tokenizer,
 )
+from .quiz_generator import QuizGenerator, QuizQuestion, QuizResponse
 
 __all__ = [
     "ATMLConfig",
@@ -25,4 +26,7 @@ __all__ = [
     "AnswerRefinementEngine",
     "RefinedAnswerResult",
     "get_atml_model_and_tokenizer",
+    "QuizGenerator",
+    "QuizQuestion",
+    "QuizResponse",
 ]

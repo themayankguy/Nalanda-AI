@@ -78,6 +78,7 @@
           </div>
           <div class="chat-header-actions">
             <span class="rag-scope" id="rag-scope-label"></span>
+            <button class="btn btn-secondary btn-sm" id="btn-practice-quiz" onclick="openPracticeQuizModal()" type="button" title="Generate practice quiz from this folder">📝 Practice Quiz</button>
             <button class="btn btn-secondary btn-sm" id="btn-clear-chat" onclick="clearChatHistory()" type="button" title="Clear conversation">Clear</button>
           </div>
         </div>
@@ -192,6 +193,27 @@
       <div class="modal-body" style="text-align: center; max-height: 75vh; overflow-y: auto;">
         <img id="figure-modal-img" src="" alt="Extracted Diagram" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
         <p id="figure-modal-caption" style="margin-top: 14px; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Practice Quiz Modal -->
+  <div class="modal-overlay" id="practice-quiz-modal">
+    <div class="modal modal-lg quiz-modal-container">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size: 1.25rem;">📝</span>
+          <h3 class="modal-title" id="quiz-modal-title">Folder Practice Quiz</h3>
+          <span style="font-size:0.75rem; background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3); padding:2px 8px; border-radius:12px; font-weight:500;">ATML Inverted Seq2Seq</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="closePracticeQuizModal()">✕</button>
+      </div>
+      <div class="modal-body" id="quiz-modal-body" style="max-height: 75vh; overflow-y: auto;">
+        <!-- Dynamically rendered -->
+      </div>
+      <div class="modal-footer" id="quiz-modal-footer" style="justify-content: space-between;">
+        <span id="quiz-score-badge" style="font-weight: 600; color: var(--text-secondary); font-size: 0.9rem;"></span>
+        <button class="btn btn-primary" id="btn-regenerate-quiz" onclick="loadPracticeQuiz()">🔄 Regenerate Quiz</button>
       </div>
     </div>
   </div>

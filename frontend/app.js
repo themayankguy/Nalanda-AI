@@ -891,3 +891,187 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter") handleCreateFolder();
   });
 });
+
+/* ==========================================================================
+   ATML Practice Quiz Controller Functions
+   ========================================================================== */
+
+let currentQuizQuestions = [];
+let quizAnswersState = {};
+
+function openPracticeQuizModal() {
+  if (!activeFolderId) {
+    showToast("Please select a folder first.", "error");
+    return;
+  }
+  const modal = document.getElementById("practice-quiz-modal");
+  if (modal) {
+    modal.classList.add("active");
+    loadPracticeQuiz();
+  }
+}
+
+function closePracticeQuizModal() {
+  const modal = document.getElementById("practice-quiz-modal");
+  if (modal) modal.classList.remove("active");
+}
+
+async function loadPracticeQuiz() {
+  if (!activeFolderId) return;
+
+  const bodyEl = document.getElementById("quiz-modal-body");
+  const scoreBadge = document.getElementById("quiz-score-badge");
+  const titleEl = document.getElementById("quiz-modal-title");
+
+  const currentFolder = folders.find(f => f.id === activeFolderId);
+  if (titleEl && currentFolder) {
+    titleEl.textContent = `Practice Quiz: ${currentFolder.name}`;
+  }
+
+  bodyEl.innerHTML = `
+    <div class="quiz-loading-spinner">
+      <div style="font-size: 2rem; animation: spin 1s infinite linear;">⚙️</div>
+      <p style="font-size: 0.95rem; font-weight: 500;">Synthesizing questions via Inverted Seq2Seq (FLAN-T5)...</p>
+      <p style="font-size: 0.8rem; color: var(--text-muted);">Mining semantic distractors from vector embeddings...</p>
+    </div>
+  `;
+  if (scoreBadge) scoreBadge.textContent = "";
+  quizAnswersState = {};
+
+  try {
+    const res = await apiFetch(`/api/folders/${activeFolderId}/quiz?num_questions=4`);
+    if (!res.ok) {
+      const err = await res.json();
+      bodyEl.innerHTML = `
+        <div style="text-align: center; padding: 30px; color: var(--text-secondary);">
+          <p style="color: #ef4444; font-weight: 600;">⚠️ ${escapeHtml(err.detail || "Failed to generate quiz.")}</p>
+          <p style="font-size: 0.85rem; margin-top: 8px;">Ensure you have uploaded and extracted documents in this folder.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const data = await res.json();
+    currentQuizQuestions = data.questions || [];
+
+    if (currentQuizQuestions.length === 0) {
+      bodyEl.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+          <span style="font-size: 2.5rem; display: block; margin-bottom: 12px;">📚</span>
+          <p style="font-weight: 600; font-size: 1rem; color: var(--text-primary);">No Course Material Available Yet</p>
+          <p style="font-size: 0.85rem; margin-top: 6px;">Upload course notes or slides (PDF) to this folder to generate practice questions.</p>
+        </div>
+      `;
+      return;
+    }
+
+    renderQuizQuestions();
+  } catch (err) {
+    bodyEl.innerHTML = `
+      <div style="text-align: center; padding: 30px; color: #ef4444;">
+        <p>⚠️ Error communicating with quiz engine: ${escapeHtml(err.message)}</p>
+      </div>
+    `;
+  }
+}
+
+function renderQuizQuestions() {
+  const bodyEl = document.getElementById("quiz-modal-body");
+  const scoreBadge = document.getElementById("quiz-score-badge");
+  let html = "";
+
+  currentQuizQuestions.forEach((q, qIndex) => {
+    const pageCitation = q.page_number ? `Page ${q.page_number}` : 'Notes';
+    html += `
+      <div class="quiz-question-card" id="card-${q.id}">
+        <div class="quiz-q-meta">
+          <span class="quiz-q-badge">Question ${qIndex + 1} of ${currentQuizQuestions.length}</span>
+          <span class="quiz-q-source">📖 ${escapeHtml(q.source_document || 'Course Material')} (${pageCitation})</span>
+        </div>
+        <div class="quiz-q-title">${escapeHtml(q.question)}</div>
+        <div class="quiz-options-group" id="options-${q.id}">
+    `;
+
+    q.options.forEach((optText, optIdx) => {
+      html += `
+        <button
+          type="button"
+          class="quiz-option-btn"
+          id="btn-${q.id}-${optIdx}"
+          onclick="handleSelectQuizOption('${q.id}', ${optIdx}, ${q.correct_option_index})"
+        >
+          <span>${escapeHtml(optText)}</span>
+        </button>
+      `;
+    });
+
+    html += `
+        </div>
+        <div class="quiz-explanation-box" id="explanation-${q.id}" style="display: none;"></div>
+      </div>
+    `;
+  });
+
+  bodyEl.innerHTML = html;
+  updateQuizScoreBadge();
+}
+
+function handleSelectQuizOption(questionId, selectedIdx, correctIdx) {
+  if (quizAnswersState[questionId] !== undefined) return; // Already answered
+
+  const isCorrect = selectedIdx === correctIdx;
+  quizAnswersState[questionId] = isCorrect;
+
+  const q = currentQuizQuestions.find(item => item.id === questionId);
+  const selectedBtn = document.getElementById(`btn-${questionId}-${selectedIdx}`);
+  const correctBtn = document.getElementById(`btn-${questionId}-${correctIdx}`);
+  const expBox = document.getElementById(`explanation-${questionId}`);
+
+  // Highlight selected button
+  if (selectedBtn) {
+    selectedBtn.classList.add(isCorrect ? "selected-correct" : "selected-incorrect");
+  }
+
+  // Highlight correct button if incorrect
+  if (!isCorrect && correctBtn) {
+    correctBtn.classList.add("selected-correct");
+  }
+
+  // Disable all options for this question
+  if (q && q.options) {
+    q.options.forEach((_, idx) => {
+      const b = document.getElementById(`btn-${questionId}-${idx}`);
+      if (b) b.disabled = true;
+    });
+  }
+
+  // Show explanation
+  if (expBox && q) {
+    expBox.style.display = "block";
+    expBox.className = `quiz-explanation-box ${isCorrect ? 'correct' : 'incorrect'}`;
+    expBox.innerHTML = `
+      <div style="font-weight: 600; margin-bottom: 4px;">
+        ${isCorrect ? '✅ Correct Answer!' : '❌ Incorrect'}
+      </div>
+      <div>${escapeHtml(q.explanation || '')}</div>
+    `;
+  }
+
+  updateQuizScoreBadge();
+}
+
+function updateQuizScoreBadge() {
+  const scoreBadge = document.getElementById("quiz-score-badge");
+  if (!scoreBadge) return;
+
+  const totalAnswered = Object.keys(quizAnswersState).length;
+  const correctCount = Object.values(quizAnswersState).filter(Boolean).length;
+  const totalQuestions = currentQuizQuestions.length;
+
+  if (totalAnswered > 0) {
+    scoreBadge.textContent = `Score: ${correctCount} / ${totalQuestions} (${Math.round((correctCount / totalQuestions) * 100)}%)`;
+  } else {
+    scoreBadge.textContent = `${totalQuestions} questions synthesized`;
+  }
+}
+
