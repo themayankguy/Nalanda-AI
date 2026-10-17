@@ -1547,4 +1547,235 @@ body {
   }
 }
 
+/* ==========================================================================
+   Unit / File Selection Bar for Notes Generation (Modern Visual Polish)
+   ========================================================================== */
+.notes-unit-selector-bar {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.9) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+}
+
+.notes-unit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+}
+
+.notes-unit-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notes-unit-icon {
+  font-size: 1.15rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.notes-unit-heading {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
+}
+
+.notes-unit-count {
+  font-size: 0.76rem;
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.notes-unit-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notes-unit-toggle-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notes-unit-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.notes-unit-apply-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.82rem;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.notes-unit-apply-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.55);
+  background: linear-gradient(135deg, #7175f7 0%, #5850ec 100%);
+}
+
+.notes-unit-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-height: 140px;
+  overflow-y: auto;
+  padding-bottom: 2px;
+}
+
+.notes-unit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1.5px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 0.84rem;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.notes-unit-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(99, 102, 241, 0.45);
+  transform: translateY(-1px);
+}
+
+.notes-unit-chip.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.12) 100%);
+  border-color: #6366f1;
+  color: #f8fafc;
+  font-weight: 600;
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.25);
+}
+
+.notes-unit-chip input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+.notes-unit-chip .unit-chip-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.84rem;
+  word-break: break-word;
+}
+
+/* ==========================================================================
+   Typewriter Effect Styles (Cursor, Blinking, Streaming, Loading)
+   ========================================================================== */
+
+.typewriter-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.15em;
+  background-color: #818cf8;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  border-radius: 1px;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.7);
+  animation: typewriter-cursor-blink 0.75s infinite alternate ease-in-out;
+}
+
+@keyframes typewriter-cursor-blink {
+  0%, 30% { opacity: 1; transform: scaleY(1); }
+  50%, 100% { opacity: 0; transform: scaleY(0.9); }
+}
+
+.typewriter-status-box {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.85) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 10px;
+  padding: 12px 18px;
+  margin: 16px auto 0;
+  max-width: 560px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.typewriter-status-icon {
+  font-size: 1.05rem;
+  animation: typewriter-pulse-glow 1.5s infinite alternate ease-in-out;
+}
+
+@keyframes typewriter-pulse-glow {
+  0% { transform: scale(1); filter: drop-shadow(0 0 2px #818cf8); }
+  100% { transform: scale(1.15); filter: drop-shadow(0 0 8px #a5b4fc); }
+}
+
+.typewriter-status-text {
+  font-size: 0.88rem;
+  color: #c7d2fe;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.typewriter-skip-hint {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 4px;
+  display: block;
+  font-style: italic;
+  transition: color 0.2s;
+}
+
+.direct-answer-card:hover .typewriter-skip-hint {
+  color: #94a3b8;
+}
+
+.notes-stream-enter {
+  animation: notesSectionFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes notesSectionFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
 

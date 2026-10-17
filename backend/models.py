@@ -90,3 +90,21 @@ class DocumentExtraction(Base):
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
     document = relationship("Document", back_populates="extraction")
+
+
+class FolderNoteCache(Base):
+    """Caches generated academic study guides per folder for instantaneous retrieval."""
+    __tablename__ = "folder_note_caches"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    folder_id = Column(String(36), ForeignKey("folders.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    markdown_content = Column(Text, nullable=False)
+    sections_json = Column(Text, nullable=False)  # JSON-encoded list of section dicts
+    documents_hash = Column(String(64), nullable=False)  # SHA-256 fingerprint of completed document states
+    total_sections = Column(Integer, default=0)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    folder = relationship("Folder", backref="note_cache")
+

@@ -471,6 +471,155 @@ function formatDirectAnswerHtml(text) {
   return htmlParts.join("");
 }
 
+/* ==========================================================================
+   Typewriter Effect Utilities (Streaming, Typing Loop, Text Animations)
+   ========================================================================== */
+
+/**
+ * Typewriter Streaming Effect for HTML / Markdown Formatted Text (e.g. AI Chat Answers)
+ * Streams words progressively into containerEl with a blinking cursor.
+ * Clicking the card immediately completes the stream.
+ */
+function typewriterStreamHtml(containerEl, fullText, options = {}) {
+  if (!containerEl) return;
+  const formatFn = options.formatFn || (t => escapeHtml(t));
+  const speed = options.speed || 16;
+  const scrollContainer = options.scrollContainer || null;
+  const onComplete = options.onComplete || null;
+
+  const tokens = fullText.split(/(\s+)/);
+  if (tokens.length <= 1) {
+    containerEl.innerHTML = formatFn(fullText);
+    if (onComplete) onComplete();
+    return;
+  }
+
+  let tokenIdx = 0;
+  let isDone = false;
+  const tokensPerTick = tokens.length > 200 ? 3 : (tokens.length > 80 ? 2 : 1);
+  const cardParent = containerEl.closest(".direct-answer-card") || containerEl;
+
+  function finishInstantly() {
+    if (isDone) return;
+    isDone = true;
+    if (timerId) clearInterval(timerId);
+    containerEl.innerHTML = formatFn(fullText);
+    const hint = cardParent.querySelector(".typewriter-skip-hint");
+    if (hint) hint.remove();
+    cardParent.removeEventListener("click", finishInstantly);
+    if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    if (onComplete) onComplete();
+  }
+
+  cardParent.addEventListener("click", finishInstantly);
+
+  const timerId = setInterval(() => {
+    if (isDone) return;
+    tokenIdx += tokensPerTick;
+    if (tokenIdx >= tokens.length) {
+      finishInstantly();
+      return;
+    }
+
+    const accumulated = tokens.slice(0, tokenIdx).join("");
+    containerEl.innerHTML = formatFn(accumulated) + '<span class="typewriter-cursor"></span>';
+    if (scrollContainer) {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    }
+  }, speed);
+}
+
+/**
+ * Typewriter Streaming Effect for Plain Text (e.g. Quiz Explanations & Notes Intro)
+ */
+function typewriterStreamText(containerEl, fullText, options = {}) {
+  if (!containerEl || !fullText) return;
+  const speed = options.speed || 12;
+  const onComplete = options.onComplete || null;
+
+  let charIdx = 0;
+  let isDone = false;
+  const step = fullText.length > 150 ? 2 : 1;
+
+  containerEl.innerHTML = '<span class="typewriter-cursor"></span>';
+
+  function finish() {
+    if (isDone) return;
+    isDone = true;
+    if (timerId) clearInterval(timerId);
+    containerEl.textContent = fullText;
+    if (onComplete) onComplete();
+  }
+
+  containerEl.addEventListener("click", finish);
+
+  const timerId = setInterval(() => {
+    if (isDone) return;
+    charIdx += step;
+    if (charIdx >= fullText.length) {
+      finish();
+      return;
+    }
+    containerEl.textContent = fullText.slice(0, charIdx);
+    const cursor = document.createElement("span");
+    cursor.className = "typewriter-cursor";
+    containerEl.appendChild(cursor);
+  }, speed);
+}
+
+/**
+ * Animated Looping Typewriter for Notes Synthesis Loading Status
+ * Cycles through status phrases with typing and erasing.
+ */
+let activeNotesTypewriterStop = null;
+
+function startTypewriterLoop(containerEl, phrases, options = {}) {
+  if (!containerEl || !phrases || phrases.length === 0) return () => {};
+
+  let phraseIdx = 0;
+  let charIdx = 0;
+  let isDeleting = false;
+  let isStopped = false;
+  let timeoutId = null;
+
+  const typeSpeed = options.typeSpeed || 30;
+  const deleteSpeed = options.deleteSpeed || 16;
+  const holdTime = options.holdTime || 1600;
+
+  function tick() {
+    if (isStopped) return;
+    const currentPhrase = phrases[phraseIdx];
+
+    if (!isDeleting) {
+      charIdx++;
+      containerEl.textContent = currentPhrase.slice(0, charIdx);
+      if (charIdx >= currentPhrase.length) {
+        isDeleting = true;
+        timeoutId = setTimeout(tick, holdTime);
+        return;
+      }
+      timeoutId = setTimeout(tick, typeSpeed);
+    } else {
+      charIdx--;
+      containerEl.textContent = currentPhrase.slice(0, charIdx);
+      if (charIdx <= 0) {
+        isDeleting = false;
+        phraseIdx = (phraseIdx + 1) % phrases.length;
+        timeoutId = setTimeout(tick, 280);
+        return;
+      }
+      timeoutId = setTimeout(tick, deleteSpeed);
+    }
+  }
+
+  timeoutId = setTimeout(tick, 80);
+
+  return function stop() {
+    isStopped = true;
+    if (timeoutId) clearTimeout(timeoutId);
+  };
+}
+
 async function handleSemanticSearch(event) {
   event.preventDefault();
   const queryInput = document.getElementById("rag-query");
@@ -534,23 +683,28 @@ async function handleSemanticSearch(event) {
     assistantMsgEl.className = "chat-message assistant";
 
     let bubbleContent = "";
+    let directAnswerElId = null;
 
     if (data.total_results === 0) {
       bubbleContent += `<p style="color: var(--text-secondary);">No relevant sources or answers were found for this query in the selected folder.</p>`;
     } else {
       // 1. Direct Answer Card
       if (data.direct_answer) {
+        directAnswerElId = `direct-answer-${Date.now()}`;
         const isRefined = data.refinement_metadata && data.refinement_metadata.is_refined;
         const badge = isRefined
           ? `<span style="display:inline-flex; align-items:center; gap:4px; font-size:0.75rem; background:rgba(99, 102, 241, 0.15); color:#818cf8; border:1px solid rgba(99, 102, 241, 0.3); padding:2px 8px; border-radius:12px; margin-left:8px; font-weight:500;">✨ Refined (Seq2Seq)</span>`
           : '';
         bubbleContent += `
           <div class="direct-answer-card">
-            <div class="direct-answer-title" style="display:flex; align-items:center;">
-              <span>💡 Direct Answer</span>
-              ${badge}
+            <div class="direct-answer-title" style="display:flex; align-items:center; justify-content:space-between;">
+              <div style="display:flex; align-items:center;">
+                <span>💡 Direct Answer</span>
+                ${badge}
+              </div>
+              <span class="typewriter-skip-hint">Click card to skip typing</span>
             </div>
-            <div class="direct-answer-body">${formatDirectAnswerHtml(data.direct_answer)}</div>
+            <div class="direct-answer-body" id="${directAnswerElId}"></div>
           </div>
         `;
       }
@@ -612,6 +766,16 @@ async function handleSemanticSearch(event) {
 
     chatMessages.appendChild(assistantMsgEl);
     folderChatHistory[folderId].push(assistantMsgEl);
+
+    if (data.direct_answer && directAnswerElId) {
+      const answerTarget = document.getElementById(directAnswerElId);
+      if (answerTarget) {
+        typewriterStreamHtml(answerTarget, data.direct_answer, {
+          formatFn: formatDirectAnswerHtml,
+          scrollContainer: chatMessages
+        });
+      }
+    }
 
   } catch (error) {
     if (error.name !== "AbortError") {
@@ -1045,16 +1209,21 @@ function handleSelectQuizOption(questionId, selectedIdx, correctIdx) {
     });
   }
 
-  // Show explanation
+  // Show explanation with typewriter streaming
   if (expBox && q) {
     expBox.style.display = "block";
     expBox.className = `quiz-explanation-box ${isCorrect ? 'correct' : 'incorrect'}`;
+    const expTextId = `exp-text-${questionId}`;
     expBox.innerHTML = `
       <div style="font-weight: 600; margin-bottom: 4px;">
         ${isCorrect ? '✅ Correct Answer!' : '❌ Incorrect'}
       </div>
-      <div>${escapeHtml(q.explanation || '')}</div>
+      <div id="${expTextId}"></div>
     `;
+    const expTextEl = document.getElementById(expTextId);
+    if (expTextEl) {
+      typewriterStreamText(expTextEl, q.explanation || '', { speed: 8 });
+    }
   }
 
   updateQuizScoreBadge();
@@ -1078,7 +1247,10 @@ function updateQuizScoreBadge() {
 // ==========================================
 // Comprehensive Study Notes Logic
 // ==========================================
+// Comprehensive Study Notes Logic
+// ==========================================
 let currentNotesData = null;
+let selectedUnitDocIds = new Set();
 
 function openNotesModal() {
   if (!activeFolderId) {
@@ -1088,16 +1260,129 @@ function openNotesModal() {
   const modal = document.getElementById("notes-reader-modal");
   if (modal) {
     modal.classList.add("active");
+    initNotesUnitSelector();
     loadNotes();
   }
 }
 
 function closeNotesModal() {
+  if (activeNotesTypewriterStop) {
+    activeNotesTypewriterStop();
+    activeNotesTypewriterStop = null;
+  }
   const modal = document.getElementById("notes-reader-modal");
   if (modal) modal.classList.remove("active");
 }
 
-async function loadNotes() {
+function initNotesUnitSelector() {
+  const completedDocs = (documents || []).filter(d => d.status === "completed");
+  const selectorBar = document.getElementById("notes-unit-selector-bar");
+  if (!selectorBar) return;
+
+  if (completedDocs.length === 0) {
+    selectorBar.style.display = "none";
+    return;
+  }
+
+  // Ensure selectedUnitDocIds has valid document IDs for active folder
+  const validIds = new Set(completedDocs.map(d => d.id));
+  const hasValid = Array.from(selectedUnitDocIds).some(id => validIds.has(id));
+  if (!hasValid) {
+    selectedUnitDocIds = new Set(validIds);
+  } else {
+    selectedUnitDocIds = new Set(Array.from(selectedUnitDocIds).filter(id => validIds.has(id)));
+  }
+
+  renderNotesUnitSelector();
+}
+
+function renderNotesUnitSelector() {
+  const completedDocs = (documents || []).filter(d => d.status === "completed");
+  const selectorBar = document.getElementById("notes-unit-selector-bar");
+  if (!selectorBar || completedDocs.length === 0) {
+    if (selectorBar) selectorBar.style.display = "none";
+    return;
+  }
+
+  selectorBar.style.display = "flex";
+  const total = completedDocs.length;
+  const count = selectedUnitDocIds.size;
+  const allSelected = count === total;
+
+  selectorBar.innerHTML = `
+    <div class="notes-unit-header">
+      <div class="notes-unit-label">
+        <span class="notes-unit-icon">📑</span>
+        <span class="notes-unit-heading">Select Units / Files:</span>
+        <span class="notes-unit-count" id="notes-unit-count">${count} of ${total} selected</span>
+      </div>
+      <div class="notes-unit-actions">
+        <button type="button" class="notes-unit-toggle-btn" onclick="toggleSelectAllUnits(${!allSelected})">
+          ${allSelected ? 'Select First Unit Only' : 'Select All Units'}
+        </button>
+        <button type="button" class="notes-unit-apply-btn" id="btn-apply-unit-selection" onclick="applyUnitSelection()" title="Re-synthesize study notes covering only the selected units">
+          ⚡ Generate for Selected (${count})
+        </button>
+      </div>
+    </div>
+    <div class="notes-unit-chips-container">
+      ${completedDocs.map(d => {
+        const isChecked = selectedUnitDocIds.has(d.id);
+        return `
+          <label class="notes-unit-chip ${isChecked ? 'active' : ''}" id="chip-unit-${d.id}" title="${escapeHtml(d.original_filename)}">
+            <input type="checkbox" value="${d.id}" ${isChecked ? 'checked' : ''} onchange="onUnitCheckboxChanged('${d.id}', this.checked)">
+            <span class="unit-chip-name">📄 ${escapeHtml(d.original_filename)}</span>
+          </label>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function onUnitCheckboxChanged(docId, isChecked) {
+  if (!isChecked) {
+    if (selectedUnitDocIds.size <= 1) {
+      showToast("⚠️ Selection limit: You must select at least 1 unit file.", "warning");
+      const input = document.querySelector(`#chip-unit-${docId} input[type="checkbox"]`);
+      if (input) input.checked = true;
+      return;
+    }
+    selectedUnitDocIds.delete(docId);
+  } else {
+    selectedUnitDocIds.add(docId);
+  }
+  renderNotesUnitSelector();
+}
+
+function toggleSelectAllUnits(selectAll) {
+  const completedDocs = (documents || []).filter(d => d.status === "completed");
+  if (selectAll) {
+    selectedUnitDocIds = new Set(completedDocs.map(d => d.id));
+  } else {
+    if (completedDocs.length > 0) {
+      selectedUnitDocIds = new Set([completedDocs[0].id]);
+      showToast("Selected 1 unit (minimum selection limit is 1).", "info");
+    }
+  }
+  renderNotesUnitSelector();
+}
+
+async function applyUnitSelection() {
+  if (selectedUnitDocIds.size === 0) {
+    showToast("Please select at least 1 unit file.", "error");
+    return;
+  }
+  showToast(`🔄 Synthesizing study notes for ${selectedUnitDocIds.size} selected unit(s)...`, "info");
+  await loadNotes(true);
+}
+
+async function refreshNotes() {
+  if (!activeFolderId) return;
+  showToast("🔄 Re-synthesizing study notes from lecture materials...", "success");
+  await loadNotes(true);
+}
+
+async function loadNotes(forceRefresh = false) {
   if (!activeFolderId) return;
 
   const bodyEl = document.getElementById("notes-modal-body");
@@ -1109,25 +1394,62 @@ async function loadNotes() {
     titleEl.textContent = `Study Guide: ${currentFolder.name}`;
   }
   if (subtitleEl) {
-    subtitleEl.textContent = "Synthesizing comprehensive course notes with ATML FLAN-T5...";
+    subtitleEl.textContent = forceRefresh
+      ? "Re-synthesizing comprehensive course notes from selected lecture units..."
+      : "Loading comprehensive course notes (Instant cache or synthesizing)...";
   }
 
   bodyEl.innerHTML = `
     <div class="quiz-loading-spinner" style="padding: 60px 20px; text-align: center;">
       <div style="font-size: 2.5rem; animation: spin 1s infinite linear; margin-bottom: 16px;">📚</div>
-      <p style="font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">Synthesizing Comprehensive Study Guide...</p>
-      <p style="font-size: 0.85rem; color: var(--text-secondary); max-width: 500px; margin: 0 auto;">Mining conceptual anchors, cross-slide comparative matrices, and high-yield exam takeaways...</p>
+      <p style="font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">
+        ${forceRefresh ? "Synthesizing Selected Units..." : "Loading Study Guide..."}
+      </p>
+      <div class="typewriter-status-box">
+        <span class="typewriter-status-icon">⚡</span>
+        <span id="notes-typewriter-status" class="typewriter-status-text"></span>
+        <span class="typewriter-cursor"></span>
+      </div>
     </div>
   `;
 
+  if (activeNotesTypewriterStop) {
+    activeNotesTypewriterStop();
+    activeNotesTypewriterStop = null;
+  }
+  const statusEl = document.getElementById("notes-typewriter-status");
+  if (statusEl) {
+    activeNotesTypewriterStop = startTypewriterLoop(statusEl, [
+      "Analyzing lecture materials & selected units...",
+      "Mining core conceptual anchors & definitions...",
+      "Generating cross-unit comparison matrices...",
+      "Structuring high-yield university exam takeaways...",
+      "Polishing comprehensive study guide..."
+    ]);
+  }
+
   try {
-    const res = await apiFetch(`/api/folders/${activeFolderId}/notes`);
+    let url = `/api/folders/${activeFolderId}/notes`;
+    const queryParts = [];
+    if (forceRefresh) queryParts.push("refresh=true");
+    if (selectedUnitDocIds && selectedUnitDocIds.size > 0) {
+      queryParts.push(`doc_ids=${encodeURIComponent(Array.from(selectedUnitDocIds).join(","))}`);
+    }
+    if (queryParts.length > 0) {
+      url += `?${queryParts.join("&")}`;
+    }
+
+    const res = await apiFetch(url);
     if (!res.ok) {
       const err = await res.json();
+      if (activeNotesTypewriterStop) {
+        activeNotesTypewriterStop();
+        activeNotesTypewriterStop = null;
+      }
       bodyEl.innerHTML = `
         <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
           <p style="color: #ef4444; font-weight: 600; font-size: 1rem;">⚠️ ${escapeHtml(err.detail || "Failed to generate study guide.")}</p>
-          <p style="font-size: 0.85rem; margin-top: 8px;">Ensure you have uploaded and extracted documents in this folder.</p>
+          <p style="font-size: 0.85rem; margin-top: 8px;">Ensure you have selected completed units in this folder.</p>
         </div>
       `;
       return;
@@ -1137,11 +1459,15 @@ async function loadNotes() {
     currentNotesData = data;
 
     if (subtitleEl) {
-      subtitleEl.textContent = `Generated on ${data.generated_at} · ${data.documents_analyzed.length} documents analyzed`;
+      subtitleEl.textContent = `Generated on ${data.generated_at} · ${data.documents_analyzed.length} document(s) included`;
     }
 
     renderNotes(data);
   } catch (error) {
+    if (activeNotesTypewriterStop) {
+      activeNotesTypewriterStop();
+      activeNotesTypewriterStop = null;
+    }
     console.error("Notes generation error:", error);
     bodyEl.innerHTML = `
       <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
@@ -1153,6 +1479,10 @@ async function loadNotes() {
 }
 
 function renderNotes(data) {
+  if (activeNotesTypewriterStop) {
+    activeNotesTypewriterStop();
+    activeNotesTypewriterStop = null;
+  }
   const bodyEl = document.getElementById("notes-modal-body");
   if (!bodyEl || !data) return;
 
@@ -1163,7 +1493,7 @@ function renderNotes(data) {
     sectionsHtml = data.sections.map((sec, idx) => {
       const sectionHtml = renderMarkdownToHtml(sec.content_markdown);
       return `
-        <details class="notes-section-card" open id="${escapeHtml(sec.id)}">
+        <details class="notes-section-card notes-stream-enter" open id="${escapeHtml(sec.id)}" style="animation-delay: ${idx * 50}ms;">
           <summary class="notes-section-header">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span class="notes-sec-icon">${sec.icon || '📌'}</span>
@@ -1188,12 +1518,22 @@ function renderNotes(data) {
         <div style="display: flex; flex-wrap: wrap; gap: 6px;">
           ${docsBadge}
         </div>
+        <div id="notes-intro-summary" style="margin-top: 10px; font-size: 0.84rem; color: #cbd5e1; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;">
+        </div>
       </div>
       <div class="notes-sections-list">
         ${sectionsHtml}
       </div>
     </div>
   `;
+
+  const introEl = document.getElementById("notes-intro-summary");
+  if (introEl) {
+    const totalDocs = data.documents_analyzed ? data.documents_analyzed.length : 1;
+    const totalSecs = data.sections ? data.sections.length : 0;
+    const introText = `✨ Comprehensive study notes synthesized across ${totalDocs} unit(s) with ${totalSecs} topic modules. Review all sections below for exam-oriented conceptual clarity.`;
+    typewriterStreamText(introEl, introText, { speed: 12 });
+  }
 }
 
 function copyNotesToClipboard() {
@@ -1209,61 +1549,6 @@ function copyNotesToClipboard() {
   });
 }
 
-async function downloadNotesPDF() {
-  if (!currentNotesData) {
-    showToast("Please wait for notes to finish generating.", "error");
-    return;
-  }
-
-  const btn = document.getElementById("btn-download-pdf");
-  const originalHtml = btn ? btn.innerHTML : "📥 Download PDF";
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = `<span class="spinner" style="width:12px;height:12px;margin-right:6px;display:inline-block;vertical-align:middle;"></span> Generating PDF...`;
-  }
-
-  try {
-    const token = localStorage.getItem("token") || "";
-    const folderId = currentNotesData.folder_id || currentFolderId;
-
-    const response = await fetch(`/api/folders/${folderId}/notes/export-pdf`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        markdown_content: currentNotesData.markdown_content
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Export failed with HTTP ${response.status}`);
-    }
-
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.style.display = "none";
-    a.href = url;
-    const safeName = (currentNotesData.folder_name || "Course").replace(/[^a-zA-Z0-9_-]/g, "_");
-    a.download = `Study_Guide_${safeName}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    a.remove();
-
-    showToast("📥 PDF Study Guide downloaded successfully!", "success");
-  } catch (err) {
-    console.error("PDF download failed:", err);
-    showToast("Failed to download PDF. Please try Print / Save PDF instead.", "error");
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = originalHtml;
-    }
-  }
-}
 
 function downloadNotesMarkdown() {
   if (!currentNotesData || !currentNotesData.markdown_content) {
@@ -1346,18 +1631,24 @@ function renderMarkdownToHtml(md) {
     return tableHtml;
   });
 
-  // Numbered Lists
-  html = html.replace(/^(\d+)\.\s+(.*?)$/gm, '<div class="notes-list-item numbered"><span class="list-num">$1.</span> <span>$2</span></div>');
+  // Numbered Lists (with optional indentation)
+  html = html.replace(/^(\s*)(\d+)\.\s+(.*?)$/gm, function(m, indent, num, text) {
+    const ml = indent.length > 0 ? ' style="margin-left: ' + (indent.length * 10) + 'px;"' : '';
+    return '<div class="notes-list-item numbered"' + ml + '><span class="list-num">' + num + '.</span> <span>' + text + '</span></div>';
+  });
 
-  // Bullet Lists
-  html = html.replace(/^-\s+(.*?)$/gm, '<div class="notes-list-item bullet"><span class="list-bullet">•</span> <span>$1</span></div>');
+  // Bullet Lists (with optional indentation and support for - and *)
+  html = html.replace(/^(\s*)[-*]\s+(.*?)$/gm, function(m, indent, text) {
+    const ml = indent.length > 0 ? ' style="margin-left: ' + (indent.length * 10) + 'px;"' : '';
+    return '<div class="notes-list-item bullet"' + ml + '><span class="list-bullet">•</span> <span>' + text + '</span></div>';
+  });
 
   // Paragraphs
   const blocks = html.split(/\n\s*\n/);
   html = blocks.map(b => {
     b = b.trim();
     if (!b) return "";
-    if (b.startsWith("<h") || b.startsWith("<div") || b.startsWith("<blockquote") || b.startsWith("<table") || b.startsWith("<hr")) {
+    if (b.startsWith("<h") || b.startsWith("<div") || b.startsWith("<blockquote") || b.startsWith("<table") || b.startsWith("<hr") || b.startsWith("<pre")) {
       return b;
     }
     return `<p class="notes-p">${b.replace(/\n/g, "<br>")}</p>`;

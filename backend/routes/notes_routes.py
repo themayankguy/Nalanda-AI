@@ -32,23 +32,29 @@ class ExportPdfRequest(BaseModel):
 )
 def get_folder_notes(
     folder_id: str,
+    refresh: bool = False,
+    doc_ids: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Synthesize a complete, multi-section comprehensive academic study guide grounded in the folder's lecture materials.
 
     ATML Features Applied:
-    - Executive overview & learning scope synthesis via FLAN-T5.
+    - Selective unit/document generation when doc_ids is specified.
+    - Instantaneous cached retrieval when documents have not changed.
     - Pedagogical fact-anchor extraction with exact page citations.
     - Comparative analysis matrix (structured comparison tables).
     - Sequential workflows & procedural architectures.
     - High-yield examination revision points.
     """
+    selected_doc_ids = [d.strip() for d in doc_ids.split(",") if d.strip()] if doc_ids else None
     try:
         notes_result = _notes_generator.generate_notes_for_folder(
             db=db,
             current_user=current_user,
             folder_id=folder_id,
+            force_refresh=refresh,
+            document_ids=selected_doc_ids,
         )
         return notes_result.to_dict()
     except ValueError as exc:
@@ -68,6 +74,7 @@ def get_folder_notes(
 )
 def export_folder_notes_pdf(
     folder_id: str,
+    doc_ids: Optional[str] = None,
     payload: Optional[ExportPdfRequest] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -86,10 +93,12 @@ def export_folder_notes_pdf(
 
     markdown_text = payload.markdown_content if payload and payload.markdown_content else None
     if not markdown_text:
+        selected_doc_ids = [d.strip() for d in doc_ids.split(",") if d.strip()] if doc_ids else None
         notes_result = _notes_generator.generate_notes_for_folder(
             db=db,
             current_user=current_user,
             folder_id=folder_id,
+            document_ids=selected_doc_ids,
         )
         markdown_text = notes_result.markdown_content
 
@@ -124,12 +133,14 @@ def export_folder_notes_pdf(
 )
 def download_folder_notes_pdf(
     folder_id: str,
+    doc_ids: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Direct GET endpoint to download study guide PDF."""
     return export_folder_notes_pdf(
         folder_id=folder_id,
+        doc_ids=doc_ids,
         payload=None,
         current_user=current_user,
         db=db,
