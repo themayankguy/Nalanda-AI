@@ -1062,6 +1062,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 let currentQuizQuestions = [];
 let quizAnswersState = {};
+let selectedQuizDocIds = new Set();
+let activeQuizTypewriterStop = null;
 
 function openPracticeQuizModal() {
   if (!activeFolderId) {
@@ -1071,45 +1073,188 @@ function openPracticeQuizModal() {
   const modal = document.getElementById("practice-quiz-modal");
   if (modal) {
     modal.classList.add("active");
+    initQuizUnitSelector();
     loadPracticeQuiz();
   }
 }
 
 function closePracticeQuizModal() {
+  if (activeQuizTypewriterStop) {
+    activeQuizTypewriterStop();
+    activeQuizTypewriterStop = null;
+  }
   const modal = document.getElementById("practice-quiz-modal");
   if (modal) modal.classList.remove("active");
 }
 
-async function loadPracticeQuiz() {
+function initQuizUnitSelector() {
+  const completedDocs = (documents || []).filter(d => d.status === "completed");
+  const selectorBar = document.getElementById("quiz-unit-selector-bar");
+  if (!selectorBar) return;
+
+  if (completedDocs.length === 0) {
+    selectorBar.style.display = "none";
+    return;
+  }
+
+  // Ensure selectedQuizDocIds has valid document IDs for active folder
+  const validIds = new Set(completedDocs.map(d => d.id));
+  const hasValid = Array.from(selectedQuizDocIds).some(id => validIds.has(id));
+  if (!hasValid) {
+    selectedQuizDocIds = new Set(validIds);
+  } else {
+    selectedQuizDocIds = new Set(Array.from(selectedQuizDocIds).filter(id => validIds.has(id)));
+  }
+
+  renderQuizUnitSelector();
+}
+
+function renderQuizUnitSelector() {
+  const completedDocs = (documents || []).filter(d => d.status === "completed");
+  const selectorBar = document.getElementById("quiz-unit-selector-bar");
+  if (!selectorBar || completedDocs.length === 0) {
+    if (selectorBar) selectorBar.style.display = "none";
+    return;
+  }
+
+  selectorBar.style.display = "flex";
+  const total = completedDocs.length;
+  const count = selectedQuizDocIds.size;
+  const allSelected = count === total;
+
+  selectorBar.innerHTML = `
+    <div class="notes-unit-header">
+      <div class="notes-unit-label">
+        <span class="notes-unit-icon">📑</span>
+        <span class="notes-unit-heading">Select Units / Files for Quiz:</span>
+        <span class="notes-unit-count" id="quiz-unit-count">${count} of ${total} selected</span>
+      </div>
+      <div class="notes-unit-actions">
+        <button type="button" class="notes-unit-toggle-btn" onclick="toggleSelectAllQuizUnits(${!allSelected})">
+          ${allSelected ? 'Select First Unit Only' : 'Select All Units'}
+        </button>
+        <button type="button" class="notes-unit-apply-btn" id="btn-apply-quiz-selection" onclick="applyQuizUnitSelection()" title="Generate practice quiz covering only the selected units">
+          ⚡ Generate Quiz for Selected (${count})
+        </button>
+      </div>
+    </div>
+    <div class="notes-unit-chips-container">
+      ${completedDocs.map(d => {
+        const isChecked = selectedQuizDocIds.has(d.id);
+        return `
+          <label class="notes-unit-chip ${isChecked ? 'active' : ''}" id="chip-quiz-unit-${d.id}" title="${escapeHtml(d.original_filename)}">
+            <input type="checkbox" value="${d.id}" ${isChecked ? 'checked' : ''} onchange="onQuizUnitCheckboxChanged('${d.id}', this.checked)">
+            <span class="unit-chip-name">📄 ${escapeHtml(d.original_filename)}</span>
+          </label>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function onQuizUnitCheckboxChanged(docId, isChecked) {
+  if (!isChecked) {
+    if (selectedQuizDocIds.size <= 1) {
+      showToast("⚠️ Selection limit: You must select at least 1 unit file for the quiz.", "warning");
+      const input = document.querySelector(`#chip-quiz-unit-${docId} input[type="checkbox"]`);
+      if (input) input.checked = true;
+      return;
+    }
+    selectedQuizDocIds.delete(docId);
+  } else {
+    selectedQuizDocIds.add(docId);
+  }
+  renderQuizUnitSelector();
+}
+
+function toggleSelectAllQuizUnits(selectAll) {
+  const completedDocs = (documents || []).filter(d => d.status === "completed");
+  if (selectAll) {
+    selectedQuizDocIds = new Set(completedDocs.map(d => d.id));
+  } else {
+    if (completedDocs.length > 0) {
+      selectedQuizDocIds = new Set([completedDocs[0].id]);
+      showToast("Selected 1 unit (minimum selection limit is 1).", "info");
+    }
+  }
+  renderQuizUnitSelector();
+}
+
+async function applyQuizUnitSelection() {
+  if (selectedQuizDocIds.size === 0) {
+    showToast("Please select at least 1 unit file.", "error");
+    return;
+  }
+  showToast(`🔄 Synthesizing 10 quiz questions for ${selectedQuizDocIds.size} selected unit(s)...`, "info");
+  await loadPracticeQuiz(true);
+}
+
+async function loadPracticeQuiz(forceRefresh = false) {
   if (!activeFolderId) return;
 
   const bodyEl = document.getElementById("quiz-modal-body");
   const scoreBadge = document.getElementById("quiz-score-badge");
   const titleEl = document.getElementById("quiz-modal-title");
+  const subtitleEl = document.getElementById("quiz-modal-subtitle");
 
   const currentFolder = folders.find(f => f.id === activeFolderId);
   if (titleEl && currentFolder) {
     titleEl.textContent = `Practice Quiz: ${currentFolder.name}`;
   }
+  if (subtitleEl) {
+    const unitCount = selectedQuizDocIds ? selectedQuizDocIds.size : 0;
+    subtitleEl.textContent = `10 Practice Questions (${unitCount} unit(s) selected)`;
+  }
 
   bodyEl.innerHTML = `
-    <div class="quiz-loading-spinner">
-      <div style="font-size: 2rem; animation: spin 1s infinite linear;">⚙️</div>
-      <p style="font-size: 0.95rem; font-weight: 500;">Synthesizing questions via Inverted Seq2Seq (FLAN-T5)...</p>
-      <p style="font-size: 0.8rem; color: var(--text-muted);">Mining semantic distractors from vector embeddings...</p>
+    <div class="quiz-loading-spinner" style="padding: 60px 20px; text-align: center;">
+      <div style="font-size: 2.5rem; animation: spin 1s infinite linear; margin-bottom: 16px;">⚙️</div>
+      <p style="font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">
+        Synthesizing 10 Practice Questions...
+      </p>
+      <div class="typewriter-status-box">
+        <span class="typewriter-status-icon">📝</span>
+        <span id="quiz-typewriter-status" class="typewriter-status-text"></span>
+        <span class="typewriter-cursor"></span>
+      </div>
     </div>
   `;
   if (scoreBadge) scoreBadge.textContent = "";
   quizAnswersState = {};
 
+  if (activeQuizTypewriterStop) {
+    activeQuizTypewriterStop();
+    activeQuizTypewriterStop = null;
+  }
+  const statusEl = document.getElementById("quiz-typewriter-status");
+  if (statusEl) {
+    activeQuizTypewriterStop = startTypewriterLoop(statusEl, [
+      "Mining fact anchors from selected unit materials...",
+      "Formulating conceptual question stems (FLAN-T5)...",
+      "Optimizing vector manifold distractors (all-MiniLM)...",
+      "Verifying page citations and pedagogical explanations...",
+      "Assembling 10 practice questions..."
+    ]);
+  }
+
   try {
-    const res = await apiFetch(`/api/folders/${activeFolderId}/quiz?num_questions=4`);
+    let url = `/api/folders/${activeFolderId}/quiz?num_questions=10`;
+    if (selectedQuizDocIds && selectedQuizDocIds.size > 0) {
+      url += `&doc_ids=${encodeURIComponent(Array.from(selectedQuizDocIds).join(","))}`;
+    }
+
+    const res = await apiFetch(url);
+    if (activeQuizTypewriterStop) {
+      activeQuizTypewriterStop();
+      activeQuizTypewriterStop = null;
+    }
+
     if (!res.ok) {
       const err = await res.json();
       bodyEl.innerHTML = `
         <div style="text-align: center; padding: 30px; color: var(--text-secondary);">
           <p style="color: #ef4444; font-weight: 600;">⚠️ ${escapeHtml(err.detail || "Failed to generate quiz.")}</p>
-          <p style="font-size: 0.85rem; margin-top: 8px;">Ensure you have uploaded and extracted documents in this folder.</p>
+          <p style="font-size: 0.85rem; margin-top: 8px;">Ensure you have selected completed documents in this folder.</p>
         </div>
       `;
       return;
@@ -1131,6 +1276,10 @@ async function loadPracticeQuiz() {
 
     renderQuizQuestions();
   } catch (err) {
+    if (activeQuizTypewriterStop) {
+      activeQuizTypewriterStop();
+      activeQuizTypewriterStop = null;
+    }
     bodyEl.innerHTML = `
       <div style="text-align: center; padding: 30px; color: #ef4444;">
         <p>⚠️ Error communicating with quiz engine: ${escapeHtml(err.message)}</p>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nalanda AI — Document & Folder Management</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=8">
+  <link rel="stylesheet" href="/assets/styles.css?v=10">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -200,21 +200,30 @@
 
   <!-- Practice Quiz Modal -->
   <div class="modal-overlay" id="practice-quiz-modal">
-    <div class="modal modal-lg quiz-modal-container">
-      <div class="modal-header">
+    <div class="modal modal-lg quiz-modal-container" style="max-width: 900px; width: 92vw;">
+      <div class="modal-header" style="justify-content: space-between;">
         <div style="display:flex; align-items:center; gap:10px;">
           <span style="font-size: 1.25rem;">📝</span>
-          <h3 class="modal-title" id="quiz-modal-title">Folder Practice Quiz</h3>
-          <span style="font-size:0.75rem; background:rgba(99,102,241,0.15); color:#818cf8; border:1px solid rgba(99,102,241,0.3); padding:2px 8px; border-radius:12px; font-weight:500;">ATML Inverted Seq2Seq</span>
+          <div>
+            <h3 class="modal-title" id="quiz-modal-title" style="margin: 0; font-size: 1.15rem;">Folder Practice Quiz</h3>
+            <span style="font-size:0.75rem; color: var(--text-muted);" id="quiz-modal-subtitle">10 Practice Questions</span>
+          </div>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="closePracticeQuizModal()">✕</button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary btn-sm" id="btn-regenerate-quiz-header" onclick="loadPracticeQuiz(true)" type="button" title="Regenerate quiz questions">🔄 Regenerate Quiz</button>
+          <button class="btn btn-secondary btn-sm" onclick="closePracticeQuizModal()" type="button">✕</button>
+        </div>
       </div>
-      <div class="modal-body" id="quiz-modal-body" style="max-height: 75vh; overflow-y: auto;">
+      <!-- Unit / File Selection Bar for Quiz -->
+      <div class="notes-unit-selector-bar" id="quiz-unit-selector-bar" style="display: none;">
+        <!-- Dynamically populated with units / files checkboxes -->
+      </div>
+      <div class="modal-body" id="quiz-modal-body" style="max-height: 74vh; overflow-y: auto; padding: 24px;">
         <!-- Dynamically rendered -->
       </div>
       <div class="modal-footer" id="quiz-modal-footer" style="justify-content: space-between;">
         <span id="quiz-score-badge" style="font-weight: 600; color: var(--text-secondary); font-size: 0.9rem;"></span>
-        <button class="btn btn-primary" id="btn-regenerate-quiz" onclick="loadPracticeQuiz()">🔄 Regenerate Quiz</button>
+        <button class="btn btn-primary" id="btn-regenerate-quiz" onclick="loadPracticeQuiz(true)">🔄 Regenerate Quiz</button>
       </div>
     </div>
   </div>
@@ -250,6 +259,6 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="/assets/app.js?v=9"></script>
+  <script src="/assets/app.js?v=10"></script>
 </body>
 </html>

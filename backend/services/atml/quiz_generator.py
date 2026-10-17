@@ -81,6 +81,11 @@ DOMAIN_DISTRACTOR_MAP = {
         "Transport Layer Security", "Hash Function", "Authentication Protocol", "Privilege Escalation",
         "Intrusion Detection", "Zero Trust Architecture"
     ],
+    "bigdata_runtime": [
+        "Local File System", "Java Virtual Machine", "Grunt Shell", "Standalone Client",
+        "Pig Engine", "Embedded Script", "Single Machine Storage", "HDFS NameNode",
+        "YARN NodeManager", "MapReduce JobTracker"
+    ],
     "software": [
         "Agile Methodology", "Scrum Framework", "Continuous Integration", "Design Pattern",
         "Object-Oriented Programming", "Unit Testing", "Test-Driven Development", "Code Refactoring",
@@ -91,6 +96,7 @@ DOMAIN_DISTRACTOR_MAP = {
 CURATED_DOMAIN_DISTRACTORS = (
     DOMAIN_DISTRACTOR_MAP["cloud"]
     + DOMAIN_DISTRACTOR_MAP["bigdata"]
+    + DOMAIN_DISTRACTOR_MAP["bigdata_runtime"]
     + DOMAIN_DISTRACTOR_MAP["visualization"]
     + DOMAIN_DISTRACTOR_MAP["os"]
     + DOMAIN_DISTRACTOR_MAP["networks"]
@@ -191,8 +197,20 @@ ACTION_VERB_PREFIXES = re.compile(
 )
 
 
+INVALID_DEFINITION_START = re.compile(
+    r"^(?:not\s+(?:required|needed|used|supported|recommended|present|available)|is\s+not|are\s+not|cannot|does\s+not|do\s+not|should\s+not|never\b|optional\b|neither\b)",
+    re.I,
+)
+
+DANGLING_ANAPHORA_PATTERN = re.compile(
+    r"\b(?:this|that|these|those)\s+(?:mode|case|scenario|approach|method|architecture|technique|system|tool|way|manner|section|step|process|stage|format|example|relation|model)\b|"
+    r"\b(?:the\s+above|as\s+mentioned|as\s+follows|as\s+discussed|as\s+stated|shown\s+above|refer\s+to|herein|hereafter)\b",
+    re.I,
+)
+
+
 def is_valid_definition(text: str) -> bool:
-    """Ensure statement is a valid natural-language educational definition, not shell commands or code."""
+    """Ensure statement is a valid natural-language educational definition, not shell commands, code, negative fragments, or dangling anaphora."""
     if not text or len(text.strip()) < 15:
         return False
     clean = text.strip()
@@ -204,19 +222,147 @@ def is_valid_definition(text: str) -> bool:
     words = clean.split()
     if len(words) < 4:
         return False
+    # Reject isolated negative predicates (e.g. "not required in this mode")
+    if INVALID_DEFINITION_START.search(clean):
+        return False
+    # Reject dangling anaphoric pronouns (e.g. "in this mode", "the above")
+    if DANGLING_ANAPHORA_PATTERN.search(clean):
+        return False
     return True
+
+
+def are_options_too_similar(opt1: str, opt2: str) -> bool:
+    """Check if two multiple-choice options are too similar, overlapping, or collision-prone.
+
+    Prevents degenerate option sets such as:
+    - 'Hadoop' vs 'Hadoop Cluster' vs 'Data in Hadoop' vs 'Hadoop and HDFS'
+    """
+    s1 = opt1.strip().lower()
+    s2 = opt2.strip().lower()
+    if not s1 or not s2:
+        return True
+    if s1 == s2:
+        return True
+
+    # Strip prefixes like A), B)
+    s1 = re.sub(r"^[a-d]\)\s*", "", s1).strip()
+    s2 = re.sub(r"^[a-d]\)\s*", "", s2).strip()
+    if s1 == s2:
+        return True
+
+    # Substring / Superstring check for meaningful words
+    if s1 in s2 or s2 in s1:
+        return True
+
+    stopwords = {"and", "or", "in", "the", "a", "an", "of", "to", "for", "with", "by", "is", "are", "mode"}
+    t1 = {w for w in re.findall(r"[a-z0-9]+", s1) if w not in stopwords}
+    t2 = {w for w in re.findall(r"[a-z0-9]+", s2) if w not in stopwords}
+    if not t1 or not t2:
+        return False
+
+    overlap = t1.intersection(t2)
+    jaccard = len(overlap) / len(t1.union(t2))
+    if jaccard >= 0.4:
+        return True
+
+    # If any shared non-trivial word >= 4 chars when both options are short concepts (<= 2 words)
+    if len(t1) <= 2 and len(t2) <= 2 and any(len(w) >= 4 for w in overlap):
+        return True
+
+    return False
+
+
+def extract_chunk_hierarchy_context(chunk: Dict[str, Any], statement: str = "") -> Dict[str, Any]:
+    """Extract hierarchical educational context: technology/subject, main section, mode/subsection."""
+    sec_title = chunk.get("section_title") or ""
+    source_fn = chunk.get("source_filename") or ""
+    chunk_text = chunk.get("text") or ""
+
+    # 1. Detect Subject / Technology
+    subject = None
+    all_context = f"{source_fn} {sec_title} {chunk_text[:300]}"
+
+    tech_candidates = [
+        "Apache Pig", "Pig Latin", "Apache Hive", "Apache Spark", "Hadoop", "HDFS",
+        "MapReduce", "Apache Kafka", "Docker", "Kubernetes", "Tableau", "YARN",
+        "Apache HBase", "ZooKeeper", "Linux", "Git"
+    ]
+    for tech in tech_candidates:
+        if re.search(rf"\b{re.escape(tech)}\b", all_context, re.I):
+            subject = tech
+            break
+
+    if not subject:
+        fn_clean = re.sub(r"\.(?:pdf|docx|ppt|pptx|txt|md)$", "", source_fn, flags=re.I).strip()
+        fn_clean = re.sub(r"^(?:bda|unit\s*\d+|lecture\s*\d+|module\s*\d+)[\s_\-]+", "", fn_clean, flags=re.I).strip()
+        if fn_clean and len(fn_clean) > 2:
+            subject = fn_clean
+
+    # 2. Detect Section / Topic
+    clean_sec = re.sub(r"^\d+(?:\.\d+)*\s*", "", sec_title).strip()
+    clean_sec = re.sub(r"^(?:section|unit|chapter)\s*\d+[\.\:\-]?\s*", "", clean_sec, flags=re.I).strip()
+
+    # 3. Detect Mode / Subsection
+    mode = None
+    mode_matches = []
+    for m in re.finditer(r"(?:^|\n)\s*(?:[A-Z0-9][\.\)]\s*)?([A-Za-z ]{2,25}Mode)\b", chunk_text, re.I):
+        cand_mode = m.group(1).strip()
+        if not re.search(r"\b(difference|comparison|types|between|vs)\b", cand_mode, re.I):
+            mode_matches.append((m.start(), cand_mode))
+
+    if mode_matches:
+        stmt_idx = chunk_text.find(statement) if statement else -1
+        if stmt_idx != -1:
+            preceding = [m for m in mode_matches if m[0] <= stmt_idx]
+            if preceding:
+                mode = preceding[-1][1]
+        else:
+            mode = mode_matches[0][1]
+
+    if not mode:
+        m = re.search(r"\b([A-Za-z ]{2,25}Mode)\b", sec_title, re.I)
+        if m and not re.search(r"\b(difference|comparison|types|between|vs)\b", m.group(1), re.I):
+            mode = m.group(1).strip()
+
+    # 4. Detect Specific Category
+    category = "concept"
+    stmt_idx = chunk_text.find(statement) if statement else -1
+    local_window = chunk_text[max(0, stmt_idx - 250):stmt_idx + 150] if stmt_idx != -1 else chunk_text[:350]
+    combined_ctx = f"{sec_title} {local_window}".lower()
+
+    if "data model" in combined_ctx or "data structure" in combined_ctx or "data type" in combined_ctx or any(k in statement.lower() for k in ["tuple", "bag", "ordered collection of fields", "atomic value", "key-value"]):
+        category = "data structure"
+    elif mode or "execution mode" in combined_ctx or "mode" in combined_ctx:
+        category = "execution mode"
+    elif "operator" in combined_ctx:
+        category = "operator"
+    elif "architecture" in combined_ctx or "component" in combined_ctx:
+        category = "component"
+    elif "visualization" in combined_ctx or "chart" in combined_ctx or "plot" in combined_ctx:
+        category = "visualization technique"
+
+    return {
+        "subject": subject,
+        "section": clean_sec or None,
+        "mode": mode,
+        "category": category,
+        "document_name": source_fn,
+        "page_number": chunk.get("page_number"),
+    }
 
 
 def get_domain_distractors_for_context(text: str) -> List[str]:
     """Detect subject domain from document context to supply aligned fallback concepts."""
     lower = (text or "").lower()
+    if any(k in lower for k in ["local mode", "execution mode", "runtime", "grunt"]):
+        return DOMAIN_DISTRACTOR_MAP["bigdata_runtime"] + DOMAIN_DISTRACTOR_MAP["bigdata"]
     if any(k in lower for k in ["chart", "plot", "histogram", "visualization", "scatter", "graph", "treemap"]):
         return DOMAIN_DISTRACTOR_MAP["visualization"]
     if any(k in lower for k in ["docker", "container", "kubernetes", "apdd", "devops", "microservice", "virtual machine"]):
         return DOMAIN_DISTRACTOR_MAP["cloud"]
     if any(k in lower for k in ["neural", "classification", "regression", "learning", "gradient", "feature engineering"]):
         return DOMAIN_DISTRACTOR_MAP["ml"]
-    if any(k in lower for k in ["bda", "hadoop", "mapreduce", "hdfs", "spark", "yarn", "hive", "kafka", "namenode"]):
+    if any(k in lower for k in ["bda", "hadoop", "mapreduce", "hdfs", "spark", "yarn", "hive", "pig", "kafka", "namenode"]):
         return DOMAIN_DISTRACTOR_MAP["bigdata"]
     if any(k in lower for k in ["network", "router", "packet", "protocol", "osi", "tcp", "udp", "ip", "dns", "subnet"]):
         return DOMAIN_DISTRACTOR_MAP["networks"]
@@ -294,7 +440,7 @@ def clean_academic_concept(text: str) -> Optional[str]:
     if CLI_SYNTAX_PATTERN.search(lower):
         return None
 
-    if re.search(r"\b(?:unit|chapter|slide|page)\s+\d+\b", lower) or lower.startswith("unit "):
+    if re.search(r"\b(?:unit|chapter|slide|page|concept|topic|section|step)\s+\d+\b", lower) or lower.startswith(("unit ", "concept ", "topic ", "section ", "step ")):
         return None
 
     if "." in cleaned:
@@ -374,21 +520,105 @@ class QuizResponse:
     folder_name: str
     total_questions: int
     questions: List[QuizQuestion]
+    note: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "folder_id": self.folder_id,
             "folder_name": self.folder_name,
             "total_questions": self.total_questions,
             "questions": [q.to_dict() for q in self.questions],
         }
+        if self.note:
+            d["note"] = self.note
+        return d
 
 
-class QuizGenerator:
-    """Automated academic quiz generator utilizing Inverted Seq2Seq and Vector Manifold sampling."""
+def validate_quiz_question(
+    question: QuizQuestion,
+    source_chunk_text: str = "",
+    min_length: int = 25,
+) -> Tuple[bool, List[str]]:
+    """Strictly validate generated question across all 8 quality dimensions.
 
-    def __init__(self, config: Optional[ATMLConfig] = None):
-        self.config = config or default_config
+    Returns (is_valid, list_of_failure_reasons).
+    """
+    failures = []
+    q_text = question.question.strip()
+
+    # A. Completeness & Minimum Length
+    if len(q_text) < min_length:
+        failures.append(f"Question text too short ({len(q_text)} chars)")
+    if not q_text.endswith("?"):
+        failures.append("Question does not end with '?'")
+
+    # Reject literal quote completions and forbidden phrases
+    if re.search(r'\bdefined as:\s*"|"not required in this mode"|\bknown as the above\b|\bmentioned in this case\b|\bcompletes the statement\b|\bwhat does this refer to\b|\bwhat is not required\b', q_text, re.I):
+        failures.append("Question contains forbidden sentence-completion or literal quote phrasing")
+
+    # Reject dangling anaphoric pronouns without explicit antecedent in the question
+    dangling_match = DANGLING_ANAPHORA_PATTERN.search(q_text)
+    if dangling_match:
+        matched_str = dangling_match.group(0).lower()
+        has_specific_mode = bool(re.search(r"\b(?:local|mapreduce|interactive|batch|hdfs|embedded)\s+mode\b", q_text, re.I))
+        if not ("mode" in matched_str and has_specific_mode):
+            failures.append("Question contains dangling anaphoric reference (e.g. 'this mode', 'the above')")
+
+    # B. Context Sufficiency
+    # If the question asks about a mode or requirement, ensure specific mode is explicitly named
+    if "mode" in q_text.lower() and not re.search(r"\b(local mode|mapreduce mode|interactive mode|batch mode|hdfs mode|embedded mode)\b", q_text, re.I):
+        failures.append("Question discusses mode without identifying which specific mode is being tested")
+
+    # C. Answerability
+    if not question.correct_answer or len(question.correct_answer.strip()) < 2:
+        failures.append("Correct answer is empty or invalid")
+
+    # D. Unambiguity & Distractor Anti-Collision
+    if len(question.options) != 4:
+        failures.append(f"Expected exactly 4 options, found {len(question.options)}")
+    else:
+        clean_opts = [re.sub(r"^[A-D]\)\s*", "", opt).strip() for opt in question.options]
+        # Check uniqueness
+        if len(set(o.lower() for o in clean_opts)) != 4:
+            failures.append("Duplicate or non-unique options detected")
+        # Check pairwise collision between options
+        for i in range(len(clean_opts)):
+            for j in range(i + 1, len(clean_opts)):
+                if are_options_too_similar(clean_opts[i], clean_opts[j]):
+                    failures.append(f"Options too similar: '{clean_opts[i]}' and '{clean_opts[j]}'")
+                    break
+            if failures and "Options too similar" in failures[-1]:
+                break
+        # Correct answer must be among options
+        if question.correct_answer.lower() not in [o.lower() for o in clean_opts]:
+            failures.append(f"Correct answer '{question.correct_answer}' not present in options")
+        if question.correct_option_index < 0 or question.correct_option_index >= 4:
+            failures.append("Invalid correct_option_index")
+        elif clean_opts[question.correct_option_index].lower() != question.correct_answer.lower():
+            failures.append("correct_option_index does not point to correct_answer")
+
+    # E. Grammatical Correctness
+    if not q_text[0].isupper():
+        failures.append("Question does not start with a capitalized letter")
+    if q_text.count("?") > 1:
+        failures.append("Multiple question marks detected")
+
+    # F. Conceptual Relevance
+    if question.correct_answer.lower() in FORBIDDEN_CONCEPT_WORDS or question.correct_answer.lower() in ENGLISH_STOPWORDS:
+        failures.append(f"Correct answer '{question.correct_answer}' is a forbidden filler or stopword")
+
+    # G. Explanation Consistency
+    if not question.explanation or len(question.explanation.strip()) < 20:
+        failures.append("Explanation is missing or too short")
+    elif question.correct_answer.lower() not in question.explanation.lower():
+        failures.append("Explanation does not mention or justify the correct answer")
+
+    # H. Source Traceability
+    if not question.source_document:
+        failures.append("Source document metadata is missing")
+
+    is_valid = len(failures) == 0
+    return is_valid, failures
 
 def unwrap_and_extract_sentences(text: str) -> List[str]:
     """Reconstruct wrapped document text into coherent, complete sentences.
@@ -470,7 +700,7 @@ class QuizGenerator:
         self.config = config or default_config
 
     def extract_fact_anchors(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Identify candidate educational statements containing clean concepts and definitions."""
+        """Identify candidate educational statements containing clean concepts, definitions, or verified mode requirements."""
         anchors: List[Dict[str, Any]] = []
         seen_concepts = set()
 
@@ -486,7 +716,7 @@ class QuizGenerator:
                 if len(line) < 30 or len(line) > 500 or line.endswith("?") or line.startswith("?"):
                     continue
 
-                # Pattern A: "Concept is/are/refers to/is defined as/represents/uses Definition"
+                # Pattern A: "Concept is/are/refers to/is defined as/represents/displays/uses Definition"
                 def_match = re.search(
                     r"^([A-Za-z0-9\.\s\-–—]{2,50}?)\s+(?:is|are|refers to|is defined as|is the process of|consists of|represents|displays|uses)\s+(.+)",
                     line,
@@ -498,13 +728,40 @@ class QuizGenerator:
                         definition = definition.split(". ")[0].strip() + "."
                     definition = re.sub(r"\s+(?:and|or|to|for|in|with|by|as|such as|of|the|a|an)\s*[\.\,\;\:]*$", ".", definition, flags=re.I)
                     concept = clean_academic_concept(raw_concept)
+
+                    # Check for Mode / Operational Requirement statement (e.g. "Hadoop and HDFS are not required in this mode.")
+                    is_neg_req = bool(re.search(r"\b(?:is|are)\s+not\s+(?:required|needed|used)\b", line, re.I))
+                    is_pos_req = bool(re.search(r"\b(?:is|are)\s+(?:required|needed|used)\b", line, re.I))
+                    if (is_neg_req or is_pos_req) and (INVALID_DEFINITION_START.search(definition) or DANGLING_ANAPHORA_PATTERN.search(definition)):
+                        ctx = extract_chunk_hierarchy_context(chunk, line)
+                        # ONLY accept if mode and subject can be verified with 100% certainty from the document!
+                        if concept and concept.lower() not in seen_concepts and ctx.get("mode") and ctx.get("subject"):
+                            seen_concepts.add(concept.lower())
+                            anchors.append({
+                                "concept": concept,
+                                "anchor_type": "mode_requirement",
+                                "requirement": "not_required" if is_neg_req else "required",
+                                "mode": ctx["mode"],
+                                "subject": ctx["subject"],
+                                "statement": line,
+                                "chunk": chunk,
+                            })
+                            continue
+                        else:
+                            # Context cannot be verified without guessing: discard candidate
+                            continue
+
                     if concept and concept.lower() not in seen_concepts and is_valid_definition(definition):
+                        ctx = extract_chunk_hierarchy_context(chunk, line)
                         seen_concepts.add(concept.lower())
                         anchors.append({
                             "concept": concept,
+                            "anchor_type": "definition",
                             "definition": definition,
                             "statement": line,
                             "chunk": chunk,
+                            "subject": ctx.get("subject"),
+                            "category": ctx.get("category"),
                         })
                         continue
 
@@ -518,16 +775,20 @@ class QuizGenerator:
                     definition = re.sub(r"\s+(?:and|or|to|for|in|with|by|as|such as|of|the|a|an)\s*[\.\,\;\:]*$", ".", definition, flags=re.I)
                     concept = clean_academic_concept(raw_concept)
                     if concept and concept.lower() not in seen_concepts and is_valid_definition(definition):
+                        ctx = extract_chunk_hierarchy_context(chunk, line)
                         seen_concepts.add(concept.lower())
                         anchors.append({
                             "concept": concept,
+                            "anchor_type": "definition",
                             "definition": definition,
                             "statement": line,
                             "chunk": chunk,
+                            "subject": ctx.get("subject"),
+                            "category": ctx.get("category"),
                         })
                         continue
 
-                # Pattern C: Numbered Step or bullet list: "1. Concept: Explanation" or "- Concept: Explanation"
+                # Pattern C: Numbered Step or bullet list: "1. Concept - Explanation" or "- Concept: Explanation"
                 step_match = re.search(r"^(?:[\-\*•–—]|\d+[\.\)])\s*([A-Za-z0-9\.\s\-–—]{2,50}?)(?::\s*|\s+[\-–—]\s+)(.+)", line)
                 if step_match:
                     raw_concept = step_match.group(1).strip()
@@ -537,12 +798,16 @@ class QuizGenerator:
                     definition = re.sub(r"\s+(?:and|or|to|for|in|with|by|as|such as|of|the|a|an)\s*[\.\,\;\:]*$", ".", definition, flags=re.I)
                     concept = clean_academic_concept(raw_concept)
                     if concept and concept.lower() not in seen_concepts and is_valid_definition(definition):
+                        ctx = extract_chunk_hierarchy_context(chunk, line)
                         seen_concepts.add(concept.lower())
                         anchors.append({
                             "concept": concept,
+                            "anchor_type": "definition",
                             "definition": definition,
                             "statement": line,
                             "chunk": chunk,
+                            "subject": ctx.get("subject"),
+                            "category": ctx.get("category"),
                         })
 
         return anchors
@@ -550,16 +815,41 @@ class QuizGenerator:
     def generate_question_stem(
         self,
         concept: str,
-        definition: str,
-        statement: str,
+        definition: str = "",
+        statement: str = "",
+        chunk: Optional[Dict[str, Any]] = None,
+        anchor: Optional[Dict[str, Any]] = None,
         model=None,
         tokenizer=None,
     ) -> str:
-        """Formulate specific conceptual interrogative question stem, strictly rejecting title questions."""
-        # Seq2Seq generation attempt with quality filters
+        """Formulate specific conceptual interrogative question stem, strictly rejecting sentence completions and quote wrappers."""
+        anchor_type = anchor.get("anchor_type", "definition") if anchor else "definition"
+
+        # 1. Mode / Operational Requirement Questions
+        if anchor_type == "mode_requirement" and anchor:
+            mode = anchor.get("mode")
+            subject = anchor.get("subject")
+            requirement = anchor.get("requirement", "not_required")
+            if mode and subject:
+                if requirement == "not_required":
+                    return f"According to the section on {mode} in {subject}, which of the following is described as not being required in that mode?"
+                else:
+                    return f"In the {mode} of {subject}, which of the following is required to process data?"
+
+        # Extract hierarchical context if available
+        subject = None
+        category = None
+        if anchor:
+            subject = anchor.get("subject")
+            category = anchor.get("category")
+        elif chunk:
+            ctx = extract_chunk_hierarchy_context(chunk, statement)
+            subject = ctx.get("subject")
+            category = ctx.get("category")
+
+        # 2. Seq2Seq generation attempt with quality filters
         if model is not None and tokenizer is not None and self.config.enable_refinement:
             try:
-                # Guide Seq2Seq to ask directly which concept matches the definition
                 clean_def_snippet = definition.rstrip(". ;")[:160]
                 prompt = (
                     f"Given the explanation: \"{clean_def_snippet}\", write a single academic question asking which concept is being described. "
@@ -587,71 +877,90 @@ class QuizGenerator:
                 if not decoded.endswith("?"):
                     decoded += "?"
 
-                # Strictly REJECT generic reading-comprehension meta questions, title matching, or concept giveaway
                 is_invalid = bool(re.search(
                     r"\b(best\s+title|title\s+of|title\s+for|appropriate\s+title|suitable\s+title|name\s+of\s+the|"
                     r"headline|main\s+idea|main\s+point|theme|topic\s+of|which\s+(?:of\s+the\s+following\s+)?statements?\s+is\s+true|"
                     r"which\s+is\s+true|which\s+of\s+the\s+following\s+is\s+true|is\s+true\?|"
                     r"what\s+is\s+the\s+definition\s+of|what\s+is\s+the\s+main\s+concept\s+of|what\s+is\s+the\s+meaning\s+of|"
-                    r"what\s+is\s+the\s+purpose\s+of|what\s+is\s+a\b|what\s+is\s+an\b|what\s+does\s+the\s+author)\b",
+                    r"what\s+is\s+the\s+purpose\s+of|what\s+is\s+a\b|what\s+is\s+an\b|what\s+does\s+the\s+author|"
+                    r"what\s+concept\s+is\s+being\s+described|what\s+is\s+the\s+concept\s+of|what\s+is\s+being\s+described|"
+                    r"defined\s+as|known\s+as\s+the\s+above|completes\s+the\s+statement)\b",
                     decoded,
                     re.I,
                 ))
                 contains_concept = bool(re.search(rf"\b{re.escape(concept)}\b", decoded, re.I))
 
-                if not is_invalid and not contains_concept and len(decoded) > 20:
+                if not is_invalid and not contains_concept and len(decoded) > 25:
                     return decoded
             except Exception as exc:
                 logger.warning("Seq2Seq question generation fallback: %s", exc)
 
-        # High-quality academic conceptual formulation
+        # 3. Direct Conceptual Formulation (NO quotes, NO sentence completion)
         clean_def = definition.strip(" .;-–:")
-        clean_def = re.sub(r"^(?:defined as|is defined as|refers to|is)\s+", "", clean_def, flags=re.I).strip()
-        # Clean trailing dangling conjunctions/prepositions
+        clean_def = re.sub(rf"^(?:an?|the)?\s*{re.escape(concept)}\s+(?:is|are|refers to|represents)\s+", "", clean_def, flags=re.I).strip()
+        clean_def = re.sub(r"^(?:defined as|is defined as|refers to|is the process of|is|represents)\s+", "", clean_def, flags=re.I).strip()
         clean_def = re.sub(r"\s+(?:and|or|to|for|in|with|by|as|such as|of|the|a|an)\s*$", "", clean_def, flags=re.I).strip(" ,.-–:")
         clean_def_lower = clean_def.lower()
 
-        # Known academic category nouns
         known_nouns = [
             "technology", "plot", "chart", "diagram", "graph", "visualization", "technique",
             "method", "algorithm", "process", "framework", "system", "distribution",
             "metric", "measure", "tool", "approach", "platform", "paradigm", "package",
-            "service", "environment", "engine", "component", "model", "pipeline", "map"
+            "service", "environment", "engine", "component", "model", "pipeline", "map",
+            "data structure", "data type"
         ]
 
-        # 1. Check if clean_def begins with "a/an <noun>"
-        for noun in known_nouns:
-            if clean_def_lower.startswith(f"a {noun}") or clean_def_lower.startswith(f"an {noun}") or clean_def_lower.startswith(noun):
-                rest = re.sub(rf"^(?:an?|the)?\s*{noun}\s+(?:that|which|is|used to|for|in which)?\s*", "", clean_def, flags=re.I).strip()
-                if rest:
-                    return f"Which {noun} {rest}?".replace("??", "?")
-
-        # 2. Check if concept has a category noun (e.g., "Line Chart" -> "chart", "Scatter Plot" -> "plot")
+        cat_noun = category or "concept"
         concept_words = concept.lower().split()
-        cat_noun = None
         for w in reversed(concept_words):
             if w in known_nouns:
                 cat_noun = w
                 break
 
-        if cat_noun:
-            # If clean_def starts with third-person verb: e.g. "represents ...", "uses ..."
-            if re.match(r"^(?:represents|uses|displays|calculates|measures|enables|provides|groups|divides|plots)\b", clean_def, re.I):
-                return f"Which {cat_noun} {clean_def}?".replace("??", "?")
-            # Or if statement has "represents", "uses", etc.
-            stmt_match = re.search(r"\b(represents|uses|displays|calculates|measures)\s+" + re.escape(clean_def[:15]), statement, re.I)
-            if stmt_match:
-                verb = stmt_match.group(1).lower()
-                return f"Which {cat_noun} {verb} {clean_def}?".replace("??", "?")
-            if clean_def_lower.startswith("used to ") or clean_def_lower.startswith("is used to "):
-                rest = re.sub(r"^(?:is\s+)?used to\s+", "", clean_def, flags=re.I)
-                return f"Which {cat_noun} is used to {rest}?".replace("??", "?")
+        # Check if clean_def begins with "a/an <noun>" or "a/an <adjective(s)> <noun>"
+        matched_stem = None
+        for noun in known_nouns:
+            m_noun = re.match(rf"^(?:an?|the)?\s*(?:[a-z\-]+\s+)?\b{re.escape(noun)}\b\s*(?:that|which|is|used to|for|in which)?\s*(.+)", clean_def, flags=re.I)
+            if m_noun:
+                rest = m_noun.group(1).strip().rstrip(". ;:-–")
+                if rest:
+                    if re.match(r"^(?:represents|uses|displays|handles|accelerates|manages|monitors|processes|calculates|stores|contains)\b", rest, re.I):
+                        if subject and subject.lower() not in rest.lower():
+                            matched_stem = f"In {subject}, which {noun} {rest}?".replace("??", "?")
+                        else:
+                            matched_stem = f"Which {noun} {rest}?".replace("??", "?")
+                    else:
+                        if subject and subject.lower() not in rest.lower():
+                            matched_stem = f"In {subject}, which {noun} is {rest}?".replace("is is", "is").replace("??", "?")
+                        else:
+                            matched_stem = f"Which {noun} is {rest}?".replace("is is", "is").replace("??", "?")
+                    break
+        if matched_stem:
+            return matched_stem
 
-        # Natural question stem fallback with capitalized quote
-        formatted_def = clean_def[0].upper() + clean_def[1:] if clean_def else clean_def
-        if cat_noun:
-            return f"Which {cat_noun} is defined as: \"{formatted_def}\"?"
-        return f"Which concept or technology is defined as: \"{formatted_def}\"?"
+        # Third-person verbs (represents, uses, displays, manages, maintains, monitors, processes, calculates)
+        if re.match(r"^(?:represents|uses|displays|calculates|measures|enables|provides|groups|divides|plots|manages|maintains|monitors|processes|stores)\b", clean_def, re.I):
+            if subject and subject.lower() not in clean_def_lower:
+                return f"In {subject}, which {cat_noun} {clean_def}?".replace("??", "?")
+            return f"Which {cat_noun} {clean_def}?".replace("??", "?")
+
+        # Used to / Used for
+        if clean_def_lower.startswith("used to ") or clean_def_lower.startswith("is used to ") or clean_def_lower.startswith("used for "):
+            rest = re.sub(r"^(?:is\s+)?used (?:to|for)\s+", "", clean_def, flags=re.I)
+            if subject and subject.lower() not in rest.lower():
+                return f"In {subject}, which {cat_noun} is used to {rest}?".replace("??", "?")
+            return f"Which {cat_noun} is used to {rest}?".replace("??", "?")
+
+        # An ordered collection / a collection of ...
+        if clean_def_lower.startswith("an ordered collection") or clean_def_lower.startswith("a collection") or clean_def_lower.startswith("collection"):
+            if subject and subject.lower() not in clean_def_lower:
+                return f"In {subject}, which {cat_noun} is {clean_def}?".replace("??", "?")
+            return f"Which {cat_noun} is {clean_def}?".replace("??", "?")
+
+        # Natural question stem fallback WITHOUT ANY QUOTES
+        if subject and subject.lower() not in clean_def_lower:
+            return f"In {subject}, which {cat_noun} corresponds to {clean_def}?".replace("??", "?")
+        return f"Which {cat_noun} corresponds to {clean_def}?".replace("??", "?")
 
     def mine_semantic_distractors(
         self,
@@ -659,29 +968,37 @@ class QuizGenerator:
         candidate_pool: List[str],
         embedding_model=None,
         context_text: str = "",
+        anchor: Optional[Dict[str, Any]] = None,
         model=None,
         tokenizer=None,
         top_k: int = 3,
     ) -> List[str]:
-        """Mine sibling technical concepts, sorting by highest semantic relation to the answer."""
+        """Mine sibling technical concepts, enforcing strict anti-collision and category consistency."""
         norm_correct = correct_concept.lower().strip()
 
-        # Sanitize every candidate from the folder, filtering out stopwords, fillers, and forbidden terms
+        # Sanitize every candidate from the folder, rejecting duplicates and colliding terms
         folder_candidates = []
         seen = {norm_correct}
         for raw in candidate_pool:
             cleaned = clean_academic_concept(raw)
-            if cleaned and cleaned.lower() not in seen:
+            if cleaned and cleaned.lower() not in seen and not are_options_too_similar(cleaned, correct_concept):
                 seen.add(cleaned.lower())
                 folder_candidates.append(cleaned)
 
-        # Domain-aligned curated sibling concepts using full context (folder name + chunk text + concept)
-        domain_distractors = get_domain_distractors_for_context(f"{context_text} {correct_concept}")
-        domain_siblings = [d for d in domain_distractors if d.lower() not in seen]
+        # Domain-aligned curated sibling concepts
+        is_mode_req = bool(anchor and anchor.get("anchor_type") == "mode_requirement") or "hadoop and hdfs" in norm_correct
+        if is_mode_req:
+            domain_distractors = DOMAIN_DISTRACTOR_MAP.get("bigdata_runtime", []) + get_domain_distractors_for_context(f"{context_text} {correct_concept}")
+        else:
+            domain_distractors = get_domain_distractors_for_context(f"{context_text} {correct_concept}")
+
+        domain_siblings = [
+            d for d in domain_distractors
+            if d.lower() not in seen and not are_options_too_similar(d, correct_concept)
+        ]
 
         if embedding_model is not None:
             try:
-                # Combine folder candidates and domain siblings
                 combined_pool = folder_candidates + domain_siblings
                 if combined_pool:
                     target_vec = embedding_model.encode([correct_concept], convert_to_numpy=True)[0]
@@ -694,33 +1011,28 @@ class QuizGenerator:
                     ranked = []
                     for idx, cand in enumerate(combined_pool):
                         similarity = float(sims[idx])
-                        # Exclude identical concept or trivial synonyms (>= 0.92)
-                        # Exclude unrelated terms (< 0.35)
-                        if similarity >= 0.92 or similarity < 0.35:
+                        if similarity >= 0.92 or similarity < 0.25:
                             continue
-                        ranked.append((similarity, cand))
+                        if not are_options_too_similar(cand, correct_concept):
+                            ranked.append((similarity, cand))
 
-                    # Sort by highest semantic similarity to the correct concept
                     ranked.sort(key=lambda x: x[0], reverse=True)
 
-                    distractors = []
-                    seen_dist = set()
+                    distractors: List[str] = []
                     for sim, cand in ranked:
-                        if cand.lower() not in seen_dist:
-                            seen_dist.add(cand.lower())
-                            distractors.append(cand)
-                            if len(distractors) == top_k:
-                                return distractors
+                        if cand.lower() not in seen and not are_options_too_similar(cand, correct_concept):
+                            if not any(are_options_too_similar(cand, prev) for prev in distractors):
+                                distractors.append(cand)
+                                if len(distractors) == top_k:
+                                    return distractors
 
-                    # If fewer than top_k passed the 0.35 cutoff, fill from domain siblings
                     for cand in domain_siblings:
-                        if cand.lower() not in seen_dist and cand.lower() != norm_correct:
-                            seen_dist.add(cand.lower())
-                            distractors.append(cand)
-                            if len(distractors) == top_k:
-                                return distractors
+                        if cand.lower() not in seen and not are_options_too_similar(cand, correct_concept):
+                            if not any(are_options_too_similar(cand, prev) for prev in distractors):
+                                distractors.append(cand)
+                                if len(distractors) == top_k:
+                                    return distractors
 
-                    # Zero-shot Flan-T5 sibling concept generation for unknown domains
                     if len(distractors) < top_k and model is not None and tokenizer is not None and self.config.enable_refinement:
                         try:
                             prompt = f"List three alternative technical concepts in the same field as \"{correct_concept}\" separated by commas: "
@@ -731,33 +1043,130 @@ class QuizGenerator:
                             decoded = tokenizer.decode(out_tokens[0], skip_special_tokens=True).strip()
                             for item in re.split(r"[,;\n]+", decoded):
                                 cand = clean_academic_concept(item.strip())
-                                if cand and cand.lower() not in seen_dist and cand.lower() != norm_correct:
-                                    seen_dist.add(cand.lower())
-                                    distractors.append(cand)
-                                    if len(distractors) == top_k:
-                                        return distractors
+                                if cand and cand.lower() not in seen and not are_options_too_similar(cand, correct_concept):
+                                    if not any(are_options_too_similar(cand, prev) for prev in distractors):
+                                        distractors.append(cand)
+                                        if len(distractors) == top_k:
+                                            return distractors
                         except Exception as exc:
-                            logger.debug("Flan-T5 zero-shot sibling distractor generation fallback: %s", exc)
+                            logger.debug("Flan-T5 sibling distractor generation fallback: %s", exc)
 
                     if distractors:
                         return distractors
             except Exception as exc:
                 logger.warning("Embedding distractor calculation fallback: %s", exc)
 
-        # Fallback: prioritize domain distractors first
-        fallback_pool = [d for d in domain_siblings if d.lower() != norm_correct]
-        if len(fallback_pool) >= top_k:
-            return fallback_pool[:top_k]
-        return (fallback_pool + folder_candidates)[:top_k]
+        # Fallback pool with anti-collision
+        distractors = []
+        for cand in domain_siblings + folder_candidates:
+            if cand.lower() != norm_correct and not are_options_too_similar(cand, correct_concept):
+                if not any(are_options_too_similar(cand, prev) for prev in distractors):
+                    distractors.append(cand)
+                    if len(distractors) == top_k:
+                        return distractors
+
+        return distractors[:top_k]
+
+    def regenerate_question_with_context(
+        self,
+        anchor: Dict[str, Any],
+        chunk: Dict[str, Any],
+        candidate_pool: List[str],
+        embedding_model=None,
+        folder_name: str = "",
+    ) -> Optional[QuizQuestion]:
+        """Attempt to regenerate a failed candidate question by enriching hierarchy context."""
+        ctx = extract_chunk_hierarchy_context(chunk, anchor.get("statement", ""))
+        enriched_anchor = dict(anchor)
+        if ctx.get("subject"):
+            enriched_anchor["subject"] = ctx["subject"]
+        if ctx.get("category"):
+            enriched_anchor["category"] = ctx["category"]
+        if ctx.get("mode"):
+            enriched_anchor["mode"] = ctx["mode"]
+
+        stem = self.generate_question_stem(
+            concept=enriched_anchor["concept"],
+            definition=enriched_anchor.get("definition", ""),
+            statement=enriched_anchor.get("statement", ""),
+            chunk=chunk,
+            anchor=enriched_anchor,
+            model=None,
+            tokenizer=None,
+        )
+
+        context_text = f"{folder_name} {chunk.get('source_filename', '')} {chunk.get('text', '')[:200]}"
+        distractors = self.mine_semantic_distractors(
+            correct_concept=enriched_anchor["concept"],
+            candidate_pool=candidate_pool,
+            embedding_model=embedding_model,
+            context_text=context_text,
+            anchor=enriched_anchor,
+            top_k=3,
+        )
+
+        clean_correct = clean_academic_concept(enriched_anchor["concept"]) or enriched_anchor["concept"]
+        sanitized_distractors = []
+        seen_opt = {clean_correct.lower()}
+        for d in distractors:
+            cd = clean_academic_concept(d) or d
+            if cd and cd.lower() not in seen_opt and not are_options_too_similar(cd, clean_correct):
+                if not any(are_options_too_similar(cd, prev) for prev in sanitized_distractors):
+                    seen_opt.add(cd.lower())
+                    sanitized_distractors.append(cd)
+
+        if len(sanitized_distractors) < 3:
+            return None
+
+        all_options = [clean_correct] + sanitized_distractors[:3]
+        random.shuffle(all_options)
+        correct_idx = all_options.index(clean_correct)
+
+        letters = ["A", "B", "C", "D"]
+        formatted_options = [f"{letters[i]}) {opt}" for i, opt in enumerate(all_options)]
+
+        page_num = chunk.get("page_number")
+        doc_name = chunk.get("source_filename") or "Course Material"
+        if enriched_anchor.get("anchor_type") == "mode_requirement" and enriched_anchor.get("mode"):
+            explanation = (
+                f"According to {doc_name}"
+                + (f" (Page {page_num})" if page_num else "")
+                + f", in {enriched_anchor['mode']} of {enriched_anchor.get('subject', 'the system')}, "
+                + f"{clean_correct} is not required because all files are processed using the local file system."
+            )
+        else:
+            explanation = (
+                f"According to {doc_name}"
+                + (f" (Page {page_num})" if page_num else "")
+                + f", {clean_correct} in {enriched_anchor.get('subject', 'the course material')} is: "
+                + f"{enriched_anchor.get('definition', '').rstrip('. ;')}."
+            )
+
+        candidate_q = QuizQuestion(
+            id=f"quiz-q-{uuid.uuid4().hex[:8]}",
+            question=stem,
+            options=formatted_options,
+            correct_option_index=correct_idx,
+            correct_answer=clean_correct,
+            explanation=explanation,
+            source_document=doc_name,
+            page_number=page_num,
+            section_title=chunk.get("section_title"),
+            concept=clean_correct,
+        )
+
+        is_valid, _ = validate_quiz_question(candidate_q, source_chunk_text=chunk.get("text", ""))
+        return candidate_q if is_valid else None
 
     def generate_quiz_for_folder(
         self,
         db: Session,
         current_user: User,
         folder_id: str,
-        num_questions: int = 4,
+        num_questions: int = 10,
+        document_ids: Optional[List[str]] = None,
     ) -> QuizResponse:
-        """Execute end-to-end quiz generation for an authorized user folder."""
+        """Execute end-to-end quiz generation for an authorized user folder with strict validation and deduplication."""
         folder = db.query(Folder).filter(
             Folder.id == folder_id,
             Folder.user_id == current_user.id,
@@ -766,18 +1175,28 @@ class QuizGenerator:
         if not folder:
             raise ValueError(f"Folder '{folder_id}' not found or unauthorized.")
 
-        # Load folder vector index
+        docs_query = db.query(Document).filter(
+            Document.folder_id == folder.id,
+            Document.status == "completed",
+        )
+        if document_ids:
+            doc_id_set = {str(did).strip() for did in document_ids if str(did).strip()}
+            docs_query = docs_query.filter(Document.id.in_(doc_id_set))
+        docs = docs_query.all()
+
+        if document_ids and not docs:
+            raise ValueError("No completed documents found matching the selected units.")
+
         index_dir = get_folder_index_dir(BASE_STORAGE_DIR, str(current_user.id), str(folder.id))
         index = FolderVectorIndex(index_dir)
 
-        chunks = index.chunks
-        if not chunks:
-            # Fallback to DocumentExtraction
-            docs = db.query(Document).filter(
-                Document.folder_id == folder.id,
-                Document.status == "completed",
-            ).all()
+        if document_ids:
+            doc_id_set = {str(did).strip() for did in document_ids if str(did).strip()}
+            chunks = [c for c in (index.chunks or []) if str(c.get("document_id")) in doc_id_set]
+        else:
+            chunks = list(index.chunks) if index.chunks else []
 
+        if not chunks:
             chunks = []
             for d in docs:
                 if d.extraction and d.extraction.markdown_content:
@@ -800,7 +1219,7 @@ class QuizGenerator:
         # 1. Extract Fact Anchors
         fact_anchors = self.extract_fact_anchors(chunks)
 
-        # If strict patterns were too sparse, mine verified section titles with valid educational definitions
+        # Fallback 1: Mine section titles with educational definitions
         if len(fact_anchors) < num_questions:
             seen_existing = {fa["concept"].lower() for fa in fact_anchors}
             for c in chunks:
@@ -808,14 +1227,45 @@ class QuizGenerator:
                 txt = c.get("text", "")
                 if st and st.lower() not in seen_existing and len(txt) > 60:
                     first_sent = txt.split(".")[0].strip()
-                    if len(first_sent) > 25 and is_valid_definition(first_sent) and not re.search(r"\b(when|where|if)\b", first_sent.lower()):
+                    if len(first_sent) > 25 and is_valid_definition(first_sent):
+                        ctx = extract_chunk_hierarchy_context(c, first_sent)
                         seen_existing.add(st.lower())
                         fact_anchors.append({
                             "concept": st,
+                            "anchor_type": "definition",
                             "definition": first_sent,
                             "statement": first_sent,
                             "chunk": c,
+                            "subject": ctx.get("subject"),
+                            "category": ctx.get("category"),
                         })
+
+        # Fallback 2: Extract conceptual definitions from chunk lines
+        if len(fact_anchors) < num_questions:
+            seen_existing = {fa["concept"].lower() for fa in fact_anchors}
+            for c in chunks:
+                for line in (c.get("text") or "").split("\n"):
+                    l_str = line.strip()
+                    if len(l_str) < 30:
+                        continue
+                    m = re.match(r"^([A-Z][a-zA-Z0-9\s\-–—/]{2,45})\s*[:\-–—]\s*(.{25,})", l_str)
+                    if m:
+                        cand_concept = clean_academic_concept(m.group(1))
+                        cand_def = m.group(2).strip()
+                        if cand_concept and cand_concept.lower() not in seen_existing and is_valid_definition(cand_def):
+                            ctx = extract_chunk_hierarchy_context(c, l_str)
+                            seen_existing.add(cand_concept.lower())
+                            fact_anchors.append({
+                                "concept": cand_concept,
+                                "anchor_type": "definition",
+                                "definition": cand_def.split(".")[0].strip() + ".",
+                                "statement": l_str,
+                                "chunk": c,
+                                "subject": ctx.get("subject"),
+                                "category": ctx.get("category"),
+                            })
+                            if len(fact_anchors) >= num_questions * 3:
+                                break
 
         if not fact_anchors:
             return QuizResponse(
@@ -823,6 +1273,7 @@ class QuizGenerator:
                 folder_name=folder.name,
                 total_questions=0,
                 questions=[],
+                note="Insufficient structured educational facts found in the selected materials.",
             )
 
         # 2. Build candidate pool for distractors from fact anchors and domain libraries
@@ -840,7 +1291,10 @@ class QuizGenerator:
             embedding_model = None
 
         questions: List[QuizQuestion] = []
-        selected_anchors = fact_anchors[: min(len(fact_anchors), num_questions * 2)]
+        seen_quiz_concepts = set()
+        seen_stems: List[str] = []
+
+        selected_anchors = list(fact_anchors)
         random.shuffle(selected_anchors)
 
         for anchor in selected_anchors:
@@ -848,50 +1302,59 @@ class QuizGenerator:
                 break
 
             concept = anchor["concept"]
-            definition = anchor["definition"]
-            statement = anchor["statement"]
+            if concept.lower() in seen_quiz_concepts:
+                continue
+
+            definition = anchor.get("definition", "")
+            statement = anchor.get("statement", "")
             chunk = anchor["chunk"]
 
-            # Generate question stem
+            # Generate initial question stem
             question_text = self.generate_question_stem(
                 concept=concept,
                 definition=definition,
                 statement=statement,
+                chunk=chunk,
+                anchor=anchor,
                 model=model,
                 tokenizer=tokenizer,
             )
 
-            # Mine 3 sibling distractors aligned to the document domain
+            # Mine 3 sibling distractors with strict anti-collision
             context_text = f"{folder.name} {chunk.get('source_filename', '')} {chunk.get('text', '')[:200]}"
             distractors = self.mine_semantic_distractors(
                 correct_concept=concept,
                 candidate_pool=candidate_pool,
                 embedding_model=embedding_model,
                 context_text=context_text,
+                anchor=anchor,
                 model=model,
                 tokenizer=tokenizer,
                 top_k=3,
             )
 
-            # Combine correct answer and distractors, ensuring clean formatting, validity, and uniqueness
             clean_correct = clean_academic_concept(concept) or concept
             sanitized_distractors = []
             seen_opt = {clean_correct.lower()}
             for d in distractors:
                 cd = clean_academic_concept(d) or d
-                if cd and cd.lower() not in seen_opt and len(sanitized_distractors) < 3:
-                    if cd.lower() not in FORBIDDEN_CONCEPT_WORDS and cd.lower() not in ENGLISH_STOPWORDS:
+                if cd and cd.lower() not in seen_opt and not are_options_too_similar(cd, clean_correct):
+                    if not any(are_options_too_similar(cd, prev) for prev in sanitized_distractors):
                         seen_opt.add(cd.lower())
                         sanitized_distractors.append(cd)
 
-            # Fill with domain defaults if needed
+            # Fill with domain defaults if needed, respecting anti-collision
             context_domain_pool = get_domain_distractors_for_context(chunk.get("text", "") + " " + clean_correct)
             for cd in context_domain_pool:
                 if len(sanitized_distractors) >= 3:
                     break
-                if cd.lower() not in seen_opt and cd.lower() not in FORBIDDEN_CONCEPT_WORDS and cd.lower() not in ENGLISH_STOPWORDS:
-                    seen_opt.add(cd.lower())
-                    sanitized_distractors.append(cd)
+                if cd.lower() not in seen_opt and not are_options_too_similar(cd, clean_correct):
+                    if not any(are_options_too_similar(cd, prev) for prev in sanitized_distractors):
+                        seen_opt.add(cd.lower())
+                        sanitized_distractors.append(cd)
+
+            if len(sanitized_distractors) < 3:
+                continue
 
             all_options = [clean_correct] + sanitized_distractors[:3]
             random.shuffle(all_options)
@@ -903,29 +1366,77 @@ class QuizGenerator:
             page_num = chunk.get("page_number")
             doc_name = chunk.get("source_filename") or "Course Material"
             clean_def_preview = definition.rstrip(". ;")
-            explanation = (
-                f"According to {doc_name}"
-                + (f" (Page {page_num})" if page_num else "")
-                + f", {concept} is: {clean_def_preview}."
-            )
+
+            if anchor.get("anchor_type") == "mode_requirement" and anchor.get("mode"):
+                explanation = (
+                    f"According to {doc_name}"
+                    + (f" (Page {page_num})" if page_num else "")
+                    + f", in {anchor['mode']} of {anchor.get('subject', 'the system')}, "
+                    + f"{clean_correct} is not required because all files are processed using the local file system."
+                )
+            else:
+                subj_tag = anchor.get("subject") or "the course material"
+                explanation = (
+                    f"According to {doc_name}"
+                    + (f" (Page {page_num})" if page_num else "")
+                    + f", {clean_correct} in {subj_tag} is: {clean_def_preview}."
+                )
 
             q_item = QuizQuestion(
                 id=f"quiz-q-{uuid.uuid4().hex[:8]}",
                 question=question_text,
                 options=formatted_options,
                 correct_option_index=correct_idx,
-                correct_answer=concept,
+                correct_answer=clean_correct,
                 explanation=explanation,
                 source_document=doc_name,
                 page_number=page_num,
                 section_title=chunk.get("section_title"),
-                concept=concept,
+                concept=clean_correct,
             )
+
+            # --- QUESTION-QUALITY VALIDATION STAGE ---
+            is_valid, failures = validate_quiz_question(q_item, source_chunk_text=chunk.get("text", ""))
+            if not is_valid:
+                logger.debug("Question validation failed (%s). Attempting regeneration with context...", failures)
+                regenerated_q = self.regenerate_question_with_context(
+                    anchor=anchor,
+                    chunk=chunk,
+                    candidate_pool=candidate_pool,
+                    embedding_model=embedding_model,
+                    folder_name=folder.name,
+                )
+                if regenerated_q is not None:
+                    q_item = regenerated_q
+                else:
+                    logger.debug("Regeneration failed for '%s'; discarding candidate.", concept)
+                    continue
+
+            # Deduplication: ensure stem is not duplicate
+            q_clean = q_item.question.strip().lower()
+            is_duplicate_stem = False
+            for prev_stem in seen_stems:
+                if prev_stem.strip().lower() == q_clean:
+                    is_duplicate_stem = True
+                    break
+            if is_duplicate_stem:
+                continue
+
+            seen_quiz_concepts.add(clean_correct.lower())
+            seen_stems.append(q_item.question)
             questions.append(q_item)
+
+        note = None
+        if len(questions) < num_questions and len(questions) > 0:
+            note = (
+                f"Generated {len(questions)} high-quality validated questions. "
+                f"Additional candidate questions were discarded to prevent incomplete or ambiguous items from limited source material."
+            )
 
         return QuizResponse(
             folder_id=folder.id,
             folder_name=folder.name,
             total_questions=len(questions),
             questions=questions,
+            note=note,
         )

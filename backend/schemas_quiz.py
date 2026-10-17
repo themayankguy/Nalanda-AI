@@ -25,3 +25,4 @@ class QuizResponseSchema(BaseModel):
     folder_name: str
     total_questions: int
     questions: List[QuizQuestionItem]
+    note: Optional[str] = None
