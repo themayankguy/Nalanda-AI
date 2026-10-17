@@ -630,29 +630,30 @@ To validate feasibility for local, offline university edge deployment, ATML was 
 
 ---
 
-## 6. Comprehensive Test Suite & Verification Results (61 System Tests)
+## 6. Comprehensive Test Suite & Verification Results (77 System Tests)
 
-The entire Nalanda AI codebase is protected by **61 comprehensive automated unit and integration tests**. All tests execute in under 38 seconds with zero failures.
+The entire Nalanda AI codebase is protected by **77 comprehensive automated unit and integration tests**. All tests execute locally in under 45 seconds with 100% pass rate.
 
 ```text
 ============================= test session starts ==============================
 platform darwin -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0
 rootdir: /Users/mayanksmac/Desktop/capstone
 plugins: anyio-4.12.1
-collected 61 items
+collected 77 items
 
-tests/test_api_integration.py ..                                         [  3%]
-tests/test_chatbot_upgrade.py ........                                   [ 16%]
-tests/test_atml_notes_generation.py ......                                [ 26%]
-tests/test_atml_quiz_generation.py ............                          [ 45%]
-tests/test_atml_refinement.py ...........                                [ 63%]
-tests/test_extraction_service.py ...                                     [ 68%]
-tests/test_multimodal_rag.py .....                                       [ 77%]
-tests/test_real_extraction_pipeline.py .                                 [ 78%]
-tests/test_semantic_search.py .........                                  [ 93%]
+tests/test_api_integration.py ..                                         [  2%]
+tests/test_atml_notes_generation.py ........                             [ 12%]
+tests/test_atml_notes_subtopics.py ........                              [ 23%]
+tests/test_atml_quiz_generation.py ..................                    [ 46%]
+tests/test_atml_refinement.py ...........                                [ 61%]
+tests/test_chatbot_upgrade.py ........                                   [ 71%]
+tests/test_extraction_service.py ...                                     [ 75%]
+tests/test_multimodal_rag.py .....                                       [ 81%]
+tests/test_real_extraction_pipeline.py .                                 [ 83%]
+tests/test_semantic_search.py .........                                  [ 94%]
 tests/test_storage_and_models.py ....                                    [100%]
 
-======================= 61 passed in 37.84s =======================
+======================= 77 passed in 44.75s =======================
 ```
 
 ### 6.1 Chatbot Upgrade & Conversational Persistence Suite (`test_chatbot_upgrade.py` - 8 Tests)
