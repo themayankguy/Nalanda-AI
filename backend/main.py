@@ -12,6 +12,7 @@ from backend.routes.document_routes import router as document_router
 from backend.routes.search_routes import router as search_router
 from backend.routes.quiz_routes import router as quiz_router
 from backend.routes.notes_routes import router as notes_router
+from backend.routes.chat_routes import router as chat_router
 
 # Ensure all database tables exist on startup
 Base.metadata.create_all(bind=engine)
@@ -38,6 +39,7 @@ app.include_router(document_router)
 app.include_router(search_router)
 app.include_router(quiz_router)
 app.include_router(notes_router)
+app.include_router(chat_router)
 
 # Mount frontend static directory if it exists
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"

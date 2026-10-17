@@ -341,35 +341,199 @@ function escapeHtml(str) {
 }
 
 const folderChatHistory = {};
+let activeConversationId = null;
+let folderConversations = [];
 
-function renderChatMessages(folderId) {
-  const container = document.getElementById("chat-messages");
-  if (!container) return;
-  container.innerHTML = "";
+async function loadFolderConversations(folderId) {
+  const selectEl = document.getElementById("chat-conversation-select");
 
-  const history = folderChatHistory[folderId] || [];
-  if (history.length === 0) {
-    const welcome = document.createElement("div");
-    welcome.className = "chat-message assistant";
-    welcome.innerHTML = `
-      <div class="chat-avatar">AI</div>
-      <div class="chat-bubble">
-        <p>Hello! Ask me any question about the documents in this folder. You can also request diagrams (e.g. <em>"Show diagram of CNN"</em>) or comparison tables.</p>
-      </div>
-    `;
-    container.appendChild(welcome);
-  } else {
-    history.forEach((msg) => {
-      container.appendChild(msg);
-    });
+  try {
+    const res = await apiFetch(`/api/folders/${folderId}/conversations`);
+    if (!res.ok) throw new Error("Failed to load conversations");
+    folderConversations = await res.json();
+
+    if (selectEl) {
+      selectEl.innerHTML = "";
+      if (folderConversations.length > 0) {
+        selectEl.style.display = "inline-block";
+        folderConversations.forEach(c => {
+          const opt = document.createElement("option");
+          opt.value = c.id;
+          opt.textContent = `${c.title} (${c.message_count} msgs)`;
+          selectEl.appendChild(opt);
+        });
+
+        // Default to the first (most recent) conversation
+        activeConversationId = folderConversations[0].id;
+        selectEl.value = activeConversationId;
+        await loadConversationMessages(activeConversationId);
+      } else {
+        selectEl.style.display = "none";
+        activeConversationId = null;
+        renderChatWelcome();
+      }
+    }
+  } catch (err) {
+    console.warn("Could not load folder conversations:", err);
+    if (selectEl) selectEl.style.display = "none";
+    activeConversationId = null;
+    renderChatWelcome();
   }
-  container.scrollTop = container.scrollHeight;
 }
 
-function clearChatHistory() {
-  if (!activeFolderId) return;
-  folderChatHistory[activeFolderId] = [];
-  renderChatMessages(activeFolderId);
+function renderChatWelcome() {
+  const container = document.getElementById("chat-messages");
+  if (!container) return;
+  container.innerHTML = `
+    <div class="chat-message assistant">
+      <div class="chat-avatar">AI</div>
+      <div class="chat-bubble">
+        <p>Hello! Ask me any question about the documents in this folder. You can also request diagrams (e.g. <em>"Show diagram of CNN"</em>), comparison tables, or full subtopic breakdowns.</p>
+      </div>
+    </div>
+  `;
+}
+
+async function loadConversationMessages(conversationId) {
+  const container = document.getElementById("chat-messages");
+  if (!container || !conversationId) return;
+
+  try {
+    const res = await apiFetch(`/api/conversations/${conversationId}`);
+    if (!res.ok) throw new Error("Failed to load conversation messages");
+    const data = await res.json();
+
+    container.innerHTML = "";
+    if (!data.messages || data.messages.length === 0) {
+      renderChatWelcome();
+      return;
+    }
+
+    data.messages.forEach(msg => {
+      const msgEl = document.createElement("div");
+      msgEl.className = `chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`;
+
+      if (msg.role === 'user') {
+        msgEl.innerHTML = `
+          <div class="chat-avatar">You</div>
+          <div class="chat-bubble">
+            <p>${escapeHtml(msg.content)}</p>
+          </div>
+        `;
+      } else {
+        let bubbleContent = "";
+
+        if (msg.direct_answer) {
+          const directAnswerElId = `direct-answer-${msg.id}`;
+          const isRefined = msg.refinement_metadata && msg.refinement_metadata.is_refined;
+          const badge = isRefined
+            ? `<span style="display:inline-flex; align-items:center; gap:4px; font-size:0.75rem; background:rgba(99, 102, 241, 0.15); color:#818cf8; border:1px solid rgba(99, 102, 241, 0.3); padding:2px 8px; border-radius:12px; margin-left:8px; font-weight:500;">✨ Refined</span>`
+            : '';
+          bubbleContent += `
+            <div class="direct-answer-card">
+              <div class="direct-answer-title" style="display:flex; align-items:center; justify-content:space-between;">
+                <div style="display:flex; align-items:center;">
+                  <span>💡 Direct Answer</span>
+                  ${badge}
+                </div>
+              </div>
+              <div class="direct-answer-body" id="${directAnswerElId}">${formatDirectAnswerHtml(msg.direct_answer)}</div>
+            </div>
+          `;
+        } else {
+          bubbleContent += `<div class="direct-answer-body">${formatDirectAnswerHtml(msg.content)}</div>`;
+        }
+
+        if (msg.primary_figure) {
+          const fig = msg.primary_figure;
+          const figUrl = token ? `${fig.figure_url}?token=${encodeURIComponent(token)}` : fig.figure_url;
+          const encodedCap = encodeURIComponent(fig.caption || "");
+          bubbleContent += `
+            <div class="diagram-card">
+              <div class="diagram-header">
+                <span>🖼️ Extracted Diagram (Page ${fig.page_number || '1'})</span>
+                <span style="font-size:0.75rem; color:var(--text-muted); cursor:pointer;" onclick="openFigureModal('${figUrl}', '${encodedCap}')">Click to zoom</span>
+              </div>
+              <img class="diagram-preview-img" src="${figUrl}" alt="Diagram" onclick="openFigureModal('${figUrl}', '${encodedCap}')">
+              ${fig.caption ? `<div class="diagram-caption">${escapeHtml(fig.caption)}</div>` : ''}
+            </div>
+          `;
+        }
+
+        if (msg.primary_table && msg.primary_table.html) {
+          const tab = msg.primary_table;
+          bubbleContent += `
+            <div class="table-card">
+              <div class="diagram-header" style="margin-bottom:6px;">
+                <span>📊 Extracted Table (Page ${tab.page_number || '1'})</span>
+              </div>
+              ${tab.html}
+            </div>
+          `;
+        }
+
+        if (msg.citations && msg.citations.length > 0) {
+          bubbleContent += `
+            <div class="citations-group">
+              <span class="citations-label">Sources:</span>
+              ${msg.citations.map(r => `
+                <span class="citation-pill" title="${r.section_title ? escapeHtml(r.section_title) : ''}">
+                  📄 <strong>${escapeHtml(r.source_filename)}</strong>
+                  ${r.page_number != null ? `· p. ${r.page_number}` : ''}
+                  ${r.section_title ? `· ${escapeHtml(r.section_title.substring(0, 30))}` : ''}
+                  <span style="color:var(--status-completed-text); font-weight:600;">(${Math.round(r.relevance_score * 100)}%)</span>
+                </span>
+              `).join('')}
+            </div>
+          `;
+        }
+
+        msgEl.innerHTML = `
+          <div class="chat-avatar">AI</div>
+          <div class="chat-bubble">
+            ${bubbleContent}
+          </div>
+        `;
+      }
+
+      container.appendChild(msgEl);
+    });
+
+    container.scrollTop = container.scrollHeight;
+  } catch (err) {
+    console.error("Error loading messages:", err);
+  }
+}
+
+async function switchConversation(conversationId) {
+  if (!conversationId) return;
+  activeConversationId = conversationId;
+  await loadConversationMessages(conversationId);
+}
+
+function startNewChat() {
+  activeConversationId = null;
+  const selectEl = document.getElementById("chat-conversation-select");
+  if (selectEl) selectEl.selectedIndex = -1;
+  renderChatWelcome();
+  const queryInput = document.getElementById("rag-query");
+  if (queryInput) queryInput.focus();
+}
+
+async function clearChatHistory() {
+  if (!activeConversationId) {
+    renderChatWelcome();
+    return;
+  }
+  try {
+    await apiFetch(`/api/conversations/${activeConversationId}`, { method: "DELETE" });
+    if (activeFolderId) {
+      await loadFolderConversations(activeFolderId);
+    }
+  } catch (err) {
+    console.error("Error deleting conversation:", err);
+    renderChatWelcome();
+  }
 }
 
 function openFigureModal(url, encodedCaption) {
@@ -398,7 +562,7 @@ async function selectFolder(folderId) {
   activeFolderId = folderId;
   renderFolders();
   renderActiveView();
-  renderChatMessages(folderId);
+  await loadFolderConversations(folderId);
   await loadDocuments(folderId);
 }
 
@@ -456,7 +620,7 @@ function formatDirectAnswerHtml(text) {
         htmlParts.push("</ul>");
         inList = false;
       }
-      if (line.length < 80 && !/[.:;]$/.test(line) && /^[A-Z]/.test(line)) {
+      if (line.length < 80 && !/[.:;]$/.test(line) && /^[A-Z]/.test(line) && !line.startsWith("Based on") && !line.startsWith("According to")) {
         htmlParts.push(`<div class="direct-answer-section-header">${formatInlineMarkdown(line)}</div>`);
       } else {
         htmlParts.push(`<p class="direct-answer-para">${formatInlineMarkdown(line)}</p>`);
@@ -664,16 +828,62 @@ async function handleSemanticSearch(event) {
   searchController = controller;
   submitButton.disabled = true;
 
+  // If no conversation currently active in this folder, create one first
+  if (!activeConversationId) {
+    try {
+      const convRes = await apiFetch(`/api/folders/${folderId}/conversations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder_id: folderId, title: query.slice(0, 35) }),
+      });
+      if (convRes.ok) {
+        const convData = await convRes.json();
+        activeConversationId = convData.id;
+      }
+    } catch (e) {
+      console.warn("Could not create conversation, falling back:", e);
+    }
+  }
+
   try {
-    const response = await apiFetch("/api/search/semantic", {
+    const chatUrl = activeConversationId
+      ? `/api/conversations/${activeConversationId}/messages`
+      : `/api/search/semantic`;
+
+    const chatBody = activeConversationId
+      ? JSON.stringify({ query })
+      : JSON.stringify({ query, folder_id: folderId, top_k: 5 });
+
+    const response = await apiFetch(chatUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, folder_id: folderId, top_k: 5 }),
+      body: chatBody,
       signal: controller.signal,
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Search failed.");
     if (folderId !== activeFolderId) return;
+
+    // Refresh conversation dropdown in background
+    if (activeFolderId) {
+      apiFetch(`/api/folders/${activeFolderId}/conversations`)
+        .then(r => r.json())
+        .then(convs => {
+          const selectEl = document.getElementById("chat-conversation-select");
+          if (selectEl && convs && convs.length > 0) {
+            selectEl.style.display = "inline-block";
+            selectEl.innerHTML = "";
+            convs.forEach(c => {
+              const opt = document.createElement("option");
+              opt.value = c.id;
+              opt.textContent = `${c.title} (${c.message_count} msgs)`;
+              selectEl.appendChild(opt);
+            });
+            selectEl.value = activeConversationId;
+          }
+        })
+        .catch(() => {});
+    }
 
     // Remove typing indicator
     typingEl.remove();
@@ -685,7 +895,9 @@ async function handleSemanticSearch(event) {
     let bubbleContent = "";
     let directAnswerElId = null;
 
-    if (data.total_results === 0) {
+    const citationList = data.citations || data.results || [];
+
+    if (!data.direct_answer && citationList.length === 0) {
       bubbleContent += `<p style="color: var(--text-secondary);">No relevant sources or answers were found for this query in the selected folder.</p>`;
     } else {
       // 1. Direct Answer Card
@@ -693,7 +905,7 @@ async function handleSemanticSearch(event) {
         directAnswerElId = `direct-answer-${Date.now()}`;
         const isRefined = data.refinement_metadata && data.refinement_metadata.is_refined;
         const badge = isRefined
-          ? `<span style="display:inline-flex; align-items:center; gap:4px; font-size:0.75rem; background:rgba(99, 102, 241, 0.15); color:#818cf8; border:1px solid rgba(99, 102, 241, 0.3); padding:2px 8px; border-radius:12px; margin-left:8px; font-weight:500;">✨ Refined (Seq2Seq)</span>`
+          ? `<span style="display:inline-flex; align-items:center; gap:4px; font-size:0.75rem; background:rgba(99, 102, 241, 0.15); color:#818cf8; border:1px solid rgba(99, 102, 241, 0.3); padding:2px 8px; border-radius:12px; margin-left:8px; font-weight:500;">✨ Refined</span>`
           : '';
         bubbleContent += `
           <div class="direct-answer-card">
@@ -740,11 +952,11 @@ async function handleSemanticSearch(event) {
       }
 
       // 4. Citation Pills
-      if (data.results && data.results.length > 0) {
+      if (citationList.length > 0) {
         bubbleContent += `
           <div class="citations-group">
             <span class="citations-label">Sources:</span>
-            ${data.results.map(r => `
+            ${citationList.map(r => `
               <span class="citation-pill" title="${r.section_title ? escapeHtml(r.section_title) : ''}">
                 📄 <strong>${escapeHtml(r.source_filename)}</strong>
                 ${r.page_number != null ? `· p. ${r.page_number}` : ''}
@@ -765,7 +977,7 @@ async function handleSemanticSearch(event) {
     `;
 
     chatMessages.appendChild(assistantMsgEl);
-    folderChatHistory[folderId].push(assistantMsgEl);
+    if (folderChatHistory[folderId]) folderChatHistory[folderId].push(assistantMsgEl);
 
     if (data.direct_answer && directAnswerElId) {
       const answerTarget = document.getElementById(directAnswerElId);

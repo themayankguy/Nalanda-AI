@@ -268,13 +268,16 @@ class AnswerRefinementEngine:
         # Keep answers as long and complete as they need to be (no shortcuts)
         if is_meta_phrase or is_too_brief or generation_missed_points or is_significant_shortcut:
             logger.info("Preserving comprehensive multi-point evidence over shortened summary.")
-            intro_lead = formulate_conversational_intro(query)
-            if structured_fallback.startswith("### "):
+            if "Based on" in structured_fallback or "According to" in structured_fallback:
+                structured_answer = structured_fallback
+            elif structured_fallback.startswith("### "):
                 lines_fb = structured_fallback.splitlines()
                 first_heading = lines_fb[0]
                 rest_fb = "\n".join(lines_fb[1:]).strip()
+                intro_lead = formulate_conversational_intro(query)
                 structured_answer = f"{first_heading}\n\n{intro_lead}\n\n{rest_fb}"
             else:
+                intro_lead = formulate_conversational_intro(query)
                 structured_answer = f"{intro_lead}\n\n{structured_fallback}"
 
         # Validate factual fidelity and hallucination guard

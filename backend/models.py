@@ -108,3 +108,36 @@ class FolderNoteCache(Base):
 
     folder = relationship("Folder", backref="note_cache")
 
+
+class Conversation(Base):
+    """Represents a persistent multi-turn chat session scoped to a user and folder."""
+    __tablename__ = "conversations"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    folder_id = Column(String(36), ForeignKey("folders.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(255), nullable=False, default="New Conversation")
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    user = relationship("User", backref="conversations")
+    folder = relationship("Folder", backref="conversations")
+    messages = relationship("ChatMessage", back_populates="conversation", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
+
+
+class ChatMessage(Base):
+    """Represents an individual message turn within a conversation."""
+    __tablename__ = "chat_messages"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    conversation_id = Column(String(36), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String(20), nullable=False)  # "user" or "assistant"
+    content = Column(Text, nullable=False)
+    direct_answer = Column(Text, nullable=True)
+    primary_figure_json = Column(Text, nullable=True)
+    primary_table_json = Column(Text, nullable=True)
+    citations_json = Column(Text, nullable=True)
+    refinement_metadata_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+    conversation = relationship("Conversation", back_populates="messages")
