@@ -1,6 +1,6 @@
 """Main FastAPI application for Nalanda AI."""
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -41,19 +41,26 @@ app.include_router(quiz_router)
 app.include_router(notes_router)
 app.include_router(chat_router)
 
+@app.get("/health", tags=["system"])
+def health_check():
+    return {"status": "healthy", "service": "Nalanda AI"}
+
 # Mount frontend static directory if it exists
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 if FRONTEND_DIR.exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR)), name="assets")
 
     @app.get("/", include_in_schema=False)
-    def read_root():
+    @app.get("/home", include_in_schema=False)
+    @app.get("/chat", include_in_schema=False)
+    @app.get("/notes", include_in_schema=False)
+    @app.get("/quiz", include_in_schema=False)
+    @app.get("/{view_name:path}", include_in_schema=False)
+    def read_spa(view_name: str = ""):
+        clean_view = view_name.strip("/").lower()
+        if clean_view.startswith(("api", "assets", "health", "docs", "openapi.json")):
+            raise HTTPException(status_code=404, detail="Not Found")
         index_file = FRONTEND_DIR / "index.html"
         if index_file.exists():
             return FileResponse(str(index_file))
         return {"message": "Nalanda AI API is running. Frontend index.html not found."}
-
-
-@app.get("/health", tags=["system"])
-def health_check():
-    return {"status": "healthy", "service": "Nalanda AI"}

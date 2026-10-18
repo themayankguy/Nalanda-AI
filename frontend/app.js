@@ -271,8 +271,8 @@ async function loadFolders() {
 }
 
 function restoreActiveModalState() {
-  const savedView = localStorage.getItem("nalanda_active_view") || "home";
-  switchView(savedView);
+  const currentRoute = getCurrentRoute();
+  switchView(currentRoute, false);
 }
 
 function renderFolders() {
@@ -423,24 +423,34 @@ async function loadFolderConversations(folderId) {
           selectEl.appendChild(opt);
         });
 
-        // Restore saved conversation for this folder if exists, otherwise default to first
+        // Restore saved conversation for this folder if exists
         const savedConvId = localStorage.getItem(`nalanda_active_conv_${folderId}`) || localStorage.getItem("nalanda_active_conversation_id");
+
+        if (savedConvId === "new") {
+          activeConversationId = null;
+          selectEl.selectedIndex = -1;
+          renderChatWelcome();
+          return;
+        }
+
         const matchingConv = folderConversations.find(c => c.id === savedConvId);
 
         if (matchingConv) {
           activeConversationId = matchingConv.id;
+          selectEl.value = activeConversationId;
+          localStorage.setItem("nalanda_active_conversation_id", activeConversationId);
+          localStorage.setItem(`nalanda_active_conv_${folderId}`, activeConversationId);
+          await loadConversationMessages(activeConversationId);
         } else {
-          activeConversationId = folderConversations[0].id;
+          // If no specific matching conversation was active or user chose new chat, stay in clean new chat state
+          activeConversationId = null;
+          selectEl.selectedIndex = -1;
+          renderChatWelcome();
         }
-
-        selectEl.value = activeConversationId;
-        localStorage.setItem("nalanda_active_conversation_id", activeConversationId);
-        localStorage.setItem(`nalanda_active_conv_${folderId}`, activeConversationId);
-        await loadConversationMessages(activeConversationId);
       } else {
         selectEl.style.display = "none";
         activeConversationId = null;
-        localStorage.removeItem("nalanda_active_conversation_id");
+        localStorage.setItem("nalanda_active_conversation_id", "new");
         renderChatWelcome();
       }
     }
@@ -615,7 +625,10 @@ async function loadConversationMessages(conversationId) {
 }
 
 async function switchConversation(conversationId) {
-  if (!conversationId) return;
+  if (!conversationId) {
+    startNewChat();
+    return;
+  }
   activeConversationId = conversationId;
   localStorage.setItem("nalanda_active_conversation_id", conversationId);
   if (activeFolderId) {
@@ -626,9 +639,9 @@ async function switchConversation(conversationId) {
 
 function startNewChat() {
   activeConversationId = null;
-  localStorage.removeItem("nalanda_active_conversation_id");
+  localStorage.setItem("nalanda_active_conversation_id", "new");
   if (activeFolderId) {
-    localStorage.removeItem(`nalanda_active_conv_${activeFolderId}`);
+    localStorage.setItem(`nalanda_active_conv_${activeFolderId}`, "new");
   }
   const selectEl = document.getElementById("chat-conversation-select");
   if (selectEl) selectEl.selectedIndex = -1;
@@ -644,9 +657,9 @@ async function clearChatHistory() {
   }
   const convToDelete = activeConversationId;
   try {
-    localStorage.removeItem("nalanda_active_conversation_id");
+    localStorage.setItem("nalanda_active_conversation_id", "new");
     if (activeFolderId) {
-      localStorage.removeItem(`nalanda_active_conv_${activeFolderId}`);
+      localStorage.setItem(`nalanda_active_conv_${activeFolderId}`, "new");
     }
     await apiFetch(`/api/conversations/${convToDelete}`, { method: "DELETE" });
     if (activeFolderId) {
@@ -1438,9 +1451,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Restore saved view or default to 'home'
-  const savedView = localStorage.getItem("nalanda_active_view") || "home";
-  switchView(savedView);
+  // Restore exact page and route based on current URL to preserve page on reload
+  const currentRoute = getCurrentRoute();
+  switchView(currentRoute, false);
 });
 
 /* ==========================================================================
@@ -2227,9 +2240,61 @@ function renderMarkdownToHtml(md) {
    Stitch Workspace Controllers (View Switching, Drawer, Home Prompt)
    ========================================================================== */
 
-function switchView(viewName) {
+function getCurrentRoute() {
+  // 1. Check URL pathname (e.g. /chat, /notes, /quiz, /home)
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
+  if (["home", "chat", "notes", "quiz"].includes(path)) {
+    return path;
+  }
+
+  // 2. Check hash route (e.g. #/chat, #chat, #/notes)
+  const hash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
+  if (["home", "chat", "notes", "quiz"].includes(hash)) {
+    return hash;
+  }
+
+  // 3. Check query parameter ?view=...
+  const params = new URLSearchParams(window.location.search);
+  const qView = (params.get("view") || "").toLowerCase();
+  if (["home", "chat", "notes", "quiz"].includes(qView)) {
+    return qView;
+  }
+
+  // 4. Fallback to localStorage saved view only when on root path "/" or "index.html"
+  if (path === "" || path === "index.html") {
+    const saved = (localStorage.getItem("nalanda_active_view") || "").toLowerCase();
+    if (["home", "chat", "notes", "quiz"].includes(saved)) {
+      return saved;
+    }
+  }
+
+  return "home";
+}
+
+function switchView(viewName, updateUrl = true) {
+  if (!viewName || !["home", "chat", "notes", "quiz"].includes(viewName)) {
+    viewName = "home";
+  }
   activeView = viewName;
   localStorage.setItem("nalanda_active_view", viewName);
+
+  // Synchronize browser URL to preserve current page and route without reload
+  if (window.history) {
+    const targetPath = viewName === "home" ? "/" : `/${viewName}`;
+    const currentPath = window.location.pathname;
+    const cleanCurrent = currentPath.replace(/^\/+|\/+$/g, "").toLowerCase();
+
+    if (updateUrl && window.history.pushState) {
+      if (cleanCurrent !== viewName && !(viewName === "home" && cleanCurrent === "")) {
+        window.history.pushState({ view: viewName }, "", targetPath + window.location.search);
+      }
+    } else if (!updateUrl && window.history.replaceState) {
+      // Sync URL on initial page load / refresh
+      if (cleanCurrent !== viewName && !(viewName === "home" && cleanCurrent === "")) {
+        window.history.replaceState({ view: viewName }, "", targetPath + window.location.search);
+      }
+    }
+  }
 
   // Update navigation buttons
   document.querySelectorAll(".sidebar-nav-item").forEach(btn => {
@@ -2264,6 +2329,17 @@ function switchView(viewName) {
     }
   }
 }
+
+// Listen to browser Back / Forward buttons and Hash changes
+window.addEventListener("popstate", () => {
+  const route = getCurrentRoute();
+  switchView(route, false);
+});
+
+window.addEventListener("hashchange", () => {
+  const route = getCurrentRoute();
+  switchView(route, false);
+});
 
 function toggleSourceDrawer(forceState) {
   const drawer = document.getElementById("source-drawer");
@@ -2313,6 +2389,8 @@ function handleHomePromptSubmit() {
   if (!text) return;
 
   homeInput.value = "";
+  // Always start as a fresh new chat session when initiated from the home page
+  startNewChat();
   switchView("chat");
   const chatInput = document.getElementById("rag-query");
   if (chatInput) {
@@ -2325,6 +2403,8 @@ function handleHomePromptSubmit() {
 }
 
 function quickCompareDocuments() {
+  // Always start as a fresh new chat session when initiated from the home page
+  startNewChat();
   switchView("chat");
   const chatInput = document.getElementById("rag-query");
   if (chatInput) {
