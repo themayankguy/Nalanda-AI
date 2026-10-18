@@ -12,6 +12,9 @@ let token = localStorage.getItem("nalanda_token");
 let currentUser = null;
 let folders = [];
 let activeFolderId = null;
+let activeDocumentId = null;
+let activeView = "home"; // 'home', 'chat', 'notes', 'quiz'
+let isSidebarCollapsed = false;
 let documents = [];
 let pollingTimer = null;
 let isRegisterMode = false;
@@ -67,8 +70,9 @@ async function apiFetch(url, options = {}) {
 // Authentication
 async function checkAuth() {
   if (!token) {
-    // If no token, log in with demo account automatically for convenience
-    await handleDemoLogin();
+    // No demo user: prompt login screen first!
+    updateAuthUI();
+    openAuthModal();
     return;
   }
   try {
@@ -78,10 +82,19 @@ async function checkAuth() {
       updateAuthUI();
       await loadFolders();
     } else {
-      await handleDemoLogin();
+      localStorage.removeItem("nalanda_token");
+      token = null;
+      currentUser = null;
+      updateAuthUI();
+      openAuthModal();
     }
   } catch (err) {
     console.error("Auth check failed:", err);
+    localStorage.removeItem("nalanda_token");
+    token = null;
+    currentUser = null;
+    updateAuthUI();
+    openAuthModal();
   }
 }
 
@@ -90,84 +103,67 @@ function updateAuthUI() {
   const avatar = document.getElementById("user-avatar-text");
   const name = document.getElementById("user-display-name");
   const btnLogout = document.getElementById("btn-logout");
+  const greetingEl = document.getElementById("home-greeting-heading");
 
   if (currentUser) {
-    badge.style.display = "flex";
-    avatar.textContent = (currentUser.username || "U")[0].toUpperCase();
-    name.textContent = currentUser.username;
-    btnLogout.style.display = "inline-flex";
+    if (badge) badge.style.display = "flex";
+    if (avatar) avatar.textContent = (currentUser.username || "U")[0].toUpperCase();
+    if (name) name.textContent = currentUser.username;
+    if (btnLogout) btnLogout.style.display = "inline-flex";
+    if (greetingEl) greetingEl.textContent = `What are we studying today, ${currentUser.username}?`;
   } else {
-    badge.style.display = "none";
-    btnLogout.style.display = "none";
-  }
-}
-
-async function handleDemoLogin() {
-  try {
-    // Try to register demo user or log in if already exists
-    let res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "demo@nalanda.ai",
-        username: "demo_user",
-        password: "demopassword123",
-      }),
-    });
-
-    if (!res.ok) {
-      // User likely exists, log in
-      res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email_or_username: "demo@nalanda.ai",
-          password: "demopassword123",
-        }),
-      });
-    }
-
-    if (res.ok) {
-      const data = await res.json();
-      token = data.access_token;
-      currentUser = data.user;
-      localStorage.setItem("nalanda_token", token);
-      closeAuthModal();
-      updateAuthUI();
-      showToast(`Signed in as ${currentUser.username}`);
-      await loadFolders();
-    }
-  } catch (err) {
-    showToast("Failed to authenticate demo user", "error");
+    if (badge) badge.style.display = "none";
+    if (btnLogout) btnLogout.style.display = "none";
+    if (greetingEl) greetingEl.textContent = "What are we studying today?";
   }
 }
 
 function openAuthModal() {
-  document.getElementById("auth-modal").classList.add("active");
+  const modal = document.getElementById("auth-modal");
+  if (modal) {
+    modal.style.display = "flex";
+    modal.classList.add("active");
+    const closeBtn = document.getElementById("auth-modal-close-btn");
+    if (closeBtn) {
+      closeBtn.style.display = currentUser ? "block" : "none";
+    }
+    setTimeout(() => {
+      const emailInput = document.getElementById("auth-email");
+      if (emailInput) emailInput.focus();
+    }, 100);
+  }
 }
 
 function closeAuthModal() {
-  document.getElementById("auth-modal").classList.remove("active");
+  if (!currentUser) {
+    showToast("Please sign in or create an account to access Nalanda.", "error");
+    return;
+  }
+  const modal = document.getElementById("auth-modal");
+  if (modal) {
+    modal.style.display = "none";
+    modal.classList.remove("active");
+  }
 }
 
 function toggleAuthMode(event) {
-  event.preventDefault();
+  if (event) event.preventDefault();
   isRegisterMode = !isRegisterMode;
   const title = document.getElementById("auth-modal-title");
-  const btn = document.getElementById("btn-auth-submit");
-  const toggleLink = document.getElementById("auth-toggle-link");
+  const btn = document.getElementById("auth-submit-btn") || document.getElementById("btn-auth-submit");
+  const toggleLink = document.getElementById("auth-toggle-btn") || document.getElementById("auth-toggle-link");
   const usernameGroup = document.getElementById("username-group");
 
   if (isRegisterMode) {
-    title.textContent = "Create an Account";
-    btn.textContent = "Register";
-    toggleLink.textContent = "Already have an account? Sign in";
-    usernameGroup.style.display = "block";
+    if (title) title.textContent = "Create an Account";
+    if (btn) btn.textContent = "Register";
+    if (toggleLink) toggleLink.textContent = "Already have an account? Sign in";
+    if (usernameGroup) usernameGroup.style.display = "block";
   } else {
-    title.textContent = "Sign In to Nalanda AI";
-    btn.textContent = "Sign In";
-    toggleLink.textContent = "Need an account? Register here";
-    usernameGroup.style.display = "none";
+    if (title) title.textContent = "Sign In to Nalanda AI";
+    if (btn) btn.textContent = "Sign In";
+    if (toggleLink) toggleLink.textContent = "Need an account? Register here";
+    if (usernameGroup) usernameGroup.style.display = "none";
   }
 }
 
@@ -226,6 +222,9 @@ async function logout() {
     // Ignore error
   }
   localStorage.removeItem("nalanda_token");
+  localStorage.removeItem("nalanda_active_folder_id");
+  localStorage.removeItem("nalanda_active_conversation_id");
+  localStorage.removeItem("nalanda_active_modal");
   token = null;
   currentUser = null;
   folders = [];
@@ -236,6 +235,7 @@ async function logout() {
   renderFolders();
   renderActiveView();
   showToast("Logged out successfully.");
+  openAuthModal();
 }
 
 // Folders Management
@@ -246,48 +246,108 @@ async function loadFolders() {
       folders = await res.json();
       renderFolders();
 
-      // If no folder selected yet and folders exist, select first
-      if (!activeFolderId && folders.length > 0) {
-        selectFolder(folders[0].id);
-      } else if (activeFolderId) {
-        // Refresh active folder
-        selectFolder(activeFolderId);
+      const savedFolderId = localStorage.getItem("nalanda_active_folder_id");
+      const folderExists = savedFolderId && folders.some(f => f.id === savedFolderId);
+
+      // If saved folder exists, restore it. Otherwise fallback to activeFolderId or first folder.
+      if (folderExists) {
+        await selectFolder(savedFolderId);
+      } else if (!activeFolderId && folders.length > 0) {
+        await selectFolder(folders[0].id);
+      } else if (activeFolderId && folders.some(f => f.id === activeFolderId)) {
+        await selectFolder(activeFolderId);
+      } else if (folders.length > 0) {
+        await selectFolder(folders[0].id);
       } else {
         renderActiveView();
       }
+
+      // Restore last action modal (e.g. Study Notes or Practice Quiz) if it was open before reload
+      restoreActiveModalState();
     }
   } catch (err) {
     console.error("Failed to load folders:", err);
   }
 }
 
+function restoreActiveModalState() {
+  const savedView = localStorage.getItem("nalanda_active_view") || "home";
+  switchView(savedView);
+}
+
 function renderFolders() {
   const container = document.getElementById("folder-list-container");
+  if (!container) return;
   container.innerHTML = "";
 
   if (folders.length === 0) {
     container.innerHTML = `
-      <div class="empty-state" style="padding: 24px 12px;">
-        <p style="font-size: 0.85rem; color: var(--text-muted);">No folders yet. Click '+ New Folder' to create one.</p>
+      <div class="p-3 text-center text-outline text-label-sm">
+        No folders yet. Click '+ New' to create one.
       </div>
     `;
     return;
   }
 
   folders.forEach((folder) => {
+    const isFolderActive = folder.id === activeFolderId;
     const item = document.createElement("div");
-    item.className = `folder-item ${folder.id === activeFolderId ? "active" : ""}`;
-    item.onclick = () => selectFolder(folder.id);
+    item.className = `folder-tree-item ${isFolderActive ? "active" : ""}`;
+    item.id = `folder-tree-${folder.id}`;
+
+    const arrowIcon = isFolderActive ? "arrow_drop_down" : "arrow_right";
+    const folderIcon = isFolderActive ? "folder_open" : "folder";
+    const folderIconColor = isFolderActive ? "text-primary" : "text-outline";
+
+    let docsTreeHtml = "";
+    if (isFolderActive && documents && documents.length > 0) {
+      docsTreeHtml = `
+        <div class="flex flex-col pl-6 pr-1 gap-0.5 border-l border-outline-variant/60 ml-4 my-1">
+          ${documents.map(doc => {
+            const isDocActive = doc.id === activeDocumentId;
+            const isPdf = doc.file_type.toLowerCase() === "pdf";
+            const docIcon = isPdf ? "picture_as_pdf" : "description";
+            const iconColor = isPdf ? "text-error" : "text-primary";
+            const activeBg = isDocActive ? "bg-surface-container-high text-primary font-medium" : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high";
+            return `
+              <div class="folder-doc-link flex items-center justify-between py-1 px-2 rounded ${activeBg} text-body-sm truncate transition-colors cursor-pointer" onclick="selectDocument('${doc.id}', event)">
+                <div class="flex items-center gap-2 truncate">
+                  <span class="material-symbols-outlined text-[16px] ${iconColor}">${docIcon}</span>
+                  <span class="truncate" title="${escapeHtml(doc.original_filename)}">${escapeHtml(doc.original_filename)}</span>
+                </div>
+                ${isDocActive ? '<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim" title="Currently active in context scope"></span>' : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
 
     item.innerHTML = `
-      <div class="folder-info">
-        <span class="folder-icon">📁</span>
-        <span class="folder-name" title="${folder.name}">${folder.name}</span>
+      <div class="folder-tree-header" onclick="selectFolder('${folder.id}')">
+        <div class="flex items-center gap-2 truncate">
+          <span class="material-symbols-outlined text-outline-variant text-[16px]">${arrowIcon}</span>
+          <span class="material-symbols-outlined ${folderIconColor} text-[18px]">${folderIcon}</span>
+          <span class="text-body-sm font-medium truncate">${escapeHtml(folder.name)}</span>
+        </div>
+        <span class="text-label-sm text-outline px-1.5 py-0.2 rounded-full bg-surface-container">${folder.document_count || 0}</span>
       </div>
-      <span class="doc-count-badge">${folder.document_count || 0}</span>
+      ${docsTreeHtml}
     `;
+
     container.appendChild(item);
   });
+}
+
+function selectDocument(docId, event) {
+  if (event) event.stopPropagation();
+  activeDocumentId = docId;
+  const doc = documents.find(d => d.id === docId);
+  renderActiveView();
+  renderFolders();
+  if (doc) {
+    showToast(`Active document: ${doc.original_filename}`);
+  }
 }
 
 function openCreateFolderModal() {
@@ -363,13 +423,24 @@ async function loadFolderConversations(folderId) {
           selectEl.appendChild(opt);
         });
 
-        // Default to the first (most recent) conversation
-        activeConversationId = folderConversations[0].id;
+        // Restore saved conversation for this folder if exists, otherwise default to first
+        const savedConvId = localStorage.getItem(`nalanda_active_conv_${folderId}`) || localStorage.getItem("nalanda_active_conversation_id");
+        const matchingConv = folderConversations.find(c => c.id === savedConvId);
+
+        if (matchingConv) {
+          activeConversationId = matchingConv.id;
+        } else {
+          activeConversationId = folderConversations[0].id;
+        }
+
         selectEl.value = activeConversationId;
+        localStorage.setItem("nalanda_active_conversation_id", activeConversationId);
+        localStorage.setItem(`nalanda_active_conv_${folderId}`, activeConversationId);
         await loadConversationMessages(activeConversationId);
       } else {
         selectEl.style.display = "none";
         activeConversationId = null;
+        localStorage.removeItem("nalanda_active_conversation_id");
         renderChatWelcome();
       }
     }
@@ -381,15 +452,53 @@ async function loadFolderConversations(folderId) {
   }
 }
 
+function getIlayasAvatarHtml() {
+  return `
+    <div class="chat-avatar" title="Ilayas AI">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" />
+        <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(72 12 12)" />
+        <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(144 12 12)" />
+        <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(216 12 12)" />
+        <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(288 12 12)" />
+        <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" />
+        <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(72 12 12)" />
+        <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(144 12 12)" />
+        <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(216 12 12)" />
+        <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(288 12 12)" />
+        <circle cx="12" cy="12" r="2.1" fill="#818cf8" />
+        <circle cx="12" cy="12" r="1.1" fill="#e0e7ff" />
+      </svg>
+    </div>
+  `;
+}
+
 function renderChatWelcome() {
   const container = document.getElementById("chat-messages");
   if (!container) return;
   container.innerHTML = `
-    <div class="chat-message assistant">
-      <div class="chat-avatar">AI</div>
-      <div class="chat-bubble">
-        <p>Hello! Ask me any question about the documents in this folder. You can also request diagrams (e.g. <em>"Show diagram of CNN"</em>), comparison tables, or full subtopic breakdowns.</p>
+    <div class="ilayas-welcome-card">
+      <div class="ilayas-badge-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" />
+          <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(72 12 12)" />
+          <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(144 12 12)" />
+          <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(216 12 12)" />
+          <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(288 12 12)" />
+          <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" />
+          <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(72 12 12)" />
+          <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(144 12 12)" />
+          <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(216 12 12)" />
+          <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(288 12 12)" />
+          <circle cx="12" cy="12" r="2.1" fill="#818cf8" />
+          <circle cx="12" cy="12" r="1.1" fill="#e0e7ff" />
+        </svg>
       </div>
+      <h3>Hi, I'm Ilayas. What would you like to explore today?</h3>
+      <p class="ilayas-tagline">I talk, you understand.</p>
+      <p class="ilayas-desc">
+        Ask questions across your uploaded documents, synthesize formulas, request diagrams, or generate comparison tables.
+      </p>
     </div>
   `;
 }
@@ -489,7 +598,7 @@ async function loadConversationMessages(conversationId) {
         }
 
         msgEl.innerHTML = `
-          <div class="chat-avatar">AI</div>
+          ${getIlayasAvatarHtml()}
           <div class="chat-bubble">
             ${bubbleContent}
           </div>
@@ -508,11 +617,19 @@ async function loadConversationMessages(conversationId) {
 async function switchConversation(conversationId) {
   if (!conversationId) return;
   activeConversationId = conversationId;
+  localStorage.setItem("nalanda_active_conversation_id", conversationId);
+  if (activeFolderId) {
+    localStorage.setItem(`nalanda_active_conv_${activeFolderId}`, conversationId);
+  }
   await loadConversationMessages(conversationId);
 }
 
 function startNewChat() {
   activeConversationId = null;
+  localStorage.removeItem("nalanda_active_conversation_id");
+  if (activeFolderId) {
+    localStorage.removeItem(`nalanda_active_conv_${activeFolderId}`);
+  }
   const selectEl = document.getElementById("chat-conversation-select");
   if (selectEl) selectEl.selectedIndex = -1;
   renderChatWelcome();
@@ -525,8 +642,13 @@ async function clearChatHistory() {
     renderChatWelcome();
     return;
   }
+  const convToDelete = activeConversationId;
   try {
-    await apiFetch(`/api/conversations/${activeConversationId}`, { method: "DELETE" });
+    localStorage.removeItem("nalanda_active_conversation_id");
+    if (activeFolderId) {
+      localStorage.removeItem(`nalanda_active_conv_${activeFolderId}`);
+    }
+    await apiFetch(`/api/conversations/${convToDelete}`, { method: "DELETE" });
     if (activeFolderId) {
       await loadFolderConversations(activeFolderId);
     }
@@ -560,10 +682,11 @@ async function selectFolder(folderId) {
     if (submitBtn) submitBtn.disabled = false;
   }
   activeFolderId = folderId;
+  localStorage.setItem("nalanda_active_folder_id", folderId);
+  await loadDocuments(folderId);
   renderFolders();
   renderActiveView();
   await loadFolderConversations(folderId);
-  await loadDocuments(folderId);
 }
 
 function formatInlineMarkdown(str) {
@@ -738,7 +861,7 @@ function typewriterStreamText(containerEl, fullText, options = {}) {
 let activeNotesTypewriterStop = null;
 
 function startTypewriterLoop(containerEl, phrases, options = {}) {
-  if (!containerEl || !phrases || phrases.length === 0) return () => {};
+  if (!containerEl || !phrases || phrases.length === 0) return () => { };
 
   let phraseIdx = 0;
   let charIdx = 0;
@@ -839,6 +962,8 @@ async function handleSemanticSearch(event) {
       if (convRes.ok) {
         const convData = await convRes.json();
         activeConversationId = convData.id;
+        localStorage.setItem("nalanda_active_conversation_id", activeConversationId);
+        localStorage.setItem(`nalanda_active_conv_${folderId}`, activeConversationId);
       }
     } catch (e) {
       console.warn("Could not create conversation, falling back:", e);
@@ -882,7 +1007,7 @@ async function handleSemanticSearch(event) {
             selectEl.value = activeConversationId;
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
 
     // Remove typing indicator
@@ -970,7 +1095,7 @@ async function handleSemanticSearch(event) {
     }
 
     assistantMsgEl.innerHTML = `
-      <div class="chat-avatar">AI</div>
+      ${getIlayasAvatarHtml()}
       <div class="chat-bubble">
         ${bubbleContent}
       </div>
@@ -995,7 +1120,7 @@ async function handleSemanticSearch(event) {
       const errorMsgEl = document.createElement("div");
       errorMsgEl.className = "chat-message assistant";
       errorMsgEl.innerHTML = `
-        <div class="chat-avatar">AI</div>
+        ${getIlayasAvatarHtml()}
         <div class="chat-bubble">
           <p style="color: var(--status-failed-text);">${escapeHtml(error.message || "Failed to process question. Please try again.")}</p>
         </div>
@@ -1029,102 +1154,176 @@ async function loadDocuments(folderId) {
 
 function renderActiveView() {
   const activeFolder = folders.find((f) => f.id === activeFolderId);
-  const title = document.getElementById("active-folder-title");
-  const subtitle = document.getElementById("active-folder-subtitle");
-  const uploadBtn = document.getElementById("btn-trigger-upload");
-  const dropzone = document.getElementById("upload-dropzone");
-  const tableContainer = document.getElementById("documents-table-container");
-  const emptyState = document.getElementById("empty-state-container");
+  const activeDoc = documents.find((d) => d.id === activeDocumentId);
+
+  // Top Navbar Breadcrumb
+  const folderNameEl = document.getElementById("topbar-folder-name");
+  const docNameEl = document.getElementById("topbar-doc-name");
+  const sepEl = document.getElementById("topbar-sep");
+  const countEl = document.getElementById("topbar-doc-count");
 
   if (activeFolder) {
-    title.textContent = activeFolder.name;
-    subtitle.textContent = `${documents.length} document${documents.length === 1 ? "" : "s"} in this folder`;
-    uploadBtn.style.display = "inline-flex";
-    dropzone.style.display = "block";
-    document.getElementById("rag-panel").style.display = "block";
-    document.getElementById("rag-scope-label").textContent = activeFolder.name;
-    renderDocumentsTable();
+    if (folderNameEl) folderNameEl.textContent = activeFolder.name;
+    if (activeDoc) {
+      if (docNameEl) {
+        docNameEl.textContent = activeDoc.original_filename;
+        docNameEl.style.display = "inline";
+      }
+      if (sepEl) sepEl.style.display = "inline";
+    } else {
+      if (docNameEl) docNameEl.style.display = "none";
+      if (sepEl) sepEl.style.display = "none";
+    }
+    if (countEl) countEl.textContent = `${documents.length} Document${documents.length === 1 ? '' : 's'} in Scope`;
+
+    // Home Scope Banner
+    const homeFolderName = document.getElementById("home-scope-folder-name");
+    const homeDocCount = document.getElementById("home-scope-doc-count");
+    if (homeFolderName) homeFolderName.textContent = activeFolder.name;
+    if (homeDocCount) homeDocCount.textContent = `(${documents.length} document${documents.length === 1 ? '' : 's'} active)`;
+
+    // Bento Cards
+    const bentoNotesTitle = document.getElementById("bento-notes-title");
+    const bentoNotesDesc = document.getElementById("bento-notes-desc");
+    if (bentoNotesTitle) bentoNotesTitle.textContent = `Study Guide: ${activeFolder.name}`;
+    if (bentoNotesDesc) bentoNotesDesc.textContent = `Comprehensive notes synthesized across ${documents.length} lecture unit(s).`;
+
+    const bentoQuizTitle = document.getElementById("bento-quiz-title");
+    if (bentoQuizTitle) bentoQuizTitle.textContent = `Practice Quiz: ${activeFolder.name}`;
+
+    // Chat Scope Label
+    const chatScopeLabel = document.getElementById("rag-scope-label");
+    if (chatScopeLabel) chatScopeLabel.textContent = `Personal AI Learning Assistant · ${activeFolder.name}`;
   } else {
-    title.textContent = "Select a Folder";
-    subtitle.textContent = "Organize and process course documents";
-    uploadBtn.style.display = "none";
-    dropzone.style.display = "none";
-    document.getElementById("rag-panel").style.display = "none";
-    tableContainer.style.display = "none";
-    emptyState.style.display = "block";
-    document.getElementById("empty-state-title").textContent = "No Folder Selected";
-    document.getElementById("empty-state-desc").textContent = "Select a folder from the sidebar or create a new one to begin uploading documents.";
+    if (folderNameEl) folderNameEl.textContent = "Select a Folder";
+    if (docNameEl) docNameEl.style.display = "none";
+    if (sepEl) sepEl.style.display = "none";
+    if (countEl) countEl.textContent = "0 Documents in Scope";
+    const chatScopeLabel = document.getElementById("rag-scope-label");
+    if (chatScopeLabel) chatScopeLabel.textContent = "Personal AI Learning Assistant";
   }
+
+  // User Greeting
+  const greetingEl = document.getElementById("home-greeting-heading");
+  if (greetingEl) {
+    const name = currentUser ? currentUser.username : "Scholar";
+    greetingEl.textContent = `What are we studying today, ${name}?`;
+  }
+
+  renderRecentDocuments();
+  renderSourceDrawerList();
 }
 
-function renderDocumentsTable() {
-  const tableContainer = document.getElementById("documents-table-container");
-  const tbody = document.getElementById("document-table-body");
-  const emptyState = document.getElementById("empty-state-container");
+function renderRecentDocuments() {
+  const container = document.getElementById("home-recent-docs-list");
+  if (!container) return;
 
-  if (!activeFolderId) return;
-
-  if (documents.length === 0) {
-    tableContainer.style.display = "none";
-    emptyState.style.display = "block";
-    document.getElementById("empty-state-title").textContent = "No Documents Yet";
-    document.getElementById("empty-state-desc").textContent = "Drag & drop a PDF or image into the dropzone above, or click 'Upload Document'.";
+  if (!documents || documents.length === 0) {
+    container.innerHTML = `
+      <div class="p-6 text-center text-outline text-body-sm">
+        No documents uploaded yet in this folder. Click "+ Upload Material" to begin.
+      </div>
+    `;
     return;
   }
 
-  emptyState.style.display = "none";
-  tableContainer.style.display = "block";
-  tbody.innerHTML = "";
+  const activeFolder = folders.find(f => f.id === activeFolderId);
+  const folderName = activeFolder ? activeFolder.name : "Workspace";
 
-  documents.forEach((doc) => {
-    const tr = document.createElement("tr");
-
-    // File type styling
+  container.innerHTML = documents.map(doc => {
     const isPdf = doc.file_type.toLowerCase() === "pdf";
-    const iconClass = isPdf ? "icon-pdf" : "icon-image";
-    const iconLabel = isPdf ? "PDF" : "IMG";
+    const icon = isPdf ? "picture_as_pdf" : "description";
+    const iconColor = isPdf ? "text-error" : "text-primary";
+    const isDocActive = doc.id === activeDocumentId;
 
-    // Status badge
-    let statusClass = "pending";
-    let statusLabel = doc.status;
-    if (doc.status === "processing") statusClass = "processing";
-    else if (doc.status === "completed") statusClass = "completed";
-    else if (doc.status === "failed") statusClass = "failed";
-
-    let actionContent = "-";
-    if (doc.status === "failed") {
-      actionContent = `
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <button class="btn btn-retry btn-sm" onclick="handleRetry('${doc.id}')" title="Retry document extraction">
-            Retry
-          </button>
-          <span style="font-size: 0.75rem; color: #f87171;" title="${doc.error_message || 'Processing failed'}">
-            ⚠️ ${doc.error_message || 'Error'}
-          </span>
-        </div>
-      `;
+    let statusPill = "";
+    if (doc.status === "completed") {
+      statusPill = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-label-sm text-tertiary bg-tertiary-fixed/40 font-medium"><span class="material-symbols-outlined text-[14px]">check</span> Indexed</span>`;
+    } else if (doc.status === "processing") {
+      statusPill = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-label-sm text-primary bg-primary-fixed font-medium"><span class="material-symbols-outlined text-[14px] animate-spin">refresh</span> Processing</span>`;
+    } else if (doc.status === "failed") {
+      statusPill = `<button class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-label-sm text-error bg-error-container font-medium hover:underline" onclick="handleRetry('${doc.id}')">Retry</button>`;
+    } else {
+      statusPill = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-label-sm text-outline bg-surface-container font-medium">Pending</span>`;
     }
 
-    tr.innerHTML = `
-      <td>
-        <div class="doc-name-cell">
-          <div class="file-type-icon ${iconClass}">${iconLabel}</div>
-          <span title="${doc.original_filename}">${doc.original_filename}</span>
+    return `
+      <div class="flex items-center justify-between p-3.5 hover:bg-surface-container-low transition-colors cursor-pointer" onclick="selectDocument('${doc.id}', event)">
+        <div class="flex items-center gap-3 truncate">
+          <div class="w-9 h-9 rounded-lg bg-surface-container-low flex items-center justify-center ${iconColor} shrink-0">
+            <span class="material-symbols-outlined">${icon}</span>
+          </div>
+          <div class="flex flex-col truncate">
+            <span class="text-body-md font-medium text-on-surface truncate ${isDocActive ? 'text-primary' : ''}">${escapeHtml(doc.original_filename)}</span>
+            <span class="text-label-sm text-outline">${folderName} • ${formatBytes(doc.file_size_bytes)} • ${formatDate(doc.created_at)}</span>
+          </div>
         </div>
-      </td>
-      <td>${doc.file_type.toUpperCase()}</td>
-      <td>${formatBytes(doc.file_size_bytes)}</td>
-      <td>${formatDate(doc.created_at)}</td>
-      <td>
-        <span class="status-badge ${statusClass}">
-          <span class="status-dot"></span>
-          ${statusLabel}
-        </span>
-      </td>
-      <td>${actionContent}</td>
+        <div class="flex items-center gap-3 shrink-0">
+          ${statusPill}
+          <button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container transition-colors" title="Select in context" onclick="selectDocument('${doc.id}', event)">
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+      </div>
     `;
-    tbody.appendChild(tr);
-  });
+  }).join('');
+}
+
+function renderSourceDrawerList() {
+  const container = document.getElementById("nlm-sources-list");
+  const countLabel = document.getElementById("nlm-source-count-label");
+  if (!container) return;
+
+  if (countLabel) {
+    countLabel.textContent = `${documents.length} source${documents.length === 1 ? '' : 's'}`;
+  }
+
+  if (!documents || documents.length === 0) {
+    container.innerHTML = `
+      <div class="text-center text-outline text-body-sm py-8">
+        No documents in this folder.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = documents.map(doc => {
+    const isPdf = doc.file_type.toLowerCase() === "pdf";
+    const icon = isPdf ? "picture_as_pdf" : "description";
+    const iconColor = isPdf ? "text-error" : "text-primary";
+    const isDocActive = doc.id === activeDocumentId;
+
+    let statusPill = "";
+    if (doc.status === "completed") {
+      statusPill = `<span class="inline-flex items-center gap-1 text-[12px] text-tertiary font-medium">✓ Indexed</span>`;
+    } else if (doc.status === "processing") {
+      statusPill = `<span class="inline-flex items-center gap-1 text-[12px] text-primary font-medium">⚡ Processing</span>`;
+    } else if (doc.status === "failed") {
+      statusPill = `<button class="text-[12px] text-error font-medium hover:underline" onclick="handleRetry('${doc.id}')">⚠️ Retry</button>`;
+    } else {
+      statusPill = `<span class="text-[12px] text-outline">Pending</span>`;
+    }
+
+    return `
+      <div class="p-2.5 rounded-xl border border-outline-variant bg-surface-container-low hover:border-primary/40 transition-all flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 truncate cursor-pointer" onclick="selectDocument('${doc.id}', event)">
+          <span class="material-symbols-outlined text-[18px] ${iconColor}">${icon}</span>
+          <div class="flex flex-col truncate">
+            <span class="text-body-sm font-medium text-on-surface truncate ${isDocActive ? 'text-primary' : ''}">${escapeHtml(doc.original_filename)}</span>
+            <span class="text-label-sm text-outline">${formatBytes(doc.file_size_bytes)}</span>
+          </div>
+        </div>
+        <div>
+          ${statusPill}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderDocumentsTable() {
+  renderRecentDocuments();
+  renderSourceDrawerList();
 }
 
 // Background Status Polling
@@ -1226,46 +1425,22 @@ async function handleRetry(documentId) {
   }
 }
 
-// Setup Event Listeners
 document.addEventListener("DOMContentLoaded", () => {
   checkAuth();
 
-  const fileInput = document.getElementById("file-input");
-  const dropzone = document.getElementById("upload-dropzone");
-  document.getElementById("rag-form").addEventListener("submit", handleSemanticSearch);
+  const ragForm = document.getElementById("rag-form");
+  if (ragForm) ragForm.addEventListener("submit", handleSemanticSearch);
 
-  fileInput.addEventListener("change", (e) => {
-    if (e.target.files.length > 0) {
-      handleFileUpload(e.target.files[0]);
-      fileInput.value = "";
-    }
-  });
+  const newFolderInput = document.getElementById("new-folder-name");
+  if (newFolderInput) {
+    newFolderInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") handleCreateFolder();
+    });
+  }
 
-  dropzone.addEventListener("click", () => {
-    fileInput.click();
-  });
-
-  dropzone.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    dropzone.classList.add("drag-over");
-  });
-
-  dropzone.addEventListener("dragleave", () => {
-    dropzone.classList.remove("drag-over");
-  });
-
-  dropzone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropzone.classList.remove("drag-over");
-    if (e.dataTransfer.files.length > 0) {
-      handleFileUpload(e.dataTransfer.files[0]);
-    }
-  });
-
-  // Modal Enter key listener
-  document.getElementById("new-folder-name").addEventListener("keypress", (e) => {
-    if (e.key === "Enter") handleCreateFolder();
-  });
+  // Restore saved view or default to 'home'
+  const savedView = localStorage.getItem("nalanda_active_view") || "home";
+  switchView(savedView);
 });
 
 /* ==========================================================================
@@ -1282,21 +1457,13 @@ function openPracticeQuizModal() {
     showToast("Please select a folder first.", "error");
     return;
   }
-  const modal = document.getElementById("practice-quiz-modal");
-  if (modal) {
-    modal.classList.add("active");
-    initQuizUnitSelector();
-    loadPracticeQuiz();
-  }
+  switchView("quiz");
+  initQuizUnitSelector();
+  loadPracticeQuiz();
 }
 
 function closePracticeQuizModal() {
-  if (activeQuizTypewriterStop) {
-    activeQuizTypewriterStop();
-    activeQuizTypewriterStop = null;
-  }
-  const modal = document.getElementById("practice-quiz-modal");
-  if (modal) modal.classList.remove("active");
+  switchView("home");
 }
 
 function initQuizUnitSelector() {
@@ -1309,13 +1476,30 @@ function initQuizUnitSelector() {
     return;
   }
 
-  // Ensure selectedQuizDocIds has valid document IDs for active folder
+  // Restore saved quiz units for this folder if valid
   const validIds = new Set(completedDocs.map(d => d.id));
-  const hasValid = Array.from(selectedQuizDocIds).some(id => validIds.has(id));
-  if (!hasValid) {
-    selectedQuizDocIds = new Set(validIds);
-  } else {
-    selectedQuizDocIds = new Set(Array.from(selectedQuizDocIds).filter(id => validIds.has(id)));
+  let restored = false;
+  try {
+    const rawSaved = localStorage.getItem(`nalanda_quiz_units_${activeFolderId}`);
+    if (rawSaved) {
+      const parsed = JSON.parse(rawSaved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const validSaved = parsed.filter(id => validIds.has(id));
+        if (validSaved.length > 0) {
+          selectedQuizDocIds = new Set(validSaved);
+          restored = true;
+        }
+      }
+    }
+  } catch (e) { }
+
+  if (!restored) {
+    const hasValid = Array.from(selectedQuizDocIds).some(id => validIds.has(id));
+    if (!hasValid) {
+      selectedQuizDocIds = new Set(validIds);
+    } else {
+      selectedQuizDocIds = new Set(Array.from(selectedQuizDocIds).filter(id => validIds.has(id)));
+    }
   }
 
   renderQuizUnitSelector();
@@ -1352,14 +1536,14 @@ function renderQuizUnitSelector() {
     </div>
     <div class="notes-unit-chips-container">
       ${completedDocs.map(d => {
-        const isChecked = selectedQuizDocIds.has(d.id);
-        return `
+    const isChecked = selectedQuizDocIds.has(d.id);
+    return `
           <label class="notes-unit-chip ${isChecked ? 'active' : ''}" id="chip-quiz-unit-${d.id}" title="${escapeHtml(d.original_filename)}">
             <input type="checkbox" value="${d.id}" ${isChecked ? 'checked' : ''} onchange="onQuizUnitCheckboxChanged('${d.id}', this.checked)">
             <span class="unit-chip-name">📄 ${escapeHtml(d.original_filename)}</span>
           </label>
         `;
-      }).join("")}
+  }).join("")}
     </div>
   `;
 }
@@ -1376,6 +1560,9 @@ function onQuizUnitCheckboxChanged(docId, isChecked) {
   } else {
     selectedQuizDocIds.add(docId);
   }
+  if (activeFolderId) {
+    localStorage.setItem(`nalanda_quiz_units_${activeFolderId}`, JSON.stringify(Array.from(selectedQuizDocIds)));
+  }
   renderQuizUnitSelector();
 }
 
@@ -1388,6 +1575,9 @@ function toggleSelectAllQuizUnits(selectAll) {
       selectedQuizDocIds = new Set([completedDocs[0].id]);
       showToast("Selected 1 unit (minimum selection limit is 1).", "info");
     }
+  }
+  if (activeFolderId) {
+    localStorage.setItem(`nalanda_quiz_units_${activeFolderId}`, JSON.stringify(Array.from(selectedQuizDocIds)));
   }
   renderQuizUnitSelector();
 }
@@ -1618,21 +1808,13 @@ function openNotesModal() {
     showToast("Please select a folder first.", "error");
     return;
   }
-  const modal = document.getElementById("notes-reader-modal");
-  if (modal) {
-    modal.classList.add("active");
-    initNotesUnitSelector();
-    loadNotes();
-  }
+  switchView("notes");
+  initNotesUnitSelector();
+  loadNotes();
 }
 
 function closeNotesModal() {
-  if (activeNotesTypewriterStop) {
-    activeNotesTypewriterStop();
-    activeNotesTypewriterStop = null;
-  }
-  const modal = document.getElementById("notes-reader-modal");
-  if (modal) modal.classList.remove("active");
+  switchView("home");
 }
 
 function initNotesUnitSelector() {
@@ -1645,13 +1827,30 @@ function initNotesUnitSelector() {
     return;
   }
 
-  // Ensure selectedUnitDocIds has valid document IDs for active folder
+  // Restore saved notes units for this folder if valid
   const validIds = new Set(completedDocs.map(d => d.id));
-  const hasValid = Array.from(selectedUnitDocIds).some(id => validIds.has(id));
-  if (!hasValid) {
-    selectedUnitDocIds = new Set(validIds);
-  } else {
-    selectedUnitDocIds = new Set(Array.from(selectedUnitDocIds).filter(id => validIds.has(id)));
+  let restored = false;
+  try {
+    const rawSaved = localStorage.getItem(`nalanda_notes_units_${activeFolderId}`);
+    if (rawSaved) {
+      const parsed = JSON.parse(rawSaved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const validSaved = parsed.filter(id => validIds.has(id));
+        if (validSaved.length > 0) {
+          selectedUnitDocIds = new Set(validSaved);
+          restored = true;
+        }
+      }
+    }
+  } catch (e) { }
+
+  if (!restored) {
+    const hasValid = Array.from(selectedUnitDocIds).some(id => validIds.has(id));
+    if (!hasValid) {
+      selectedUnitDocIds = new Set(validIds);
+    } else {
+      selectedUnitDocIds = new Set(Array.from(selectedUnitDocIds).filter(id => validIds.has(id)));
+    }
   }
 
   renderNotesUnitSelector();
@@ -1688,14 +1887,14 @@ function renderNotesUnitSelector() {
     </div>
     <div class="notes-unit-chips-container">
       ${completedDocs.map(d => {
-        const isChecked = selectedUnitDocIds.has(d.id);
-        return `
+    const isChecked = selectedUnitDocIds.has(d.id);
+    return `
           <label class="notes-unit-chip ${isChecked ? 'active' : ''}" id="chip-unit-${d.id}" title="${escapeHtml(d.original_filename)}">
             <input type="checkbox" value="${d.id}" ${isChecked ? 'checked' : ''} onchange="onUnitCheckboxChanged('${d.id}', this.checked)">
             <span class="unit-chip-name">📄 ${escapeHtml(d.original_filename)}</span>
           </label>
         `;
-      }).join("")}
+  }).join("")}
     </div>
   `;
 }
@@ -1712,6 +1911,9 @@ function onUnitCheckboxChanged(docId, isChecked) {
   } else {
     selectedUnitDocIds.add(docId);
   }
+  if (activeFolderId) {
+    localStorage.setItem(`nalanda_notes_units_${activeFolderId}`, JSON.stringify(Array.from(selectedUnitDocIds)));
+  }
   renderNotesUnitSelector();
 }
 
@@ -1724,6 +1926,9 @@ function toggleSelectAllUnits(selectAll) {
       selectedUnitDocIds = new Set([completedDocs[0].id]);
       showToast("Selected 1 unit (minimum selection limit is 1).", "info");
     }
+  }
+  if (activeFolderId) {
+    localStorage.setItem(`nalanda_notes_units_${activeFolderId}`, JSON.stringify(Array.from(selectedUnitDocIds)));
   }
   renderNotesUnitSelector();
 }
@@ -1952,7 +2157,7 @@ function renderMarkdownToHtml(md) {
     .replace(/>/g, "&gt;");
 
   // Fenced Code Blocks (```lang ... ```)
-  html = html.replace(/```(?:[a-zA-Z0-9_\-]+)?\r?\n([\s\S]*?)```/g, function(match, code) {
+  html = html.replace(/```(?:[a-zA-Z0-9_\-]+)?\r?\n([\s\S]*?)```/g, function (match, code) {
     return '<pre class="notes-code-block"><code>' + code.trim() + '</code></pre>';
   });
 
@@ -1974,7 +2179,7 @@ function renderMarkdownToHtml(md) {
   html = html.replace(/^---$/gm, '<hr class="notes-hr">');
 
   // Tables
-  html = html.replace(/((?:\|[^\n]+\|\r?\n)+)/g, function(tableMatch) {
+  html = html.replace(/((?:\|[^\n]+\|\r?\n)+)/g, function (tableMatch) {
     const lines = tableMatch.trim().split("\n");
     if (lines.length < 2) return tableMatch;
 
@@ -1993,13 +2198,13 @@ function renderMarkdownToHtml(md) {
   });
 
   // Numbered Lists (with optional indentation)
-  html = html.replace(/^(\s*)(\d+)\.\s+(.*?)$/gm, function(m, indent, num, text) {
+  html = html.replace(/^(\s*)(\d+)\.\s+(.*?)$/gm, function (m, indent, num, text) {
     const ml = indent.length > 0 ? ' style="margin-left: ' + (indent.length * 10) + 'px;"' : '';
     return '<div class="notes-list-item numbered"' + ml + '><span class="list-num">' + num + '.</span> <span>' + text + '</span></div>';
   });
 
   // Bullet Lists (with optional indentation and support for - and *)
-  html = html.replace(/^(\s*)[-*]\s+(.*?)$/gm, function(m, indent, text) {
+  html = html.replace(/^(\s*)[-*]\s+(.*?)$/gm, function (m, indent, text) {
     const ml = indent.length > 0 ? ' style="margin-left: ' + (indent.length * 10) + 'px;"' : '';
     return '<div class="notes-list-item bullet"' + ml + '><span class="list-bullet">•</span> <span>' + text + '</span></div>';
   });
@@ -2018,3 +2223,209 @@ function renderMarkdownToHtml(md) {
   return html;
 }
 
+/* ==========================================================================
+   Stitch Workspace Controllers (View Switching, Drawer, Home Prompt)
+   ========================================================================== */
+
+function switchView(viewName) {
+  activeView = viewName;
+  localStorage.setItem("nalanda_active_view", viewName);
+
+  // Update navigation buttons
+  document.querySelectorAll(".sidebar-nav-item").forEach(btn => {
+    btn.classList.remove("active");
+  });
+  const activeNavBtn = document.getElementById(`nav-btn-${viewName}`);
+  if (activeNavBtn) activeNavBtn.classList.add("active");
+
+  // Show selected view and hide others
+  const views = ["home", "chat", "notes", "quiz"];
+  views.forEach(v => {
+    const el = document.getElementById(`view-${v}`);
+    if (el) {
+      if (v === viewName) {
+        el.style.display = (v === "chat") ? "flex" : "block";
+      } else {
+        el.style.display = "none";
+      }
+    }
+  });
+
+  // Trigger view-specific loads if necessary
+  if (viewName === "notes" && activeFolderId) {
+    initNotesUnitSelector();
+    if (!currentNotesData) {
+      loadNotes();
+    }
+  } else if (viewName === "quiz" && activeFolderId) {
+    initQuizUnitSelector();
+    if (currentQuizQuestions.length === 0) {
+      loadPracticeQuiz();
+    }
+  }
+}
+
+function toggleSourceDrawer(forceState) {
+  const drawer = document.getElementById("source-drawer");
+  const backdrop = document.getElementById("source-drawer-backdrop");
+  if (!drawer) return;
+
+  const isOpen = !drawer.classList.contains("translate-x-full");
+  const shouldOpen = forceState !== undefined ? forceState : !isOpen;
+
+  if (shouldOpen) {
+    drawer.classList.remove("translate-x-full");
+    if (backdrop) backdrop.classList.remove("hidden");
+  } else {
+    drawer.classList.add("translate-x-full");
+    if (backdrop) backdrop.classList.add("hidden");
+  }
+}
+
+function toggleSidebarCollapse() {
+  const sidebar = document.getElementById("sidebar");
+  const mainCanvas = document.getElementById("main-canvas");
+  if (!sidebar || !mainCanvas) return;
+
+  isSidebarCollapsed = !isSidebarCollapsed;
+  if (isSidebarCollapsed) {
+    sidebar.classList.add("-translate-x-full");
+    mainCanvas.classList.remove("ml-64");
+    mainCanvas.classList.add("ml-0");
+  } else {
+    sidebar.classList.remove("-translate-x-full");
+    mainCanvas.classList.add("ml-64");
+    mainCanvas.classList.remove("ml-0");
+  }
+}
+
+function handleHomePromptKey(event) {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    handleHomePromptSubmit();
+  }
+}
+
+function handleHomePromptSubmit() {
+  const homeInput = document.getElementById("home-prompt-input");
+  if (!homeInput) return;
+  const text = homeInput.value.trim();
+  if (!text) return;
+
+  homeInput.value = "";
+  switchView("chat");
+  const chatInput = document.getElementById("rag-query");
+  if (chatInput) {
+    chatInput.value = text;
+  }
+  const ragForm = document.getElementById("rag-form");
+  if (ragForm) {
+    ragForm.dispatchEvent(new Event("submit", { cancelable: true }));
+  }
+}
+
+function quickCompareDocuments() {
+  switchView("chat");
+  const chatInput = document.getElementById("rag-query");
+  if (chatInput) {
+    chatInput.value = "Compare the key architectures, technologies, and core concepts across the documents in this course.";
+  }
+  const ragForm = document.getElementById("rag-form");
+  if (ragForm) {
+    ragForm.dispatchEvent(new Event("submit", { cancelable: true }));
+  }
+}
+
+function handleShareWorkspace() {
+  const activeFolder = folders.find(f => f.id === activeFolderId);
+  const name = activeFolder ? activeFolder.name : "Nalanda Workspace";
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(window.location.href);
+    showToast(`🔗 Link to workspace "${name}" copied to clipboard!`);
+  }
+}
+
+function toggleFullScreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else if (document.exitFullscreen) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+function toggleNewMenu() {
+  const menu = document.getElementById("new-dropdown-menu");
+  if (menu) menu.classList.toggle("hidden");
+}
+
+function closeNewMenu() {
+  const menu = document.getElementById("new-dropdown-menu");
+  if (menu) menu.classList.add("hidden");
+}
+
+document.addEventListener("click", (e) => {
+  const newBtn = document.getElementById("new-btn");
+  const newMenu = document.getElementById("new-dropdown-menu");
+  if (newMenu && !newMenu.classList.contains("hidden")) {
+    if (newBtn && !newBtn.contains(e.target) && !newMenu.contains(e.target)) {
+      newMenu.classList.add("hidden");
+    }
+  }
+});
+
+function handleSidebarSearch(query) {
+  const q = (query || "").trim().toLowerCase();
+  const folderItems = document.querySelectorAll(".folder-tree-item");
+  folderItems.forEach(item => {
+    if (!q) {
+      item.style.display = "flex";
+      return;
+    }
+    const text = item.textContent.toLowerCase();
+    item.style.display = text.includes(q) ? "flex" : "none";
+  });
+}
+
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    const searchInput = document.getElementById("sidebar-search-input");
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.select();
+    }
+  }
+});
+
+function handleFileSelect(event) {
+  const files = event.target.files;
+  if (files && files.length > 0) {
+    for (let i = 0; i < files.length; i++) {
+      handleFileUpload(files[i]);
+    }
+    event.target.value = "";
+  }
+}
+
+function applySuggestedPrompt(text) {
+  const input = document.getElementById("rag-query");
+  if (input) {
+    input.value = text;
+    input.focus();
+  }
+  const ragForm = document.getElementById("rag-form");
+  if (ragForm) {
+    ragForm.dispatchEvent(new Event("submit", { cancelable: true }));
+  }
+}
+
+function toggleSelectAllSources(isChecked) {
+  const checkboxes = document.querySelectorAll("#nlm-sources-list input[type='checkbox']");
+  checkboxes.forEach(cb => {
+    cb.checked = isChecked;
+  });
+}
+
+function toggleSourceCheck(docId, isChecked) {
+  // Can be used to filter active context sources
+}

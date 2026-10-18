@@ -1,259 +1,913 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="h-full" lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nalanda AI — Document & Folder Management</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=10">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>Nalanda AI — Academic Workspace</title>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-secondary-fixed": "#1a1b26",
+            "on-tertiary-fixed-variant": "#00513c",
+            "inverse-primary": "#c5c0ff",
+            "on-primary-container": "#f4f0ff",
+            "surface-variant": "#dee2f3",
+            "primary-fixed-dim": "#c5c0ff",
+            "error": "#ba1a1a",
+            "surface": "#faf8ff",
+            "inverse-surface": "#2c303d",
+            "on-secondary": "#ffffff",
+            "surface-tint": "#5546d7",
+            "on-tertiary": "#ffffff",
+            "on-error": "#ffffff",
+            "tertiary-fixed-dim": "#6fdab3",
+            "on-tertiary-container": "#bfffe3",
+            "tertiary-fixed": "#8cf7ce",
+            "on-primary-fixed-variant": "#3c28bf",
+            "inverse-on-surface": "#eef0ff",
+            "primary": "#4c3cce",
+            "on-primary-fixed": "#140067",
+            "surface-container-low": "#f2f3ff",
+            "primary-fixed": "#e3dfff",
+            "surface-container-highest": "#dee2f3",
+            "surface-container-lowest": "#ffffff",
+            "on-primary": "#ffffff",
+            "on-surface": "#171b27",
+            "tertiary": "#006249",
+            "surface-bright": "#faf8ff",
+            "on-secondary-fixed-variant": "#454653",
+            "on-tertiary-fixed": "#002116",
+            "on-background": "#171b27",
+            "outline": "#787586",
+            "secondary-fixed-dim": "#c6c5d5",
+            "error-container": "#ffdad6",
+            "secondary": "#5d5d6b",
+            "on-surface-variant": "#474554",
+            "surface-container": "#eaedfe",
+            "surface-dim": "#d6d9ea",
+            "background": "#faf8ff",
+            "tertiary-container": "#007d5e",
+            "outline-variant": "#c8c4d7",
+            "secondary-fixed": "#e2e1f1",
+            "primary-container": "#6558e8",
+            "on-error-container": "#93000a",
+            "secondary-container": "#e0deef",
+            "on-secondary-container": "#61616f",
+            "surface-container-high": "#e4e7f9"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "fontFamily": {
+            "display-lg": ["Plus Jakarta Sans", "sans-serif"],
+            "headline-lg": ["Plus Jakarta Sans", "sans-serif"],
+            "headline-md": ["Plus Jakarta Sans", "sans-serif"],
+            "headline-sm": ["Plus Jakarta Sans", "sans-serif"],
+            "body-lg": ["Inter", "sans-serif"],
+            "body-md": ["Inter", "sans-serif"],
+            "body-sm": ["Inter", "sans-serif"],
+            "label-lg": ["Inter", "sans-serif"],
+            "label-md": ["Inter", "sans-serif"],
+            "label-sm": ["Inter", "sans-serif"]
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="/assets/styles.css?v=20" />
 </head>
-<body>
-  <!-- Navigation Header -->
-  <nav class="navbar">
-    <div class="brand">
-      <div class="brand-logo">N</div>
-      <span class="brand-name">Nalanda AI</span>
-      <span class="brand-tag">Document Ingestion</span>
-    </div>
-    <div class="nav-actions">
-      <div class="user-badge" id="user-profile-badge" style="display: none;">
-        <div class="user-avatar" id="user-avatar-text">U</div>
-        <span id="user-display-name">user</span>
-      </div>
-      <button class="btn btn-secondary btn-sm" id="btn-switch-account" onclick="openAuthModal()">Switch User</button>
-      <button class="btn btn-secondary btn-sm" id="btn-logout" onclick="logout()" style="display: none;">Logout</button>
-    </div>
-  </nav>
 
-  <!-- Application Body -->
-  <div class="app-container">
-    <!-- Folders Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <span class="sidebar-title">Knowledge Folders</span>
-        <button class="btn btn-primary btn-sm" onclick="openCreateFolderModal()">+ New Folder</button>
-      </div>
-      <div class="folder-list" id="folder-list-container">
-        <!-- Rendered dynamically -->
-        <div class="empty-state" style="padding: 20px;">
-          <p class="empty-hint">Loading folders...</p>
-        </div>
-      </div>
-    </aside>
+<body
+  class="bg-background text-on-surface antialiased h-full flex overflow-hidden font-body-md text-body-md selection:bg-primary-fixed selection:text-primary">
 
-    <!-- Main Documents View -->
-    <main class="main-content">
-      <div class="view-header">
-        <div class="view-title-group">
-          <h1 id="active-folder-title">Select a Folder</h1>
-          <p class="view-subtitle" id="active-folder-subtitle">Organize and process course documents</p>
-        </div>
-        <div>
-          <button class="btn btn-primary" id="btn-trigger-upload" onclick="triggerFileInput()" style="display: none;">
-            <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/></svg>
-            Upload Document
-          </button>
-        </div>
-      </div>
+  <!-- =========================================================================
+       COLLAPSIBLE LEFT SIDEBAR (SideNavBar Component)
+       ========================================================================= -->
+  <aside
+    class="fixed top-0 left-0 h-screen w-64 flex flex-col z-40 bg-surface-container-low border-r border-outline-variant transition-all duration-200"
+    id="sidebar">
+    <div class="w-64 h-full p-4 flex flex-col justify-between overflow-y-auto custom-scrollbar">
 
-      <!-- Upload Dropzone -->
-      <div class="upload-card" id="upload-dropzone" style="display: none;">
-        <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff">
-        <div class="upload-icon">📄</div>
-        <h3 class="upload-title">Drag & drop documents here, or click to browse</h3>
-        <p class="upload-hint">Supported formats: PDF, PNG, JPG, JPEG, WEBP, BMP, TIFF (up to 50MB)</p>
-      </div>
+      <!-- Top Section -->
+      <div class="flex flex-col gap-4">
 
-      <!-- Interactive Chat Interface -->
-      <section class="rag-panel chat-section" id="rag-panel" aria-labelledby="rag-title" style="display: none;">
-        <div class="rag-heading chat-header">
-          <div>
-            <div class="chat-title-group">
-              <span class="chat-header-icon">💬</span>
-              <h2 id="rag-title">Chat with this Folder</h2>
+        <!-- Brand Header -->
+        <div class="flex items-center justify-between pb-1">
+          <div class="flex items-center gap-2.5 cursor-pointer" onclick="switchView('home')">
+            <div
+              class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center text-on-primary font-bold shadow-xs">
+              N
             </div>
-            <p>Ask questions, explore course notes, or request diagrams and tables.</p>
-          </div>
-          <div class="chat-header-actions">
-            <span class="rag-scope" id="rag-scope-label"></span>
-            <select id="chat-conversation-select" class="form-select form-select-sm" style="display:none; background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-color); border-radius:6px; padding:4px 8px; font-size:0.82rem; max-width:180px;" onchange="switchConversation(this.value)" title="Saved conversations"></select>
-            <button class="btn btn-secondary btn-sm" id="btn-new-chat" onclick="startNewChat()" type="button" title="Start a fresh conversation">+ New Chat</button>
-            <button class="btn btn-secondary btn-sm" id="btn-generate-notes" onclick="openNotesModal()" type="button" title="Generate comprehensive study notes from this folder">📚 Study Notes</button>
-            <button class="btn btn-secondary btn-sm" id="btn-practice-quiz" onclick="openPracticeQuizModal()" type="button" title="Generate practice quiz from this folder">📝 Practice Quiz</button>
-            <button class="btn btn-secondary btn-sm" id="btn-clear-chat" onclick="clearChatHistory()" type="button" title="Clear current conversation">Clear</button>
-          </div>
-        </div>
-
-        <!-- Scrollable Chat Stream -->
-        <div class="chat-messages" id="chat-messages" aria-live="polite">
-          <div class="chat-message assistant">
-            <div class="chat-avatar">AI</div>
-            <div class="chat-bubble">
-              <p>Hello! Ask me any question about the documents in this folder. You can also request diagrams (e.g. <em>"Show diagram of CNN"</em>) or comparison tables.</p>
+            <div class="flex flex-col">
+              <span class="text-headline-md font-bold text-primary tracking-tight leading-none">Nalanda</span>
+              <span class="text-label-sm text-on-surface-variant leading-tight mt-0.5">Academic Workspace</span>
             </div>
           </div>
+          <button
+            class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-colors"
+            id="toggle-sidebar" title="Collapse sidebar" onclick="toggleSidebarCollapse()">
+            <span class="material-symbols-outlined">left_panel_close</span>
+          </button>
         </div>
 
-        <!-- Chat Input Form -->
-        <form class="rag-form chat-form" id="rag-form">
-          <label class="sr-only" for="rag-query">Question or search query</label>
-          <input class="form-input" id="rag-query" name="query" type="search" maxlength="1000" placeholder="Ask a question, or ask for a diagram or table..." required autocomplete="off">
-          <button class="btn btn-primary" id="rag-submit" type="submit">
-            <span>Send</span>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-left: 4px;"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.8 14.5a.5.5 0 0 1-.928-.016l-2.48-5.787-5.787-2.48a.5.5 0 0 1-.016-.928l14.5-5.8a.5.5 0 0 1 .54.11zM6.57 9.43l5.96-5.96-10.74 4.3 4.78 2.05v-.39zm1.39 1.39 2.05 4.78 4.3-10.74-5.96 5.96h-.39z"/></svg>
-          </button>
-        </form>
-      </section>
+        <!-- + New Action & Quick Search -->
+        <div class="flex flex-col gap-2">
+          <div class="relative">
+            <button
+              class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-lg font-medium shadow-sm hover:bg-primary-container transition-all active:scale-[0.98]"
+              id="new-btn" onclick="toggleNewMenu()">
+              <span class="material-symbols-outlined text-[18px]">add</span>
+              <span>+ New</span>
+              <span class="material-symbols-outlined text-[16px] ml-auto">expand_more</span>
+            </button>
+            <!-- Dropdown Menu for + New -->
+            <div
+              class="hidden absolute top-full left-0 right-0 mt-1 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg z-50 py-1"
+              id="new-dropdown-menu">
+              <button
+                class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-body-sm hover:bg-surface-container-low text-on-surface transition-colors"
+                onclick="triggerFileInput(); closeNewMenu();">
+                <span class="material-symbols-outlined text-primary text-[18px]">upload_file</span>
+                <span>Upload Document</span>
+              </button>
+              <button
+                class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-body-sm hover:bg-surface-container-low text-on-surface transition-colors"
+                onclick="openCreateFolderModal(); closeNewMenu();">
+                <span class="material-symbols-outlined text-primary text-[18px]">create_new_folder</span>
+                <span>New Knowledge Folder</span>
+              </button>
+            </div>
+          </div>
 
-      <!-- Document Metadata Table -->
-      <div class="table-container" id="documents-table-container" style="display: none;">
-        <table class="document-table">
-          <thead>
-            <tr>
-              <th>Document Name</th>
-              <th>Format</th>
-              <th>File Size</th>
-              <th>Upload Date</th>
-              <th>Processing Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="document-table-body">
-            <!-- Populated dynamically -->
-          </tbody>
-        </table>
+          <!-- Quick Search -->
+          <div class="relative flex items-center">
+            <span class="material-symbols-outlined absolute left-2.5 text-outline text-[18px]">search</span>
+            <input
+              class="w-full pl-8 pr-10 py-1.5 bg-surface-container-lowest text-on-surface text-body-sm rounded-lg border border-outline-variant focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-outline transition-all"
+              id="sidebar-search-input" placeholder="Search resources..." type="text"
+              oninput="handleSidebarSearch(this.value)" />
+            <span
+              class="absolute right-2 px-1.5 py-0.5 text-label-sm text-outline bg-surface-container rounded border border-outline-variant/60">⌘K</span>
+          </div>
+        </div>
+
+        <!-- Primary Navigation Links -->
+        <nav class="flex flex-col gap-1 mt-1" id="sidebar-nav">
+          <button
+            class="sidebar-nav-item active flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-fixed text-primary font-label-md font-medium transition-colors w-full text-left"
+            id="nav-btn-home" onclick="switchView('home')">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+            <span>Home</span>
+          </button>
+          <button
+            class="sidebar-nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container-high transition-colors w-full text-left"
+            id="nav-btn-chat" onclick="switchView('chat')">
+            <span
+              class="w-5 h-5 rounded-md bg-[#171b27] border border-[#2e3347] flex items-center justify-center shrink-0">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" />
+                <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(72 12 12)" />
+                <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(144 12 12)" />
+                <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(216 12 12)" />
+                <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(288 12 12)" />
+                <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" />
+                <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(72 12 12)" />
+                <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(144 12 12)" />
+                <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(216 12 12)" />
+                <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(288 12 12)" />
+                <circle cx="12" cy="12" r="2.1" fill="#818cf8" />
+                <circle cx="12" cy="12" r="1.1" fill="#e0e7ff" />
+              </svg>
+            </span>
+            <span>Ilayas AI</span>
+          </button>
+          <button
+            class="sidebar-nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container-high transition-colors w-full text-left"
+            id="nav-btn-notes" onclick="switchView('notes')">
+            <span class="material-symbols-outlined">menu_book</span>
+            <span>Study Notes</span>
+          </button>
+          <button
+            class="sidebar-nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container-high transition-colors w-full text-left"
+            id="nav-btn-quiz" onclick="switchView('quiz')">
+            <span class="material-symbols-outlined">quiz</span>
+            <span>Practice Quizzes</span>
+          </button>
+        </nav>
+
+        <!-- Knowledge Folders / Document Hierarchy -->
+        <div class="flex flex-col gap-1.5 pt-2 border-t border-outline-variant">
+          <div class="flex items-center justify-between px-2 py-1">
+            <span class="text-label-sm font-medium text-on-surface-variant tracking-wider">KNOWLEDGE FOLDERS</span>
+            <button
+              class="text-on-surface-variant hover:text-on-surface p-0.5 rounded hover:bg-surface-container-high transition-colors"
+              title="Create New Folder" onclick="openCreateFolderModal()">
+              <span class="material-symbols-outlined text-[16px]">create_new_folder</span>
+            </button>
+          </div>
+
+          <!-- Dynamic Folder List Container (Matches backward-compatible IDs) -->
+          <div class="flex flex-col gap-1" id="folder-list-container">
+            <div class="p-3 text-center text-outline text-label-sm">
+              Loading knowledge folders...
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <!-- Empty / Placeholder State -->
-      <div class="empty-state" id="empty-state-container">
-        <div class="empty-icon">📁</div>
-        <h3 class="empty-title" id="empty-state-title">No Folder Selected</h3>
-        <p class="empty-hint" id="empty-state-desc">Select a folder from the sidebar or create a new one to begin uploading documents.</p>
+      <!-- Footer User Profile & Settings -->
+      <div class="flex flex-col gap-2 pt-3 border-t border-outline-variant">
+        <button
+          class="flex items-center gap-3 px-3 py-1.5 rounded-lg text-on-surface-variant font-label-md hover:bg-surface-container-high transition-colors w-full text-left"
+          onclick="showToast('Settings: Nalanda Calm theme active. All models edge-native.')">
+          <span class="material-symbols-outlined">settings</span>
+          <span>Settings</span>
+        </button>
+
+        <div
+          class="flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest border border-outline-variant"
+          id="user-profile-badge">
+          <div class="flex items-center gap-2.5 truncate cursor-pointer" onclick="openAuthModal()">
+            <div
+              class="w-7 h-7 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-label-sm shrink-0"
+              id="user-avatar-text">
+              U
+            </div>
+            <div class="flex flex-col truncate text-left justify-center">
+              <span class="text-body-sm font-medium text-on-surface leading-tight truncate" id="user-display-name">Alex
+                Rivera</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1">
+            <button
+              class="text-outline hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-colors"
+              title="Switch account" id="btn-switch-account" onclick="openAuthModal()">
+              <span class="material-symbols-outlined text-[18px]">unfold_more</span>
+            </button>
+            <button
+              class="text-outline hover:text-error p-1 rounded-lg hover:bg-surface-container-high transition-colors"
+              title="Log out" id="btn-logout" onclick="logout()">
+              <span class="material-symbols-outlined text-[18px]">logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- =========================================================================
+       MAIN WORKSPACE CANVAS (Responsive with Top Bar & Active Views)
+       ========================================================================= -->
+  <div class="flex-1 ml-64 flex flex-col h-screen overflow-hidden bg-background transition-all duration-200"
+    id="main-canvas">
+
+    <!-- TOP NAVBAR (Breadcrumb & Action Cluster) -->
+    <header
+      class="sticky top-0 z-30 w-full h-14 bg-surface border-b border-outline-variant flex justify-between items-center px-6">
+
+      <!-- Mobile Sidebar Toggle & Breadcrumb / Scope Context -->
+      <div class="flex items-center gap-3">
+        <button
+          class="md:hidden text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-colors"
+          onclick="toggleSidebarCollapse()">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <div class="flex items-center gap-1.5 text-label-lg" id="topbar-breadcrumb">
+          <a class="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+            id="topbar-folder-name" onclick="switchView('home')">Select Folder</a>
+          <span class="text-outline-variant" id="topbar-sep" style="display:none;">/</span>
+          <span class="text-on-surface font-medium truncate max-w-xs" id="topbar-doc-name"></span>
+        </div>
+        <span
+          class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container text-primary font-label-sm border border-outline-variant/50"
+          id="topbar-scope-badge">
+          <span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+          <span id="topbar-doc-count">0 Documents in Scope</span>
+        </span>
+      </div>
+
+      <!-- Trailing Action Cluster -->
+      <div class="flex items-center gap-2">
+        <button
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-label-lg font-medium hover:bg-surface-container-low transition-colors active:scale-[0.98]"
+          id="btn-toggle-drawer" onclick="toggleSourceDrawer()" title="Toggle source drawer">
+          <span class="material-symbols-outlined text-[18px] text-outline">dock_to_right</span>
+          <span>Source Drawer</span>
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-label-lg font-medium hover:bg-surface-container-low transition-colors active:scale-[0.98]"
+          onclick="handleShareWorkspace()" title="Share workspace">
+          <span class="material-symbols-outlined text-[18px] text-outline">share</span>
+          <span>Share</span>
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-container text-on-primary font-label-lg font-medium hover:bg-primary transition-colors active:scale-[0.98]"
+          onclick="switchView('notes'); loadNotes(true);" title="Synthesize notes across course materials">
+          <span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+          <span>Synthesize</span>
+        </button>
+        <div class="h-4 w-px bg-outline-variant mx-1"></div>
+        <button
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
+          title="Toggle Fullscreen" onclick="toggleFullScreen()">
+          <span class="material-symbols-outlined">fullscreen</span>
+        </button>
+      </div>
+
+    </header>
+
+    <!-- =======================================================================
+         VIEW 1: HOME DASHBOARD (Minimal Greeting, Composer, Bento, Recents)
+         ======================================================================= -->
+    <main class="workspace-view flex-1 overflow-y-auto px-8 py-8 custom-scrollbar active" id="view-home">
+      <div class="max-w-4xl mx-auto flex flex-col gap-8 pb-12">
+
+        <!-- Centered Calm Scholarly Greeting -->
+        <div class="text-center flex flex-col items-center pt-2">
+          <div
+            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant text-label-sm font-semibold mb-3">
+            <span class="material-symbols-outlined text-[14px]">auto_awesome</span>
+            <span>Nalanda RAG Knowledge Model 3.5</span>
+          </div>
+          <h1 class="text-display-lg font-display-lg text-on-surface tracking-tight" id="home-greeting-heading">
+            What are we studying today, Alex?
+          </h1>
+          <p class="text-body-md text-on-surface-variant mt-2 max-w-lg">
+            Ask questions across your lecture notes, generate exam summaries, or create self-testing practice quizzes.
+          </p>
+        </div>
+
+        <!-- Central AI Prompt Synthesis Box -->
+        <div
+          class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all p-3 flex flex-col gap-2">
+          <!-- Scope Pill Bar -->
+          <div class="flex items-center justify-between pb-1 border-b border-outline-variant/40">
+            <div
+              class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container text-body-sm text-on-surface">
+              <span class="material-symbols-outlined text-primary text-[16px]">library_books</span>
+              <span class="font-medium" id="home-scope-folder-name">Deep Learning</span>
+              <span class="text-outline text-label-sm" id="home-scope-doc-count">(3 documents active)</span>
+              <button class="text-primary hover:underline text-label-sm ml-1 font-medium"
+                onclick="toggleSourceDrawer(true)">[Change]</button>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-label-sm text-outline" id="home-token-stats">Context tokens: 18.4k / 128k</span>
+            </div>
+          </div>
+
+          <!-- Prompt Text Area -->
+          <textarea
+            class="w-full bg-transparent border-0 resize-none text-on-surface placeholder:text-outline text-body-md focus:ring-0 focus:outline-none p-1.5"
+            id="home-prompt-input"
+            placeholder="Ask Ilayas anything about your lecture materials, or paste an exam question..." rows="3"
+            onkeydown="handleHomePromptKey(event)"></textarea>
+
+          <!-- Prompt Actions Bar -->
+          <div class="flex items-center justify-between pt-2">
+            <div class="flex items-center gap-2">
+              <button
+                class="p-2 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
+                title="Attach lecture note or file" onclick="triggerFileInput()">
+                <span class="material-symbols-outlined">attach_file</span>
+              </button>
+              <button
+                class="p-2 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
+                title="Voice dictation" onclick="showToast('Voice dictation is active via browser speech-to-text.')">
+                <span class="material-symbols-outlined">mic</span>
+              </button>
+              <!-- Deep Search Toggle -->
+              <label class="flex items-center gap-2 pl-2 cursor-pointer select-none">
+                <div class="relative inline-flex items-center">
+                  <input checked="" class="sr-only peer" id="home-deep-search-check" type="checkbox" />
+                  <div
+                    class="w-8 h-4 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary">
+                  </div>
+                </div>
+                <span class="text-label-md text-on-surface-variant font-medium">Deep Search (Formula &amp;
+                  Citations)</span>
+              </label>
+            </div>
+            <!-- Send Action Button -->
+            <button
+              class="w-9 h-9 rounded-lg bg-primary-container text-on-primary flex items-center justify-center hover:bg-primary transition-all active:scale-[0.96] shadow-sm cursor-pointer"
+              onclick="handleHomePromptSubmit()" title="Send query to Nalanda">
+              <span class="material-symbols-outlined">arrow_upward</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick 1-Click Action Buttons -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <button
+            class="flex items-center gap-2.5 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant hover:border-primary/40 hover:bg-surface-container-low transition-all text-left group cursor-pointer"
+            onclick="triggerFileInput()">
+            <div
+              class="w-8 h-8 rounded-lg bg-surface-container text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <span class="material-symbols-outlined text-[18px]">upload_file</span>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-label-lg font-semibold text-on-surface">+ Upload Material</span>
+              <span class="text-label-sm text-outline">PDF, DOCX, TXT</span>
+            </div>
+          </button>
+          <button
+            class="flex items-center gap-2.5 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant hover:border-primary/40 hover:bg-surface-container-low transition-all text-left group cursor-pointer"
+            onclick="switchView('notes'); loadNotes();">
+            <div
+              class="w-8 h-8 rounded-lg bg-surface-container text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <span class="material-symbols-outlined text-[18px]">summarize</span>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-label-lg font-semibold text-on-surface">Generate Notes</span>
+              <span class="text-label-sm text-outline">Synthesis &amp; cheat-sheet</span>
+            </div>
+          </button>
+          <button
+            class="flex items-center gap-2.5 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant hover:border-primary/40 hover:bg-surface-container-low transition-all text-left group cursor-pointer"
+            onclick="switchView('quiz'); loadPracticeQuiz();">
+            <div
+              class="w-8 h-8 rounded-lg bg-surface-container text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <span class="material-symbols-outlined text-[18px]">quiz</span>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-label-lg font-semibold text-on-surface">Create Practice Quiz</span>
+              <span class="text-label-sm text-outline">10 adaptive questions</span>
+            </div>
+          </button>
+          <button
+            class="flex items-center gap-2.5 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant hover:border-primary/40 hover:bg-surface-container-low transition-all text-left group cursor-pointer"
+            onclick="quickCompareDocuments()">
+            <div
+              class="w-8 h-8 rounded-lg bg-surface-container text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <span class="material-symbols-outlined text-[18px]">compare_arrows</span>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-label-lg font-semibold text-on-surface">Compare Documents</span>
+              <span class="text-label-sm text-outline">Contrast key themes</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- 'Continue Studying' Deck (Bento Cards) -->
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-headline-sm font-semibold text-on-surface">Continue Studying</h2>
+            <button class="text-label-md text-primary hover:underline font-medium" onclick="switchView('notes')">View
+              all study runs</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <!-- Study Deck Card 1: Notes Synthesis -->
+            <div
+              class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex flex-col justify-between hover:border-primary/40 transition-all shadow-xs">
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                  <span
+                    class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary-fixed text-primary font-label-sm font-medium">
+                    <span class="material-symbols-outlined text-[14px]">auto_awesome</span>
+                    Notes Synthesis
+                  </span>
+                  <span class="text-label-sm text-outline" id="bento-notes-time">Ready</span>
+                </div>
+                <h3 class="text-headline-sm font-semibold text-on-surface" id="bento-notes-title">Comprehensive Study
+                  Guide</h3>
+                <p class="text-body-sm text-on-surface-variant line-clamp-2" id="bento-notes-desc">
+                  Core conceptual anchors, cross-unit comparison matrices, and university exam takeaways.
+                </p>
+                <div class="flex items-center gap-4 text-label-sm text-outline pt-1">
+                  <span class="flex items-center gap-1"><span
+                      class="material-symbols-outlined text-[15px]">description</span> <span
+                      id="bento-notes-count">Multi-unit notes</span></span>
+                  <span class="flex items-center gap-1"><span
+                      class="material-symbols-outlined text-[15px]">check_circle</span> Formulas &amp; Figures</span>
+                </div>
+              </div>
+              <div class="pt-4 mt-2 border-t border-outline-variant/50 flex justify-end">
+                <button
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-container text-on-primary font-label-md font-medium hover:bg-primary transition-colors cursor-pointer"
+                  onclick="switchView('notes'); loadNotes();">
+                  <span>Resume Study</span>
+                  <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Study Deck Card 2: Practice Quiz -->
+            <div
+              class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex flex-col justify-between hover:border-primary/40 transition-all shadow-xs">
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                  <span
+                    class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-sm font-medium">
+                    <span class="material-symbols-outlined text-[14px]">check_circle</span>
+                    Practice Quiz
+                  </span>
+                  <span class="text-label-sm text-outline">10 MCQs</span>
+                </div>
+                <h3 class="text-headline-sm font-semibold text-on-surface" id="bento-quiz-title">Interactive
+                  Self-Testing</h3>
+                <p class="text-body-sm text-on-surface-variant line-clamp-2">
+                  Test your understanding with instant explanations, syllabus-grounded feedback, and scoring.
+                </p>
+                <div class="flex items-center gap-4 text-label-sm text-outline pt-1">
+                  <span class="text-tertiary font-medium flex items-center gap-1"><span
+                      class="material-symbols-outlined text-[15px]">emoji_events</span> Exam Readiness</span>
+                  <span class="text-on-surface-variant font-medium flex items-center gap-1"><span
+                      class="material-symbols-outlined text-[15px]">timer</span> Instant Grading</span>
+                </div>
+              </div>
+              <div class="pt-4 mt-2 border-t border-outline-variant/50 flex justify-end">
+                <button
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface font-label-md font-medium hover:bg-surface-container-low transition-colors cursor-pointer"
+                  onclick="switchView('quiz'); loadPracticeQuiz();">
+                  <span>Start Practice Quiz</span>
+                  <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 'Recent Documents' Minimal Table -->
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-headline-sm font-semibold text-on-surface">Recent Documents</h2>
+            <button class="text-label-md text-primary hover:underline font-medium"
+              onclick="toggleSourceDrawer(true)">Browse All Sources</button>
+          </div>
+          <div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-xs">
+            <div class="divide-y divide-outline-variant/50" id="home-recent-docs-list">
+              <div class="p-6 text-center text-outline text-body-sm">
+                No documents uploaded yet in this folder. Click "+ Upload Material" to begin.
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </main>
+
+    <!-- =======================================================================
+         VIEW 2: AI STUDY CHAT (Claude-Inspired Conversational Interface)
+         ======================================================================= -->
+    <main class="workspace-view flex-1 flex flex-col h-full overflow-hidden" id="view-chat" style="display: none;">
+
+      <!-- Chat Sub-Header -->
+      <div
+        class="px-6 py-3 border-b border-outline-variant/70 bg-surface/70 backdrop-blur-sm flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-8 h-8 rounded-lg bg-[#171b27] border border-[#373c52] flex items-center justify-center shrink-0 shadow-xs">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" />
+              <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(72 12 12)" />
+              <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(144 12 12)" />
+              <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(216 12 12)" />
+              <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(288 12 12)" />
+              <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" />
+              <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(72 12 12)" />
+              <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(144 12 12)" />
+              <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(216 12 12)" />
+              <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(288 12 12)" />
+              <circle cx="12" cy="12" r="2.1" fill="#818cf8" />
+              <circle cx="12" cy="12" r="1.1" fill="#e0e7ff" />
+            </svg>
+          </div>
+          <div class="flex flex-col">
+            <div class="flex items-center gap-2">
+              <h2 class="text-headline-sm font-bold text-on-surface leading-tight" id="rag-title">Ilayas</h2>
+              <span
+                class="inline-flex items-center gap-1 px-2 py-0.2 rounded-full bg-primary-fixed text-primary text-[11px] font-semibold">AI</span>
+            </div>
+            <span class="text-label-sm text-outline leading-none mt-0.5" id="rag-scope-label">Personal AI Learning
+              Assistant</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="chat-conversation-select"
+            class="text-body-sm bg-surface-container-lowest border border-outline-variant rounded-lg px-2.5 py-1 text-on-surface"
+            style="display:none;" onchange="switchConversation(this.value)"></select>
+          <button
+            class="px-3 py-1.5 rounded-lg text-body-sm font-medium border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low transition-colors"
+            id="btn-new-chat" onclick="startNewChat()">+ New Chat</button>
+          <button
+            class="px-3 py-1.5 rounded-lg text-body-sm font-medium border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low transition-colors"
+            id="btn-clear-chat" onclick="clearChatHistory()">Clear</button>
+        </div>
+      </div>
+
+      <!-- Chat Messages Scroll Stream -->
+      <div class="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar flex flex-col gap-4 max-w-4xl mx-auto w-full"
+        id="chat-messages" aria-live="polite">
+        <div class="ilayas-welcome-card">
+          <div class="ilayas-badge-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" />
+              <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(72 12 12)" />
+              <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(144 12 12)" />
+              <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(216 12 12)" />
+              <path d="M12 4.2C10.3 6.4 9.7 9.3 11.5 11.7C11.7 12 12.3 12 12.5 11.7C14.3 9.3 13.7 6.4 12 4.2Z" fill="#FFFFFF" transform="rotate(288 12 12)" />
+              <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" />
+              <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(72 12 12)" />
+              <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(144 12 12)" />
+              <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(216 12 12)" />
+              <line x1="12" y1="6.2" x2="12" y2="10.6" stroke="#a5b4fc" stroke-width="0.7" stroke-linecap="round" opacity="0.8" transform="rotate(288 12 12)" />
+              <circle cx="12" cy="12" r="2.1" fill="#818cf8" />
+              <circle cx="12" cy="12" r="1.1" fill="#e0e7ff" />
+            </svg>
+          </div>
+          <h3>Hi, I'm Ilayas. What would you like to explore today?</h3>
+          <p class="ilayas-tagline">I talk, you understand.</p>
+          <p class="ilayas-desc">
+            Ask questions across your uploaded documents, synthesize formulas, request diagrams, or generate comparison
+            tables.
+          </p>
+        </div>
+      </div>
+
+      <!-- Suggested Prompt Chips -->
+      <div
+        class="max-w-4xl mx-auto w-full px-6 py-2 flex items-center gap-2 overflow-x-auto custom-scrollbar flex-shrink-0"
+        id="nlm-suggested-prompts">
+        <button type="button"
+          class="nlm-prompt-chip whitespace-nowrap px-3 py-1 rounded-full text-label-sm font-medium bg-surface-container-low border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors cursor-pointer"
+          onclick="applySuggestedPrompt('What are the types of charts in this course?')">
+          📊 Types of charts
+        </button>
+        <button type="button"
+          class="nlm-prompt-chip whitespace-nowrap px-3 py-1 rounded-full text-label-sm font-medium bg-surface-container-low border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors cursor-pointer"
+          onclick="applySuggestedPrompt('Show diagram of system architecture')">
+          🖼️ Show diagrams
+        </button>
+        <button type="button"
+          class="nlm-prompt-chip whitespace-nowrap px-3 py-1 rounded-full text-label-sm font-medium bg-surface-container-low border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors cursor-pointer"
+          onclick="applySuggestedPrompt('Compare key technologies and components')">
+          ⚖️ Compare concepts
+        </button>
+        <button type="button"
+          class="nlm-prompt-chip whitespace-nowrap px-3 py-1 rounded-full text-label-sm font-medium bg-surface-container-low border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors cursor-pointer"
+          onclick="applySuggestedPrompt('Explain step-by-step workflow')">
+          🔄 Sequential workflow
+        </button>
+      </div>
+
+      <!-- Bottom-Anchored Message Composer -->
+      <div class="border-t border-outline-variant bg-surface/90 backdrop-blur-md p-4">
+        <form class="max-w-4xl mx-auto flex gap-3 items-center" id="rag-form">
+          <label class="sr-only" for="rag-query">Question or search query</label>
+          <input
+            class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-2.5 text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-outline"
+            id="rag-query" name="query" type="search" maxlength="1000"
+            placeholder="Ask Ilayas anything about your lecture materials..." required autocomplete="off" />
+          <button
+            class="px-5 py-2.5 rounded-xl bg-primary text-on-primary font-medium flex items-center gap-2 hover:bg-primary-container transition-all active:scale-[0.98] cursor-pointer shadow-sm"
+            id="rag-submit" type="submit">
+            <span>Send</span>
+            <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
+          </button>
+        </form>
+      </div>
+
+    </main>
+
+    <!-- =======================================================================
+         VIEW 3: STUDY NOTES (Dedicated Reading & Synthesis Workspace)
+         ======================================================================= -->
+    <main class="workspace-view flex-1 overflow-y-auto px-8 py-6 custom-scrollbar" id="view-notes"
+      style="display: none;">
+      <div class="max-w-4xl mx-auto flex flex-col gap-6 pb-12">
+
+        <!-- Notes Top Toolbar -->
+        <div class="flex items-center justify-between pb-4 border-b border-outline-variant">
+          <div class="flex flex-col">
+            <h2 class="text-headline-md font-bold text-on-surface" id="notes-modal-title">Comprehensive Study Guide</h2>
+            <span class="text-body-sm text-on-surface-variant mt-0.5" id="notes-modal-subtitle">Synthesizing course
+              materials...</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-label-md font-medium hover:bg-surface-container-low transition-colors"
+              id="btn-print-notes" onclick="printNotesPDF()" title="Print or save as PDF">
+              <span class="material-symbols-outlined text-[16px]">print</span>
+              <span>PDF</span>
+            </button>
+            <button
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-label-md font-medium hover:bg-surface-container-low transition-colors"
+              id="btn-copy-notes" onclick="copyNotesToClipboard()" title="Copy Markdown">
+              <span class="material-symbols-outlined text-[16px]">content_copy</span>
+              <span>Copy</span>
+            </button>
+            <button
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-label-md font-medium hover:bg-primary-container transition-colors shadow-xs"
+              id="btn-refresh-notes" onclick="refreshNotes()" title="Re-synthesize notes">
+              <span class="material-symbols-outlined text-[16px]">autorenew</span>
+              <span>Re-gen</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Notes Unit Selector Bar -->
+        <div class="notes-unit-selector-bar rounded-xl" id="notes-unit-selector-bar" style="display: none;"></div>
+
+        <!-- Notes Scroll Body -->
+        <div class="nlm-studio-scroll-body" id="notes-modal-body"></div>
+
+      </div>
+    </main>
+
+    <!-- =======================================================================
+         VIEW 4: PRACTICE QUIZZES (Dedicated Interactive Quiz Interface)
+         ======================================================================= -->
+    <main class="workspace-view flex-1 overflow-y-auto px-8 py-6 custom-scrollbar" id="view-quiz"
+      style="display: none;">
+      <div class="max-w-4xl mx-auto flex flex-col gap-6 pb-12">
+
+        <!-- Quiz Top Toolbar -->
+        <div class="flex items-center justify-between pb-4 border-b border-outline-variant">
+          <div class="flex items-center gap-3">
+            <h2 class="text-headline-md font-bold text-on-surface" id="quiz-modal-title">Practice Quiz</h2>
+            <span
+              class="px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-tertiary-fixed text-on-tertiary-fixed-variant"
+              id="quiz-score-badge">10 questions</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-label-md font-medium hover:bg-primary-container transition-colors shadow-xs cursor-pointer"
+              id="btn-regenerate-quiz" onclick="loadPracticeQuiz(true)" title="Generate new quiz">
+              <span class="material-symbols-outlined text-[16px]">refresh</span>
+              <span>Regenerate Quiz</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Quiz Unit Selector Bar -->
+        <div class="notes-unit-selector-bar rounded-xl" id="quiz-unit-selector-bar" style="display: none;"></div>
+
+        <!-- Quiz Questions Scroll Body -->
+        <div class="nlm-studio-scroll-body" id="quiz-modal-body"></div>
+
+      </div>
+    </main>
+
   </div>
+
+  <!-- =========================================================================
+       COMPACT RIGHT SOURCE DRAWER (Off-Canvas Slide-Over)
+       ========================================================================= -->
+  <aside
+    class="fixed top-0 right-0 h-screen w-80 bg-surface-container-lowest border-l border-outline-variant shadow-2xl z-50 flex flex-col transform translate-x-full transition-transform duration-200"
+    id="source-drawer">
+
+    <!-- Drawer Header -->
+    <div class="p-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary text-[20px]">folder_open</span>
+        <h3 class="text-headline-sm font-bold text-on-surface">Source Drawer</h3>
+      </div>
+      <button class="p-1 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
+        onclick="toggleSourceDrawer(false)">
+        <span class="material-symbols-outlined text-[20px]">close</span>
+      </button>
+    </div>
+
+    <!-- Quick Upload Dropzone inside Drawer -->
+    <div class="p-4 border-b border-outline-variant">
+      <div
+        class="border-2 border-dashed border-outline-variant rounded-xl p-4 text-center hover:border-primary/60 hover:bg-surface-container-low transition-all cursor-pointer group"
+        onclick="triggerFileInput()">
+        <span
+          class="material-symbols-outlined text-[24px] text-primary group-hover:scale-110 transition-transform">upload_file</span>
+        <p class="text-label-lg font-semibold text-on-surface mt-1">+ Add Source</p>
+        <p class="text-label-sm text-outline">PDF, DOCX, TXT up to 50MB</p>
+      </div>
+    </div>
+
+    <!-- Source Selection Subhead -->
+    <div
+      class="px-4 py-2 bg-surface-container-low border-b border-outline-variant flex items-center justify-between text-label-sm text-on-surface-variant font-medium">
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" id="nlm-select-all-sources" checked onchange="toggleSelectAllSources(this.checked)"
+          class="rounded text-primary focus:ring-primary border-outline" />
+        <span>Select All</span>
+      </label>
+      <span id="nlm-source-count-label" class="text-outline">0 sources</span>
+    </div>
+
+    <!-- Sources List -->
+    <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5 custom-scrollbar" id="nlm-sources-list">
+      <div class="text-center text-outline text-body-sm py-8">
+        No documents in this folder.
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Drawer Backdrop Overlay -->
+  <div class="fixed inset-0 bg-black/20 z-40 hidden backdrop-blur-[1px]" id="source-drawer-backdrop"
+    onclick="toggleSourceDrawer(false)"></div>
+
+  <!-- Hidden File Input for Native File Picking -->
+  <input type="file" id="file-input" multiple accept=".pdf,.docx,.pptx,.txt,.md" style="display: none;"
+    onchange="handleFileSelect(event)" />
+
+  <!-- =========================================================================
+       MODALS & LIGHTBOXES (Folder Creation, Auth, Diagram Lightbox, Toasts)
+       ========================================================================= -->
 
   <!-- Create Folder Modal -->
-  <div class="modal-overlay" id="create-folder-modal">
-    <div class="modal">
-      <div class="modal-header">
-        <h3 class="modal-title">Create New Folder</h3>
-        <button class="btn btn-secondary btn-sm" onclick="closeCreateFolderModal()">✕</button>
+  <div class="modal-overlay" id="create-folder-modal" style="display: none;">
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-6 w-full max-w-md shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+        <h3 class="text-headline-sm font-bold text-on-surface">Create Knowledge Folder</h3>
+        <button class="text-outline hover:text-on-surface p-1 rounded-lg" onclick="closeCreateFolderModal()">✕</button>
       </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label" for="new-folder-name">Folder Name</label>
-          <input type="text" id="new-folder-name" class="form-input" placeholder="e.g. Machine Learning" autofocus>
-        </div>
+      <div class="py-4">
+        <label class="block text-label-md font-medium text-on-surface mb-1.5" for="new-folder-name">Folder Name</label>
+        <input
+          class="w-full px-3.5 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+          id="new-folder-name" placeholder="e.g. Deep Learning, Computer Vision" type="text" autofocus />
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeCreateFolderModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="handleCreateFolder()">Create Folder</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Authentication Modal -->
-  <div class="modal-overlay" id="auth-modal">
-    <div class="modal">
-      <div class="modal-header">
-        <h3 class="modal-title" id="auth-modal-title">Sign In to Nalanda AI</h3>
-        <button class="btn btn-secondary btn-sm" onclick="closeAuthModal()">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group" id="username-group" style="display: none;">
-          <label class="form-label" for="auth-username">Username</label>
-          <input type="text" id="auth-username" class="form-input" placeholder="Your username">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="auth-email">Email or Username</label>
-          <input type="text" id="auth-email" class="form-input" placeholder="user@nalanda.ai">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="auth-password">Password</label>
-          <input type="password" id="auth-password" class="form-input" placeholder="••••••••">
-        </div>
-        <div style="margin-top: 10px; font-size: 0.85rem; color: var(--text-secondary); text-align: center;">
-          <a href="#" id="auth-toggle-link" onclick="toggleAuthMode(event)" style="color: var(--accent-primary); text-decoration: none;">Need an account? Register here</a>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="handleDemoLogin()">Quick Demo User</button>
-        <button class="btn btn-primary" id="btn-auth-submit" onclick="handleAuthSubmit()">Sign In</button>
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
+        <button
+          class="px-4 py-2 rounded-lg text-body-sm font-medium border border-outline-variant hover:bg-surface-container-low text-on-surface"
+          onclick="closeCreateFolderModal()">Cancel</button>
+        <button
+          class="px-4 py-2 rounded-lg text-body-sm font-medium bg-primary text-on-primary hover:bg-primary-container"
+          onclick="handleCreateFolder()">Create Folder</button>
       </div>
     </div>
   </div>
 
-  <!-- Figure Preview Modal -->
-  <div class="modal-overlay" id="figure-modal">
-    <div class="modal modal-lg">
-      <div class="modal-header">
-        <h3 class="modal-title" id="figure-modal-title">Extracted Diagram</h3>
-        <button class="btn btn-secondary btn-sm" onclick="closeFigureModal()">✕</button>
+  <!-- Authentication / Switch User Modal -->
+  <div class="modal-overlay" id="auth-modal" style="display: none;">
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-6 w-full max-w-md shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+        <h3 class="text-headline-sm font-bold text-on-surface" id="auth-modal-title">Sign In to Nalanda AI</h3>
+        <button class="text-outline hover:text-on-surface p-1 rounded-lg" id="auth-modal-close-btn"
+          onclick="closeAuthModal()">✕</button>
       </div>
-      <div class="modal-body" style="text-align: center; max-height: 75vh; overflow-y: auto;">
-        <img id="figure-modal-img" src="" alt="Extracted Diagram" style="max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-        <p id="figure-modal-caption" style="margin-top: 14px; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;"></p>
+      <div class="py-4 flex flex-col gap-3">
+        <div id="username-group" style="display: none;">
+          <label class="block text-label-md font-medium text-on-surface mb-1" for="auth-username">Username</label>
+          <input
+            class="w-full px-3.5 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-body-md text-on-surface"
+            id="auth-username" placeholder="Your username" type="text"
+            onkeydown="if(event.key==='Enter') handleAuthSubmit()" />
+        </div>
+        <div>
+          <label class="block text-label-md font-medium text-on-surface mb-1" for="auth-email">Email or Username</label>
+          <input
+            class="w-full px-3.5 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-body-md text-on-surface"
+            id="auth-email" placeholder="user@nalanda.ai" type="text"
+            onkeydown="if(event.key==='Enter') handleAuthSubmit()" />
+        </div>
+        <div>
+          <label class="block text-label-md font-medium text-on-surface mb-1" for="auth-password">Password</label>
+          <input
+            class="w-full px-3.5 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-body-md text-on-surface"
+            id="auth-password" placeholder="••••••••" type="password"
+            onkeydown="if(event.key==='Enter') handleAuthSubmit()" />
+        </div>
+      </div>
+      <div class="flex flex-col gap-2 pt-3 border-t border-outline-variant">
+        <button
+          class="w-full py-2.5 rounded-lg text-body-sm font-medium bg-primary text-on-primary hover:bg-primary-container cursor-pointer"
+          id="auth-submit-btn" onclick="handleAuthSubmit()">Sign In</button>
+        <button class="w-full text-center text-label-md text-primary hover:underline py-1" id="auth-toggle-btn"
+          onclick="toggleAuthMode()">Don't have an account? Sign Up</button>
       </div>
     </div>
   </div>
 
-  <!-- Practice Quiz Modal -->
-  <div class="modal-overlay" id="practice-quiz-modal">
-    <div class="modal modal-lg quiz-modal-container" style="max-width: 900px; width: 92vw;">
-      <div class="modal-header" style="justify-content: space-between;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <span style="font-size: 1.25rem;">📝</span>
-          <div>
-            <h3 class="modal-title" id="quiz-modal-title" style="margin: 0; font-size: 1.15rem;">Folder Practice Quiz</h3>
-            <span style="font-size:0.75rem; color: var(--text-muted);" id="quiz-modal-subtitle">10 Practice Questions</span>
-          </div>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <button class="btn btn-secondary btn-sm" id="btn-regenerate-quiz-header" onclick="loadPracticeQuiz(true)" type="button" title="Regenerate quiz questions">🔄 Regenerate Quiz</button>
-          <button class="btn btn-secondary btn-sm" onclick="closePracticeQuizModal()" type="button">✕</button>
-        </div>
+  <!-- Extracted Figure Modal Lightbox -->
+  <div class="modal-overlay" id="figure-modal" style="display: none;">
+    <div
+      class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 max-w-2xl w-full shadow-2xl flex flex-col gap-3">
+      <div class="flex items-center justify-between pb-2 border-b border-outline-variant">
+        <h3 class="text-headline-sm font-bold text-on-surface" id="figure-modal-title">Extracted Diagram</h3>
+        <button class="text-outline hover:text-on-surface p-1 rounded-lg" onclick="closeFigureModal()">✕</button>
       </div>
-      <!-- Unit / File Selection Bar for Quiz -->
-      <div class="notes-unit-selector-bar" id="quiz-unit-selector-bar" style="display: none;">
-        <!-- Dynamically populated with units / files checkboxes -->
-      </div>
-      <div class="modal-body" id="quiz-modal-body" style="max-height: 74vh; overflow-y: auto; padding: 24px;">
-        <!-- Dynamically rendered -->
-      </div>
-      <div class="modal-footer" id="quiz-modal-footer" style="justify-content: space-between;">
-        <span id="quiz-score-badge" style="font-weight: 600; color: var(--text-secondary); font-size: 0.9rem;"></span>
-        <button class="btn btn-primary" id="btn-regenerate-quiz" onclick="loadPracticeQuiz(true)">🔄 Regenerate Quiz</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Comprehensive Study Notes Reader Modal -->
-  <div class="modal-overlay" id="notes-reader-modal">
-    <div class="modal modal-lg notes-modal-container" style="max-width: 900px; width: 92vw;">
-      <div class="modal-header" style="justify-content: space-between;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <span style="font-size: 1.35rem;">📚</span>
-          <div>
-            <h3 class="modal-title" id="notes-modal-title" style="margin: 0; font-size: 1.15rem;">Comprehensive Study Guide</h3>
-            <span style="font-size:0.75rem; color: var(--text-muted);" id="notes-modal-subtitle">Synthesizing course materials...</span>
-          </div>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <button class="btn btn-secondary btn-sm" id="btn-refresh-notes" onclick="refreshNotes()" type="button" title="Re-synthesize study notes from lecture materials">🔄 Re-generate</button>
-          <button class="btn btn-primary btn-sm" id="btn-print-notes" onclick="printNotesPDF()" type="button" title="Print notes or save as formatted PDF with all sections expanded">🖨️ Print / Save as PDF</button>
-          <button class="btn btn-secondary btn-sm" id="btn-copy-notes" onclick="copyNotesToClipboard()" type="button" title="Copy complete Markdown notes to clipboard">📋 Copy Markdown</button>
-          <button class="btn btn-secondary btn-sm" onclick="closeNotesModal()" type="button">✕</button>
-        </div>
-      </div>
-      <!-- Unit / File Selection Bar -->
-      <div class="notes-unit-selector-bar" id="notes-unit-selector-bar" style="display: none;">
-        <!-- Dynamically populated with units / files checkboxes -->
-      </div>
-      <div class="modal-body" id="notes-modal-body" style="max-height: 74vh; overflow-y: auto; padding: 24px;">
-        <!-- Dynamically rendered -->
+      <div class="text-center max-h-[70vh] overflow-y-auto">
+        <img id="figure-modal-img" src="" alt="Extracted Diagram" class="max-w-full rounded-xl mx-auto shadow-md" />
+        <p class="mt-3 text-body-sm text-on-surface-variant text-left" id="figure-modal-caption"></p>
       </div>
     </div>
   </div>
@@ -261,6 +915,8 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="/assets/app.js?v=13"></script>
+  <!-- Nalanda Application Controller -->
+  <script src="/assets/app.js?v=20"></script>
 </body>
+
 </html>

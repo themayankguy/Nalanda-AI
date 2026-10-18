@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nalanda AI - Academic Workspace</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-secondary-fixed": "#1a1b26",
+            "on-tertiary-fixed-variant": "#00513c",
+            "inverse-primary": "#c5c0ff",
+            "on-primary-container": "#f4f0ff",
+            "surface-variant": "#dee2f3",
+            "primary-fixed-dim": "#c5c0ff",
+            "error": "#ba1a1a",
+            "surface": "#faf8ff",
+            "inverse-surface": "#2c303d",
+            "on-secondary": "#ffffff",
+            "surface-tint": "#5546d7",
+            "on-tertiary": "#ffffff",
+            "on-error": "#ffffff",
+            "tertiary-fixed-dim": "#6fdab3",
+            "on-tertiary-container": "#bfffe3",
+            "tertiary-fixed": "#8cf7ce",
+            "on-primary-fixed-variant": "#3c28bf",
+            "inverse-on-surface": "#eef0ff",
+            "primary": "#4c3cce",
+            "on-primary-fixed": "#140067",
+            "surface-container-low": "#f2f3ff",
+            "primary-fixed": "#e3dfff",
+            "surface-container-highest": "#dee2f3",
+            "surface-container-lowest": "#ffffff",
+            "on-primary": "#ffffff",
+            "on-surface": "#171b27",
+            "tertiary": "#006249",
+            "surface-bright": "#faf8ff",
+            "on-secondary-fixed-variant": "#454653",
+            "on-tertiary-fixed": "#002116",
+            "on-background": "#171b27",
+            "outline": "#787586",
+            "secondary-fixed-dim": "#c6c5d5",
+            "error-container": "#ffdad6",
+            "secondary": "#5d5d6b",
+            "on-surface-variant": "#474554",
+            "surface-container": "#eaedfe",
+            "surface-dim": "#d6d9ea",
+            "background": "#faf8ff",
+            "tertiary-container": "#007d5e",
+            "outline-variant": "#c8c4d7",
+            "secondary-fixed": "#e2e1f1",
+            "primary-container": "#6558e8",
+            "on-error-container": "#93000a",
+            "secondary-container": "#e0deef",
+            "on-secondary-container": "#61616f",
+            "surface-container-high": "#e4e7f9"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "fontFamily": {
+            "display-lg": ["Plus Jakarta Sans"],
+            "label-md": ["Inter"],
+            "label-sm": ["Inter"],
+            "headline-md": ["Plus Jakarta Sans"],
+            "headline-lg": ["Plus Jakarta Sans"],
+            "body-lg": ["Inter"],
+            "body-sm": ["Inter"],
+            "headline-sm": ["Plus Jakarta Sans"],
+            "body-md": ["Inter"],
+            "label-lg": ["Inter"]
+          },
+          "fontSize": {
+            "display-lg": ["2.5rem", { "lineHeight": "3rem", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "label-md": ["0.75rem", { "lineHeight": "1rem", "letterSpacing": "0.02em", "fontWeight": "500" }],
+            "label-sm": ["0.6875rem", { "lineHeight": "0.875rem", "letterSpacing": "0.03em", "fontWeight": "600" }],
+            "headline-md": ["1.375rem", { "lineHeight": "1.875rem", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "headline-lg": ["1.75rem", { "lineHeight": "2.25rem", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "body-lg": ["1.125rem", { "lineHeight": "1.875rem", "fontWeight": "400" }],
+            "body-sm": ["0.8125rem", { "lineHeight": "1.375rem", "fontWeight": "400" }],
+            "headline-sm": ["1.125rem", { "lineHeight": "1.625rem", "fontWeight": "600" }],
+            "body-md": ["0.9375rem", { "lineHeight": "1.625rem", "fontWeight": "400" }],
+            "label-lg": ["0.875rem", { "lineHeight": "1.25rem", "letterSpacing": "0.01em", "fontWeight": "500" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 20px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #dee2f3;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased h-full flex overflow-hidden font-body-md text-body-md selection:bg-primary-fixed selection:text-primary">
+<!-- COLLAPSIBLE LEFT SIDEBAR (SideNavBar Shared Component) -->
+<aside class="fixed top-0 left-0 h-screen w-64 flex flex-col z-40 bg-surface-container-low border-r border-outline-variant transition-all duration-200" id="sidebar">
+<div class="w-64 h-full p-4 flex flex-col justify-between overflow-y-auto custom-scrollbar">
+<!-- Top Section -->
+<div class="flex flex-col gap-4">
+<!-- Brand Header -->
+<div class="flex items-center justify-between pb-1">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center text-on-primary font-headline-sm text-headline-sm font-bold shadow-xs">
+              N
+            </div>
+<div class="flex flex-col">
+<span class="text-headline-md font-headline-md font-bold text-primary tracking-tight leading-none">Nalanda</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant leading-tight mt-0.5">Academic Workspace</span>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-colors" id="toggle-sidebar" title="Collapse sidebar">
+<span class="material-symbols-outlined" data-icon="left_panel_close">left_panel_close</span>
+</button>
+</div>
+<!-- + New Action & Quick Search -->
+<div class="flex flex-col gap-2">
+<div class="relative">
+<button class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-on-primary font-label-lg text-label-lg font-medium shadow-sm hover:bg-primary-container transition-all active:scale-[0.98]" id="new-btn">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+<span>+ New</span>
+<span class="material-symbols-outlined text-[16px] ml-auto" data-icon="expand_more">expand_more</span>
+</button>
+</div>
+<!-- Quick Search -->
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-2.5 text-outline text-[18px]" data-icon="search">search</span>
+<input class="w-full pl-8 pr-10 py-1.5 bg-surface-container-lowest text-on-surface text-body-sm font-body-sm rounded-lg border border-outline-variant focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-outline transition-all" placeholder="Search resources..." type="text"/>
+<span class="absolute right-2 px-1.5 py-0.5 text-label-sm font-label-sm text-outline bg-surface-container rounded border border-outline-variant/60">⌘K</span>
+</div>
+</div>
+<!-- Primary Navigation Links (Matched to Active Semantic Intent: Home) -->
+<nav class="flex flex-col gap-1 mt-1">
+<!-- Home (Active: Maps directly to Dashboard landing) -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-fixed text-primary font-label-md text-label-md font-medium transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="home" data-weight="fill" style="font-variation-settings: 'FILL' 1;">home</span>
+<span>Home</span>
+</a>
+<!-- AI Study Chat -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="chat_spark">chat_spark</span>
+<span>AI Study Chat</span>
+</a>
+<!-- Study Notes -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span>Study Notes</span>
+</a>
+<!-- Practice Quizzes -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="quiz">quiz</span>
+<span>Practice Quizzes</span>
+</a>
+</nav>
+<!-- Knowledge Folders / FastAPI Workspaces hierarchy -->
+<div class="flex flex-col gap-1.5 pt-2 border-t border-outline-variant">
+<div class="flex items-center justify-between px-2 py-1">
+<span class="text-label-sm font-label-sm font-medium text-on-surface-variant tracking-wider">KNOWLEDGE FOLDERS</span>
+<button class="text-on-surface-variant hover:text-on-surface" title="Add Folder">
+<span class="material-symbols-outlined text-[16px]" data-icon="create_new_folder">create_new_folder</span>
+</button>
+</div>
+<!-- Deep Learning (Expanded) -->
+<div class="flex flex-col gap-0.5">
+<button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-on-surface hover:bg-surface-container-high transition-colors group">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline-variant text-[16px]" data-icon="arrow_drop_down">arrow_drop_down</span>
+<span class="material-symbols-outlined text-primary text-[18px]" data-icon="folder_open">folder_open</span>
+<span class="text-body-sm font-body-sm font-medium">Deep Learning</span>
+</div>
+<span class="text-label-sm font-label-sm text-outline group-hover:text-on-surface">3</span>
+</button>
+<!-- Nested Document Tree -->
+<div class="flex flex-col pl-6 pr-1 gap-0.5 border-l border-outline-variant/60 ml-4 my-0.5">
+<a class="flex items-center justify-between py-1 px-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface text-body-sm font-body-sm truncate transition-colors" href="#">
+<div class="flex items-center gap-2 truncate">
+<span class="material-symbols-outlined text-[16px] text-error" data-icon="picture_as_pdf">picture_as_pdf</span>
+<span class="truncate">Lecture 01 — Intro.pdf</span>
+</div>
+</a>
+<a class="flex items-center justify-between py-1 px-2 rounded hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface text-body-sm font-body-sm truncate transition-colors" href="#">
+<div class="flex items-center gap-2 truncate">
+<span class="material-symbols-outlined text-[16px] text-error" data-icon="picture_as_pdf">picture_as_pdf</span>
+<span class="truncate">Lecture 02 — CNN.pdf</span>
+</div>
+</a>
+<a class="flex items-center justify-between py-1 px-2 rounded bg-surface-container-high text-primary font-medium text-body-sm font-body-sm truncate transition-colors" href="#">
+<div class="flex items-center gap-2 truncate">
+<span class="material-symbols-outlined text-[16px] text-primary" data-icon="picture_as_pdf">picture_as_pdf</span>
+<span class="truncate">Unit 3 — Transformers.pdf</span>
+</div>
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim" title="Currently active in context scope"></span>
+</a>
+</div>
+</div>
+<!-- Computer Vision Folder -->
+<div class="flex flex-col gap-0.5">
+<button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline-variant text-[16px]" data-icon="arrow_right">arrow_right</span>
+<span class="material-symbols-outlined text-outline text-[18px]" data-icon="folder">folder</span>
+<span class="text-body-sm font-body-sm">Computer Vision</span>
+</div>
+<span class="text-label-sm font-label-sm text-outline">2</span>
+</button>
+</div>
+<!-- Natural Language Processing Folder -->
+<div class="flex flex-col gap-0.5">
+<button class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline-variant text-[16px]" data-icon="arrow_right">arrow_right</span>
+<span class="material-symbols-outlined text-outline text-[18px]" data-icon="folder">folder</span>
+<span class="text-body-sm font-body-sm">Natural Language...</span>
+</div>
+<span class="text-label-sm font-label-sm text-outline">1</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Footer User Profile & Settings -->
+<div class="flex flex-col gap-2 pt-3 border-t border-outline-variant">
+<a class="flex items-center gap-3 px-3 py-1.5 rounded-lg text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+<div class="flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest border border-outline-variant">
+<div class="flex items-center gap-2.5 truncate">
+<div class="w-7 h-7 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-label-sm shrink-0">
+              AR
+            </div>
+<div class="flex flex-col truncate">
+<span class="text-body-sm font-body-sm font-medium text-on-surface leading-tight truncate">Alex Rivera</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant truncate">CS Senior</span>
+</div>
+</div>
+<button class="text-outline hover:text-on-surface p-1 rounded hover:bg-surface-container-high transition-colors" title="Switch account">
+<span class="material-symbols-outlined text-[18px]" data-icon="unfold_more">unfold_more</span>
+</button>
+</div>
+</div>
+</div>
+</aside>
+<!-- MAIN STUDY SPACE (NotebookLM & Claude Inspired) -->
+<div class="flex-1 ml-64 flex flex-col h-screen overflow-hidden bg-background">
+<!-- TOP NAV BAR (TopNavBar Shared Component) -->
+<header class="sticky top-0 z-30 w-full h-14 bg-surface border-b border-outline-variant flex justify-between items-center px-6">
+<!-- Breadcrumb & Scope Context -->
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 text-label-lg font-label-lg">
+<a class="text-on-surface-variant hover:text-on-surface transition-colors" href="#">Deep Learning</a>
+<span class="text-outline-variant">/</span>
+<span class="text-on-surface font-medium">Unit 3 — Transformers.pdf</span>
+</div>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-primary font-label-sm text-label-sm border border-outline-variant/50">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+          3 Documents in Scope
+        </span>
+</div>
+<!-- Trailing Action Cluster -->
+<div class="flex items-center gap-2">
+<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-label-lg font-label-lg font-medium hover:bg-surface-container-low transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined text-[18px] text-outline" data-icon="dock_to_right">dock_to_right</span>
+<span>Source Drawer</span>
+</button>
+<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-label-lg font-label-lg font-medium hover:bg-surface-container-low transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined text-[18px] text-outline" data-icon="share">share</span>
+<span>Share</span>
+</button>
+<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-container text-on-primary font-label-lg text-label-lg font-medium hover:bg-primary transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined text-[18px]" data-icon="auto_awesome">auto_awesome</span>
+<span>Synthesize</span>
+</button>
+<div class="h-4 w-px bg-outline-variant mx-1"></div>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors" title="Settings &amp; Parameters">
+<span class="material-symbols-outlined" data-icon="tune">tune</span>
+</button>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors" title="History">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+</button>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors" title="Toggle Fullscreen">
+<span class="material-symbols-outlined" data-icon="fullscreen">fullscreen</span>
+</button>
+</div>
+</header>
+<!-- Scrollable Workspace Canvas -->
+<main class="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
+<div class="max-w-4xl mx-auto flex flex-col gap-8 pb-12">
+<!-- Centered Calm Scholarly Greeting -->
+<div class="text-center flex flex-col items-center pt-2">
+<div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant text-label-sm font-label-sm font-semibold mb-3">
+<span class="material-symbols-outlined text-[14px]" data-icon="spark">spark</span>
+<span>Nalanda RAG Knowledge Model 3.5</span>
+</div>
+<h1 class="text-display-lg font-display-lg text-on-surface tracking-tight">What are we studying today, Alex?</h1>
+<p class="text-body-md font-body-md text-on-surface-variant mt-2 max-w-lg">
+            Ask questions across your lecture notes, generate exam summaries, or create self-testing practice quizzes.
+          </p>
+</div>
+<!-- Central AI Prompt Synthesis Box -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all p-3 flex flex-col gap-2">
+<!-- Scope Pill Bar -->
+<div class="flex items-center justify-between pb-1 border-b border-outline-variant/40">
+<div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container text-body-sm font-body-sm text-on-surface">
+<span class="material-symbols-outlined text-primary text-[16px]" data-icon="library_books">library_books</span>
+<span class="font-medium">Deep Learning</span>
+<span class="text-outline text-label-sm font-label-sm">(3 documents active)</span>
+<button class="text-primary hover:underline text-label-sm font-label-sm ml-1 font-medium">[Change]</button>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-label-sm font-label-sm text-outline">Context tokens: 18.4k / 128k</span>
+</div>
+</div>
+<!-- Prompt Text Area -->
+<textarea class="w-full bg-transparent border-0 resize-none text-on-surface placeholder:text-outline text-body-md font-body-md focus:ring-0 focus:outline-none p-1.5" placeholder="Ask Nalanda anything about your lecture materials, or paste an exam question..." rows="3"></textarea>
+<!-- Prompt Actions Bar -->
+<div class="flex items-center justify-between pt-2">
+<div class="flex items-center gap-2">
+<button class="p-2 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors" title="Attach lecture note or screenshot">
+<span class="material-symbols-outlined" data-icon="attach_file">attach_file</span>
+</button>
+<button class="p-2 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors" title="Voice dictation">
+<span class="material-symbols-outlined" data-icon="mic">mic</span>
+</button>
+<!-- Deep Search Toggle -->
+<label class="flex items-center gap-2 pl-2 cursor-pointer select-none">
+<div class="relative inline-flex items-center">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-8 h-4 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary"></div>
+</div>
+<span class="text-label-md font-label-md text-on-surface-variant font-medium">Deep Search (Formula &amp; Citations)</span>
+</label>
+</div>
+<!-- Send Action Button -->
+<button class="w-9 h-9 rounded-lg bg-primary-container text-on-primary flex items-center justify-center hover:bg-primary transition-all active:scale-[0.96] shadow-sm">
+<span class="material-symbols-outlined" data-icon="arrow_upward">arrow_upward</span>
+</button>
+</div>
+</div>
+<!-- Quick 1-Click Action Buttons -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+<button class="flex items-center gap-2.5 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant hover:border-primary/40 hover:bg-surface-container-low transition-all text-left group">
+<div class="w-8 h-8 rounded-lg bg-surface-container text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[18px]" data-icon="upload_file">upload_file</span>
+</div>
+<div class="flex flex-col">
+<span class="text-label-lg font-label-lg font-semibold text-on-surface">+ Upload Material</span>
+<span class="text-label-sm font-label-sm text-outline">PDF, DOCX, TXT</span>
+</div>
+</button>
+<button class="flex items-center gap-2.5 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant hover:border-primary/40 hover:bg-surface-container-low transition-all text-left group">
+<div class="w-8 h-8 rounded-lg bg-surface-container text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[18px]" data-icon="summarize">summarize</span>
+</div>
+<div class="flex flex-col">
+<span class="text-label-lg font-label-lg font-semibold text-on-surface">Generate Notes</span>
+<span class="text-label-sm font-label-sm text-outline">Synthesis &amp; cheat-sheet</span>
+</div>
+</button>
+<button class="flex items-center gap-2.5 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant hover:border-primary/40 hover:bg-surface-container-low transition-all text-left group">
+<div class="w-8 h-8 rounded-lg bg-surface-container text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[18px]" data-icon="quiz">quiz</span>
+</div>
+<div class="flex flex-col">
+<span class="text-label-lg font-label-lg font-semibold text-on-surface">Create Practice Quiz</span>
+<span class="text-label-sm font-label-sm text-outline">10 adaptive questions</span>
+</div>
+</button>
+<button class="flex items-center gap-2.5 p-3 rounded-xl bg-surface-container-lowest border border-outline-variant hover:border-primary/40 hover:bg-surface-container-low transition-all text-left group">
+<div class="w-8 h-8 rounded-lg bg-surface-container text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[18px]" data-icon="compare_arrows">compare_arrows</span>
+</div>
+<div class="flex flex-col">
+<span class="text-label-lg font-label-lg font-semibold text-on-surface">Compare Documents</span>
+<span class="text-label-sm font-label-sm text-outline">Contrast key themes</span>
+</div>
+</button>
+</div>
+<!-- 'Continue Studying' Deck (Bento / Cards) -->
+<div class="flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<h2 class="text-headline-sm font-headline-sm text-on-surface">Continue Studying</h2>
+<a class="text-label-md font-label-md text-primary hover:underline font-medium" href="#">View all study runs</a>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Study Deck Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex flex-col justify-between hover:border-primary/40 transition-all shadow-xs">
+<div class="flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary-fixed text-primary font-label-sm text-label-sm font-medium">
+<span class="material-symbols-outlined text-[14px]" data-icon="auto_awesome">auto_awesome</span>
+                    Notes Synthesis
+                  </span>
+<span class="text-label-sm font-label-sm text-outline">42m ago</span>
+</div>
+<h3 class="text-headline-sm font-headline-sm text-on-surface">Unit 3 — Transformers</h3>
+<p class="text-body-sm font-body-sm text-on-surface-variant line-clamp-2">
+                  Multi-head self-attention mechanics, positional encodings, and scaling factor 1/√dk breakdown.
+                </p>
+<div class="flex items-center gap-4 text-label-sm font-label-sm text-outline pt-1">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[15px]" data-icon="description">description</span> 24 notes synthesized</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[15px]" data-icon="check_circle">check_circle</span> 8 key formulas</span>
+</div>
+</div>
+<div class="pt-4 mt-2 border-t border-outline-variant/50 flex justify-end">
+<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md font-medium hover:bg-primary transition-colors">
+<span>Resume Study</span>
+<span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Study Deck Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex flex-col justify-between hover:border-primary/40 transition-all shadow-xs">
+<div class="flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-sm text-label-sm font-medium">
+<span class="material-symbols-outlined text-[14px]" data-icon="check_circle">check_circle</span>
+                    Practice Quiz
+                  </span>
+<span class="text-label-sm font-label-sm text-outline">3h ago</span>
+</div>
+<h3 class="text-headline-sm font-headline-sm text-on-surface">ResNet &amp; Skip Connections</h3>
+<p class="text-body-sm font-body-sm text-on-surface-variant line-clamp-2">
+                  Evaluation on vanishing gradients, bottleneck architectures, and identity mappings.
+                </p>
+<div class="flex items-center gap-4 text-label-sm font-label-sm text-outline pt-1">
+<span class="text-tertiary font-medium flex items-center gap-1"><span class="material-symbols-outlined text-[15px]" data-icon="emoji_events">emoji_events</span> Score: 9/10 (90%)</span>
+<span class="text-error font-medium flex items-center gap-1"><span class="material-symbols-outlined text-[15px]" data-icon="error">error</span> 1 question flagged</span>
+</div>
+</div>
+<div class="pt-4 mt-2 border-t border-outline-variant/50 flex justify-end">
+<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md font-medium hover:bg-surface-container-low transition-colors">
+<span>Review Mistakes</span>
+<span class="material-symbols-outlined text-[16px]" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- 'Recent Documents' Minimal Table -->
+<div class="flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<h2 class="text-headline-sm font-headline-sm text-on-surface">Recent Documents</h2>
+<button class="text-label-md font-label-md text-primary hover:underline font-medium">Browse FastAPI Index</button>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-xs">
+<div class="divide-y divide-outline-variant/50">
+<!-- Document 1 -->
+<div class="flex items-center justify-between p-3.5 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container-low flex items-center justify-center text-error shrink-0">
+<span class="material-symbols-outlined" data-icon="picture_as_pdf">picture_as_pdf</span>
+</div>
+<div class="flex flex-col">
+<span class="text-body-md font-body-md font-medium text-on-surface">Lecture 02 — CNN Architectures.pdf</span>
+<span class="text-label-sm font-label-sm text-outline">Deep Learning • 4.8 MB • Uploaded Yesterday</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-label-sm font-label-sm text-tertiary bg-tertiary-fixed/40">
+<span class="material-symbols-outlined text-[14px]" data-icon="check">check</span> Indexed
+                  </span>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Document 2 -->
+<div class="flex items-center justify-between p-3.5 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container-low flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+</div>
+<div class="flex flex-col">
+<span class="text-body-md font-body-md font-medium text-on-surface">Image Processing Notes.docx</span>
+<span class="text-label-sm font-label-sm text-outline">Computer Vision • 1.2 MB • Updated May 12</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-label-sm font-label-sm text-tertiary bg-tertiary-fixed/40">
+<span class="material-symbols-outlined text-[14px]" data-icon="check">check</span> Indexed
+                  </span>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Document 3 -->
+<div class="flex items-center justify-between p-3.5 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container-low flex items-center justify-center text-error shrink-0">
+<span class="material-symbols-outlined" data-icon="picture_as_pdf">picture_as_pdf</span>
+</div>
+<div class="flex flex-col">
+<span class="text-body-md font-body-md font-medium text-on-surface">Unit 3 — Transformers.pdf</span>
+<span class="text-label-sm font-label-sm text-outline">Deep Learning • 7.1 MB • Active Session</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-label-sm font-label-sm text-primary bg-primary-fixed">
+<span class="material-symbols-outlined text-[14px]" data-icon="bolt">bolt</span> Active
+                  </span>
+<button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<script>
+    // Micro-interaction for sidebar collapse toggle
+    const toggleBtn = document.getElementById('toggle-sidebar');
+    const sidebar = document.getElementById('sidebar');
+    let isCollapsed = false;
+
+    if (toggleBtn && sidebar) {
+      toggleBtn.addEventListener('click', () => {
+        isCollapsed = !isCollapsed;
+        if (isCollapsed) {
+          sidebar.classList.add('-translate-x-full');
+          sidebar.nextElementSibling.classList.remove('ml-64');
+          sidebar.nextElementSibling.classList.add('ml-0');
+        } else {
+          sidebar.classList.remove('-translate-x-full');
+          sidebar.nextElementSibling.classList.add('ml-64');
+          sidebar.nextElementSibling.classList.remove('ml-0');
+        }
+      });
+    }
+  </script>
+</body></html>
