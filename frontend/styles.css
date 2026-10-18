@@ -57,12 +57,16 @@
   inset: 0;
   background-color: rgba(23, 27, 39, 0.45);
   backdrop-filter: blur(4px);
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 100;
   padding: 1rem;
   animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-overlay.active {
+  display: flex !important;
 }
 
 @keyframes modalFadeIn {
@@ -168,6 +172,30 @@
   background-color: #eaedfe;
   color: #4c3cce;
   font-weight: 600;
+}
+
+.folder-delete-btn {
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.folder-tree-header:hover .folder-delete-btn,
+.folder-tree-item.active .folder-delete-btn {
+  opacity: 0.7;
+}
+
+.folder-delete-btn:hover {
+  opacity: 1 !important;
+  color: #ba1a1a !important;
+  background-color: rgba(186, 26, 26, 0.12) !important;
 }
 
 .folder-doc-link {
@@ -586,11 +614,166 @@
   border-top: 1px solid #dee2f3;
 }
 
-.notes-section-content h3 {
-  font-size: 1.15rem;
-  font-weight: 700;
-  margin: 14px 0 6px;
+/* Study Notes Headings - Consistently Bold with clear hierarchy */
+.notes-section-content h1,
+.notes-h1 {
+  font-size: 1.25rem;
+  font-weight: 700 !important;
   color: #171b27;
+  margin: 20px 0 8px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+.notes-section-content h2,
+.notes-h2,
+.notes-heading-bold {
+  font-size: 1.05rem;
+  font-weight: 700 !important;
+  color: #171b27;
+  margin: 16px 0 6px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+.notes-section-content h3,
+.notes-h3 {
+  font-size: 0.975rem;
+  font-weight: 700 !important;
+  color: #171b27;
+  margin: 14px 0 6px;
+  line-height: 1.4;
+}
+
+.notes-section-content h4,
+.notes-h4 {
+  font-size: 0.9rem;
+  font-weight: 700 !important;
+  color: #334155;
+  margin: 12px 0 4px;
+  line-height: 1.4;
+}
+
+.notes-p {
+  margin: 6px 0 10px;
+  color: #334155;
+  line-height: 1.65;
+}
+
+.notes-hr {
+  border: none;
+  border-top: 1px solid #dee2f3;
+  margin: 20px 0;
+}
+
+.notes-blockquote {
+  background: #f8fafc;
+  border-left: 3px solid #6558e8;
+  padding: 8px 14px;
+  margin: 10px 0;
+  color: #475569;
+  font-size: 0.875rem;
+  border-radius: 0 6px 6px 0;
+}
+
+.notes-inline-code {
+  background: #f1f5f9;
+  color: #6558e8;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  border: 1px solid #e2e8f0;
+}
+
+.notes-code-block {
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 14px 18px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 12px 0;
+}
+
+.notes-list-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.notes-list-item .list-num {
+  font-weight: 700;
+  color: #6558e8;
+  min-width: 18px;
+}
+
+.notes-list-item .list-bullet {
+  color: #6558e8;
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+/* Study Notes Comparison & Reference Tables - Visible horizontal & vertical borders */
+.notes-table-container {
+  width: 100%;
+  margin: 16px 0 20px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.notes-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+}
+
+.notes-table thead {
+  background: #f1f5f9;
+  border-bottom: 2px solid #94a3b8;
+}
+
+.notes-table th {
+  padding: 12px 16px;
+  font-weight: 700;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  vertical-align: middle;
+  background: #f1f5f9;
+  letter-spacing: -0.01em;
+}
+
+.notes-table td {
+  padding: 11px 16px;
+  border: 1px solid #cbd5e1;
+  vertical-align: top;
+  color: #334155;
+  word-break: break-word;
+}
+
+.notes-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.notes-table tbody tr:nth-child(odd) {
+  background: #ffffff;
+}
+
+.notes-table tbody tr:hover {
+  background: #f1f5fd;
 }
 
 .notes-section-content ul {

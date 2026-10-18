@@ -133,6 +133,26 @@ class NotesPdfExporter:
                 rest = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", rest)
                 rest = re.sub(r"\*(.*?)\*", r"<i>\1</i>", rest)
                 html_lines.append(f"<p><b>{num_part}</b> {rest}</p>")
+            # Check for un-prefixed standard study-note headings
+            std_headings = (
+                "definition", "key points", "introduction", "working", "advantages",
+                "disadvantages", "applications", "examples", "conclusion", "differences between",
+                "important points", "explanation", "core components", "syntax",
+                "exam-relevant points", "summary", "overview", "working / core components",
+                "advantages and limitations", "comparison / reference table", "syntax / command example"
+            )
+            clean_check = line_s.lower().rstrip(":— -")
+            if (
+                clean_check in std_headings or
+                (clean_check.startswith("differences between") and len(clean_check) <= 60)
+            ) and len(line_s) <= 65 and not line_s.endswith("."):
+                if in_list:
+                    html_lines.append("</ul>")
+                    in_list = False
+                heading_text = line_s.rstrip(":— -").strip()
+                html_lines.append(f"<h3><b>{heading_text}</b></h3>")
+                continue
+
             else:
                 if in_list:
                     html_lines.append("</ul>")
@@ -163,6 +183,7 @@ class NotesPdfExporter:
         h1 {{
             color: #1e3a8a;
             font-size: 14pt;
+            font-weight: bold;
             margin: 6pt 0 4pt 0;
             border-bottom: 2px solid #3b82f6;
             padding-bottom: 3pt;
@@ -170,6 +191,7 @@ class NotesPdfExporter:
         h2 {{
             color: #1e40af;
             font-size: 11.5pt;
+            font-weight: bold;
             margin: 10pt 0 4pt 0;
             border-bottom: 1px solid #cbd5e1;
             padding-bottom: 2pt;
@@ -177,11 +199,13 @@ class NotesPdfExporter:
         h3 {{
             color: #2563eb;
             font-size: 10pt;
+            font-weight: bold;
             margin: 8pt 0 3pt 0;
         }}
         h4 {{
             color: #3b82f6;
             font-size: 9pt;
+            font-weight: bold;
             margin: 6pt 0 2pt 0;
         }}
         p {{
@@ -205,13 +229,12 @@ class NotesPdfExporter:
         table {{
             border-collapse: collapse;
             width: 100%;
-            margin: 6pt 0;
-            font-size: 7pt;
-            table-layout: fixed;
+            margin: 8pt 0;
+            font-size: 7.5pt;
         }}
         th, td {{
             border: 1px solid #cbd5e1;
-            padding: 3pt 4pt;
+            padding: 4pt 6pt;
             vertical-align: top;
             word-wrap: break-word;
             overflow-wrap: break-word;
@@ -222,11 +245,6 @@ class NotesPdfExporter:
             font-weight: bold;
             text-align: left;
         }}
-        th:nth-child(1), td:nth-child(1) {{ width: 17%; }}
-        th:nth-child(2), td:nth-child(2) {{ width: 13%; }}
-        th:nth-child(3), td:nth-child(3) {{ width: 22%; }}
-        th:nth-child(4), td:nth-child(4) {{ width: 22%; }}
-        th:nth-child(5), td:nth-child(5) {{ width: 26%; }}
         b {{
             color: #0f172a;
         }}

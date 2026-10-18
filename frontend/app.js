@@ -283,7 +283,8 @@ function renderFolders() {
   if (folders.length === 0) {
     container.innerHTML = `
       <div class="p-3 text-center text-outline text-label-sm">
-        No folders yet. Click '+ New' to create one.
+        No folders yet.
+        <button type="button" class="text-primary hover:underline font-medium block mx-auto mt-1 cursor-pointer" onclick="openCreateFolderModal()">Create a folder</button>
       </div>
     `;
     return;
@@ -325,12 +326,17 @@ function renderFolders() {
 
     item.innerHTML = `
       <div class="folder-tree-header" onclick="selectFolder('${folder.id}')">
-        <div class="flex items-center gap-2 truncate">
+        <div class="flex items-center gap-2 truncate flex-1 min-w-0">
           <span class="material-symbols-outlined text-outline-variant text-[16px]">${arrowIcon}</span>
           <span class="material-symbols-outlined ${folderIconColor} text-[18px]">${folderIcon}</span>
           <span class="text-body-sm font-medium truncate">${escapeHtml(folder.name)}</span>
         </div>
-        <span class="text-label-sm text-outline px-1.5 py-0.2 rounded-full bg-surface-container">${folder.document_count || 0}</span>
+        <div class="flex items-center gap-1.5 ml-2 shrink-0">
+          <span class="text-label-sm text-outline px-1.5 py-0.2 rounded-full bg-surface-container">${folder.document_count || 0}</span>
+          <button type="button" class="folder-delete-btn" title="Delete folder" onclick="confirmDeleteFolder('${folder.id}', '${escapeHtml(folder.name).replace(/'/g, "\\'")}', event)">
+            <span class="material-symbols-outlined text-[15px]">delete</span>
+          </button>
+        </div>
       </div>
       ${docsTreeHtml}
     `;
@@ -351,21 +357,43 @@ function selectDocument(docId, event) {
 }
 
 function openCreateFolderModal() {
-  document.getElementById("new-folder-name").value = "";
-  document.getElementById("create-folder-modal").classList.add("active");
-  setTimeout(() => document.getElementById("new-folder-name").focus(), 100);
+  const modal = document.getElementById("create-folder-modal");
+  if (!modal) return;
+  const input = document.getElementById("new-folder-name");
+  if (input) input.value = "";
+  modal.style.display = "flex";
+  modal.classList.add("active");
+  setTimeout(() => {
+    if (input) input.focus();
+  }, 100);
 }
 
 function closeCreateFolderModal() {
-  document.getElementById("create-folder-modal").classList.remove("active");
+  const modal = document.getElementById("create-folder-modal");
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.classList.remove("active");
 }
 
+let isCreatingFolder = false;
+
 async function handleCreateFolder() {
+  if (isCreatingFolder) return;
+
   const nameInput = document.getElementById("new-folder-name");
+  if (!nameInput) return;
   const name = nameInput.value.trim();
   if (!name) {
     showToast("Please enter a folder name", "error");
+    nameInput.focus();
     return;
+  }
+
+  isCreatingFolder = true;
+  const submitBtn = document.getElementById("btn-create-folder-submit");
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Creating...";
   }
 
   try {
@@ -379,14 +407,95 @@ async function handleCreateFolder() {
       const newFolder = await res.json();
       closeCreateFolderModal();
       showToast(`Created folder "${newFolder.name}"`);
+      activeFolderId = newFolder.id;
+      localStorage.setItem("nalanda_active_folder_id", newFolder.id);
       await loadFolders();
-      selectFolder(newFolder.id);
+      await selectFolder(newFolder.id);
     } else {
       const data = await res.json();
       showToast(data.detail || "Failed to create folder", "error");
     }
   } catch (err) {
+    console.error("Error creating folder:", err);
     showToast("Error creating folder", "error");
+  } finally {
+    isCreatingFolder = false;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Create Folder";
+    }
+  }
+}
+
+let folderToDelete = null;
+
+function confirmDeleteFolder(folderId, folderName, event) {
+  if (event) event.stopPropagation();
+  folderToDelete = { id: folderId, name: folderName };
+
+  const modal = document.getElementById("delete-folder-modal");
+  const nameEl = document.getElementById("delete-folder-modal-name");
+  if (nameEl) nameEl.textContent = folderName;
+  if (modal) {
+    modal.style.display = "flex";
+    modal.classList.add("active");
+  }
+}
+
+function closeDeleteFolderModal() {
+  folderToDelete = null;
+  const modal = document.getElementById("delete-folder-modal");
+  if (modal) {
+    modal.style.display = "none";
+    modal.classList.remove("active");
+  }
+}
+
+async function handleDeleteFolder() {
+  if (!folderToDelete || !folderToDelete.id) return;
+  const { id: folderId, name: folderName } = folderToDelete;
+
+  const btn = document.getElementById("btn-delete-folder-confirm");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Deleting...";
+  }
+
+  try {
+    const res = await apiFetch(`/api/folders/${folderId}`, {
+      method: "DELETE",
+    });
+
+    if (res.ok) {
+      closeDeleteFolderModal();
+      showToast(`Deleted folder "${folderName}"`);
+
+      if (activeFolderId === folderId) {
+        activeFolderId = null;
+        localStorage.removeItem("nalanda_active_folder_id");
+      }
+
+      await loadFolders();
+
+      if (folders.length > 0) {
+        if (!activeFolderId || !folders.some(f => f.id === activeFolderId)) {
+          await selectFolder(folders[0].id);
+        }
+      } else {
+        renderActiveView();
+      }
+    } else {
+      const data = await res.json();
+      showToast(data.detail || "Failed to delete folder", "error");
+    }
+  } catch (err) {
+    console.error("Error deleting folder:", err);
+    showToast("Error deleting folder", "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Delete Folder";
+    }
   }
 }
 
@@ -678,13 +787,17 @@ function openFigureModal(url, encodedCaption) {
   if (modal && img) {
     img.src = url;
     if (cap) cap.textContent = decodeURIComponent(encodedCaption || "");
+    modal.style.display = "flex";
     modal.classList.add("active");
   }
 }
 
 function closeFigureModal() {
   const modal = document.getElementById("figure-modal");
-  if (modal) modal.classList.remove("active");
+  if (modal) {
+    modal.style.display = "none";
+    modal.classList.remove("active");
+  }
 }
 
 async function selectFolder(folderId) {
@@ -1444,13 +1557,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const ragForm = document.getElementById("rag-form");
   if (ragForm) ragForm.addEventListener("submit", handleSemanticSearch);
 
-  const newFolderInput = document.getElementById("new-folder-name");
-  if (newFolderInput) {
-    newFolderInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") handleCreateFolder();
-    });
-  }
-
   // Restore exact page and route based on current URL to preserve page on reload
   const currentRoute = getCurrentRoute();
   switchView(currentRoute, false);
@@ -2174,11 +2280,35 @@ function renderMarkdownToHtml(md) {
     return '<pre class="notes-code-block"><code>' + code.trim() + '</code></pre>';
   });
 
-  // Headers
-  html = html.replace(/^#### (.*?)$/gm, '<h4 class="notes-h4">$1</h4>');
-  html = html.replace(/^### (.*?)$/gm, '<h3 class="notes-h3">$1</h3>');
-  html = html.replace(/^## (.*?)$/gm, '<h2 class="notes-h2">$1</h2>');
-  html = html.replace(/^# (.*?)$/gm, '<h1 class="notes-h1">$1</h1>');
+  // Headers (#, ##, ###, ####)
+  html = html.replace(/^#### (.*?)$/gm, '<h4 class="notes-h4 notes-heading-bold">$1</h4>');
+  html = html.replace(/^### (.*?)$/gm, '<h3 class="notes-h3 notes-heading-bold">$1</h3>');
+  html = html.replace(/^## (.*?)$/gm, '<h2 class="notes-h2 notes-heading-bold">$1</h2>');
+  html = html.replace(/^# (.*?)$/gm, '<h1 class="notes-h1 notes-heading-bold">$1</h1>');
+
+  // Standard Study Note Headings (Definition, Key Points, Working, Advantages, Disadvantages, etc.)
+  const stdHeadingRegex = /^(?:Definition|Key Points|Introduction|Working|Advantages|Disadvantages|Applications|Examples|Conclusion|Differences? Between(?: [A-Za-z0-9\s/–—\-]+)?|Important Points|Explanation|Core Components|Syntax|Exam-Relevant Points|Summary|Overview|Working \/ Core Components|Advantages and Limitations|Comparison \/ Reference Table|Syntax \/ Command Example)(?:\s*[:—\-])?$/i;
+
+  html = html.split("\n").map(line => {
+    const trimmed = line.trim();
+    if (
+      trimmed &&
+      trimmed.length <= 65 &&
+      !trimmed.startsWith("<") &&
+      !trimmed.startsWith("#") &&
+      !trimmed.startsWith("|") &&
+      !trimmed.startsWith("-") &&
+      !trimmed.startsWith("*") &&
+      !trimmed.startsWith("•") &&
+      !trimmed.endsWith(".")
+    ) {
+      if (stdHeadingRegex.test(trimmed)) {
+        const cleanTitle = trimmed.replace(/[:—\-]$/, "").trim();
+        return `<h2 class="notes-h2 notes-heading-bold">${cleanTitle}</h2>`;
+      }
+    }
+    return line;
+  }).join("\n");
 
   // Blockquotes (Callouts)
   html = html.replace(/^&gt; (.*?)$/gm, '<blockquote class="notes-blockquote">$1</blockquote>');
@@ -2191,17 +2321,31 @@ function renderMarkdownToHtml(md) {
   // Horizontal Rules
   html = html.replace(/^---$/gm, '<hr class="notes-hr">');
 
-  // Tables
-  html = html.replace(/((?:\|[^\n]+\|\r?\n)+)/g, function (tableMatch) {
-    const lines = tableMatch.trim().split("\n");
-    if (lines.length < 2) return tableMatch;
+  // Markdown Tables (Robust parsing with border styling and duplicate prevention)
+  const seenTableFingerprints = new Set();
+  html = html.replace(/((?:^[ \t]*\|[^\n]+\|[ \t]*(?:\r?\n|$))+)/gm, function (tableMatch) {
+    const rawLines = tableMatch.trim().split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    if (rawLines.length < 2) return tableMatch;
+
+    // Fingerprint based on normalized rows to eliminate duplicate rendered tables
+    const fingerprint = rawLines.map(l => l.replace(/\s+/g, " ").toLowerCase()).join("\n");
+    if (seenTableFingerprints.has(fingerprint)) {
+      return "";
+    }
+    seenTableFingerprints.add(fingerprint);
 
     let tableHtml = '<div class="notes-table-container"><table class="notes-table">';
-    const headerCells = lines[0].split("|").slice(1, -1);
+    const headerCells = rawLines[0].split("|").slice(1, -1);
     tableHtml += '<thead><tr>' + headerCells.map(c => `<th>${c.trim()}</th>`).join('') + '</tr></thead><tbody>';
 
-    for (let i = 2; i < lines.length; i++) {
-      const rowCells = lines[i].split("|").slice(1, -1);
+    let startRow = 1;
+    if (rawLines.length > 1 && /^\|[\s\-:|]+\|$/.test(rawLines[1])) {
+      startRow = 2;
+    }
+
+    for (let i = startRow; i < rawLines.length; i++) {
+      if (/^\|[\s\-:|]+\|$/.test(rawLines[i])) continue;
+      const rowCells = rawLines[i].split("|").slice(1, -1);
       if (rowCells.length > 0) {
         tableHtml += '<tr>' + rowCells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
       }
@@ -2467,6 +2611,12 @@ function handleSidebarSearch(query) {
 }
 
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeCreateFolderModal();
+    closeDeleteFolderModal();
+    closeFigureModal();
+    closeNewMenu();
+  }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
     e.preventDefault();
     const searchInput = document.getElementById("sidebar-search-input");

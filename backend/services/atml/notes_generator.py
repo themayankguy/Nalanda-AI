@@ -580,7 +580,7 @@ class NotesGenerator:
                         "page_start": p_num,
                         "page_end": p_num,
                         "blocks": [],
-                        "tables": list(tables),
+                        "tables": [],
                     }
                 elif curr_section is not None:
                     curr_section["blocks"].append(b)
@@ -600,8 +600,67 @@ class NotesGenerator:
                     "page_start": p_num,
                     "page_end": p_num,
                     "blocks": [p.get("text", "")],
-                    "tables": p.get("tables", []),
+                    "tables": [],
                 })
+
+        # Assign each table to at most ONE best-matching section (prevents duplicate tables across subtopics)
+        assigned_table_hashes: Set[str] = set()
+        for p in pages:
+            p_num = p.get("page", 1)
+            for tb in p.get("tables", []):
+                if not isinstance(tb, dict):
+                    continue
+                tb_md = tb.get("markdown")
+                if not tb_md or not tb_md.strip():
+                    continue
+                clean_tb_md = clean_ocr_text(tb_md.strip())
+                tb_norm = re.sub(r"\s+", " ", clean_tb_md).lower()
+                if tb_norm in assigned_table_hashes:
+                    continue
+
+                page_candidates = [s for s in raw_sections if s["page_start"] <= p_num <= s["page_end"]]
+                if not page_candidates:
+                    page_candidates = raw_sections
+                if not page_candidates:
+                    continue
+
+                tb_words = set(re.findall(r"\b[A-Za-z]{3,}\b", tb_norm))
+                best_sec = None
+                best_score = -1
+
+                for cand in page_candidates:
+                    score = 0
+                    c_title = cand["title"].lower()
+                    c_header = cand.get("raw_header", "").lower()
+                    c_text = " ".join(cand.get("blocks", [])).lower()
+
+                    score += sum(4 for w in tb_words if w in c_title)
+                    score += sum(3 for w in tb_words if w in c_header)
+                    score += min(5, sum(1 for w in tb_words if w in c_text))
+
+                    if any(kw in c_title for kw in ["vs", "versus", "difference", "comparison", "modes", "matrix"]):
+                        score += 5
+
+                    if not cand.get("tables"):
+                        score += 1
+
+                    if score > best_score:
+                        best_score = score
+                        best_sec = cand
+
+                if best_sec is None or best_score <= 0:
+                    for cand in reversed(page_candidates):
+                        if not cand.get("tables"):
+                            best_sec = cand
+                            break
+                    if best_sec is None:
+                        best_sec = page_candidates[-1]
+
+                if best_sec is not None:
+                    tb_copy = dict(tb)
+                    tb_copy["markdown"] = clean_tb_md
+                    best_sec.setdefault("tables", []).append(tb_copy)
+                    assigned_table_hashes.add(tb_norm)
 
         # Process each raw section into a rich, grounded SubtopicUnit
         for sec in raw_sections:
@@ -882,6 +941,16 @@ class NotesGenerator:
             seen[t_key] = s
             validated.append(s)
 
+        # Enforce strict table uniqueness across all subtopics
+        seen_table_markdowns: Set[str] = set()
+        for s in validated:
+            if s.table_markdown:
+                norm_tb = re.sub(r"\s+", " ", s.table_markdown.strip()).lower()
+                if norm_tb in seen_table_markdowns:
+                    s.table_markdown = None
+                else:
+                    seen_table_markdowns.add(norm_tb)
+
         return validated
 
     def _render_subtopic_markdown(self, sub: SubtopicUnit, doc_idx: int, sub_idx: int) -> str:
@@ -1134,9 +1203,14 @@ class NotesGenerator:
         sec3_citations = []
 
         tables_found = 0
+        seen_sec3_tables: Set[str] = set()
         for doc_name, subs in doc_subtopics_map.items():
             for s in subs:
                 if s.table_markdown:
+                    norm_tb = re.sub(r"\s+", " ", s.table_markdown.strip()).lower()
+                    if norm_tb in seen_sec3_tables:
+                        continue
+                    seen_sec3_tables.add(norm_tb)
                     tables_found += 1
                     cit = f"{doc_name} (Page {s.page_start})"
                     sec3_citations.append(cit)
