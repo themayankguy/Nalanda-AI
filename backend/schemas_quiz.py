@@ -16,6 +16,7 @@ class QuizQuestionItem(BaseModel):
     page_number: Optional[int] = None
     section_title: Optional[str] = None
     concept: str
+    prerequisite_review: Optional[dict] = None
 
 
 class QuizResponseSchema(BaseModel):

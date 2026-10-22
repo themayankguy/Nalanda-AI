@@ -25,12 +25,14 @@ from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+import logging
 from backend.database import get_db
-from backend.models import User, Folder, Document
+from backend.models import User, Folder, Document, DocumentIngestionLog
 from backend.schemas import (
     DocumentMetadataResponse,
     DocumentUploadResponse,
     DocumentStatusResponse,
+    DocumentIngestionSummaryResponse,
 )
 from backend.auth import get_current_user, security, verify_token_string
 from backend.services.storage_service import (
@@ -41,7 +43,10 @@ from backend.services.storage_service import (
 )
 from backend.services.nalanda_extraction_service import process_document_extraction
 
+logger = logging.getLogger("nalanda.document_routes")
+
 router = APIRouter(tags=["documents"])
+
 
 
 @router.post(
@@ -272,3 +277,164 @@ def get_document_figure(
         media_type = "image/webp"
 
     return FileResponse(str(fig_path), media_type=media_type)
+
+
+@router.get(
+    "/api/documents/{document_id}/file",
+    summary="View and stream original uploaded PDF or document",
+)
+def get_document_file(
+    document_id: str,
+    token: Optional[str] = Query(None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Serve the original uploaded PDF with user ownership verification and inline disposition."""
+    token_str = None
+    if credentials and credentials.credentials:
+        token_str = credentials.credentials
+    elif token:
+        token_str = token
+
+    if not token_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication credentials were not provided.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    current_user = verify_token_string(token_str, db)
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or does not belong to you.",
+        )
+
+    if not document.storage_path or not Path(document.storage_path).exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Original document file not found on disk storage.",
+        )
+
+    file_path = Path(document.storage_path)
+    media_type = "application/pdf"
+    if file_path.suffix.lower() in [".jpg", ".jpeg"]:
+        media_type = "image/jpeg"
+    elif file_path.suffix.lower() == ".png":
+        media_type = "image/png"
+    elif file_path.suffix.lower() == ".webp":
+        media_type = "image/webp"
+
+    return FileResponse(
+        str(file_path),
+        media_type=media_type,
+        filename=document.original_filename,
+        content_disposition_type="inline",
+    )
+
+
+@router.get(
+    "/api/documents/{document_id}/ingestion-summary",
+    response_model=DocumentIngestionSummaryResponse,
+)
+def get_document_ingestion_summary(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Retrieve the knowledge integration audit summary for a document."""
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or does not belong to you.",
+        )
+    log = (
+        db.query(DocumentIngestionLog)
+        .filter(DocumentIngestionLog.document_id == document_id)
+        .first()
+    )
+    if not log:
+        return DocumentIngestionSummaryResponse(
+            document_id=doc.id,
+            folder_id=doc.folder_id,
+            items_matched=0,
+            concepts_enriched=0,
+            concepts_created=0,
+            duplicates_skipped=0,
+            conflicts_flagged=0,
+            summary_message="No ingestion log available for this document.",
+        )
+    return DocumentIngestionSummaryResponse.model_validate(log)
+
+
+@router.delete(
+    "/api/documents/{document_id}",
+    status_code=status.HTTP_200_OK,
+)
+def delete_document(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Safely delete a document, updating provenance and preserving independently supported concepts."""
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .first()
+    )
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or does not belong to you.",
+        )
+
+    folder_id = document.folder_id
+    filename = document.original_filename
+
+    # 1. Update knowledge provenance and concepts
+    try:
+        from backend.services.NLP.knowledge_integration_service import KnowledgeIntegrationService
+        KnowledgeIntegrationService.handle_document_deletion(db, document.id, folder_id, current_user.id)
+    except Exception as exc:
+        logger.warning("Error updating knowledge on document deletion: %s", exc)
+
+    # 2. Update vector index
+    try:
+        from backend.services.storage_service import BASE_STORAGE_DIR
+        from backend.services.NLP.vector_index_service import get_folder_index_dir, FolderVectorIndex
+        index_dir = get_folder_index_dir(BASE_STORAGE_DIR, current_user.id, folder_id)
+        f_idx = FolderVectorIndex(index_dir)
+        f_idx.remove_document(document.id)
+    except Exception as exc:
+        logger.warning("Error removing document from vector index: %s", exc)
+
+
+    # 4. Remove physical storage if exists
+    try:
+        if document.storage_path and Path(document.storage_path).exists():
+            p = Path(document.storage_path)
+            doc_dir = p.parent.parent
+            if doc_dir.exists() and doc_dir.name == document.id:
+                shutil.rmtree(doc_dir, ignore_errors=True)
+            elif p.exists():
+                p.unlink(missing_ok=True)
+    except Exception as exc:
+        logger.warning("Error deleting document files: %s", exc)
+
+    # 5. Delete from DB
+    db.delete(document)
+    db.commit()
+
+    return {"message": f"Document '{filename}' successfully deleted.", "document_id": document_id}
+
+

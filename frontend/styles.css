@@ -386,6 +386,59 @@
   }
 }
 
+/* Minimalist Under-Response Copy Button (ChatGPT / Claude style) */
+.chat-message-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #eaedfe;
+}
+
+.chat-copy-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid #dee2f3;
+  background: #f8f9fe;
+  color: #474554;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+  user-select: none;
+  line-height: 1.2;
+}
+
+.chat-copy-icon-btn svg {
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.chat-copy-icon-btn:hover {
+  background: #f0eeff;
+  color: #4c3cce;
+  border-color: #c5c0ff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(76, 60, 206, 0.12);
+}
+
+.chat-copy-icon-btn:active {
+  transform: scale(0.96);
+}
+
+.chat-copy-icon-btn.copied {
+  color: #059669 !important;
+  background: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.15) !important;
+}
+
 /* Citations & Visual Diagram Cards */
 .rag-citation-badge {
   display: inline-flex;

@@ -171,18 +171,18 @@ def create_chunks_from_paragraphs(
         # Check if this paragraph is a numbered item continuing a list in the current chunk
         is_list_continuation = False
         if para_heading and current_chunk:
-            is_num_heading = bool(re.match(r"^(?:\d+[\.\)]|\d+(?:\.\d+)+)", para.strip()))
+            is_num_heading = bool(re.match(r"^(?:(?:Goal|Step|Objective|Feature|Phase|Stage|Rule)\s*\d+|\d+[\.\)]|\d+(?:\.\d+)+)", para.strip(), re.I))
             is_major_topic = bool(re.search(r"\b(vs|versus|difference|comparison|architecture|working|overview|introduction|modes?|execution|models?|components?|features?|applications?|techniques?|mechanisms?|types?|evolution|need)\b", para_heading, flags=re.I))
             if is_num_heading and not is_major_topic:
-                all_nums = [int(m.group(1)) for m in re.finditer(r"(?:^|\n)\s*(\d+)[\.\)]", "\n".join(current_chunk))]
-                curr_num_m = re.match(r"^(\d+)[\.\)]", para.strip())
+                all_nums = [int(m.group(1)) for m in re.finditer(r"(?:^|\n)\s*(?:(?:Goal|Step|Objective|Feature|Phase|Stage|Rule)\s*)?(\d+)[\.\)]?", "\n".join(current_chunk), re.I)]
+                curr_num_m = re.match(r"^(?:(?:Goal|Step|Objective|Feature|Phase|Stage|Rule)\s*)?(\d+)[\.\)]?", para.strip(), re.I)
                 curr_num = int(curr_num_m.group(1)) if curr_num_m else None
                 if curr_num is not None:
                     if all_nums:
                         last_num = all_nums[-1]
-                        if 1 <= (curr_num - last_num) <= 2 and curr_num <= 20:
+                        if 1 <= abs(curr_num - last_num) <= 5 and curr_num <= 20:
                             is_list_continuation = True
-                    elif curr_num <= 2:
+                    elif curr_num <= 4:
                         is_list_continuation = True
 
         # If this paragraph starts a brand new section heading and we already have content,

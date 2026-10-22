@@ -705,15 +705,21 @@ async function loadConversationMessages(conversationId) {
             <div class="citations-group">
               <span class="citations-label">Sources:</span>
               ${msg.citations.map(r => `
-                <span class="citation-pill" title="${r.section_title ? escapeHtml(r.section_title) : ''}">
+                <span class="citation-pill cursor-pointer" title="${r.section_title ? escapeHtml(r.section_title) : ''} — Click to view PDF on page ${r.page_number || 1}" onclick="openPdfModal('${r.document_id}', '${escapeHtml(r.source_filename)}', ${r.page_number || 1})">
                   📄 <strong>${escapeHtml(r.source_filename)}</strong>
                   ${r.page_number != null ? `· p. ${r.page_number}` : ''}
                   ${r.section_title ? `· ${escapeHtml(r.section_title.substring(0, 30))}` : ''}
                   <span style="color:var(--status-completed-text); font-weight:600;">(${Math.round(r.relevance_score * 100)}%)</span>
+                  <span class="material-symbols-outlined text-[12px] opacity-75">open_in_new</span>
                 </span>
               `).join('')}
             </div>
           `;
+        }
+
+        const fallbackAns = msg.direct_answer || msg.content || "";
+        if (fallbackAns) {
+          bubbleContent += getChatCopyButtonHtml(fallbackAns);
         }
 
         msgEl.innerHTML = `
@@ -800,6 +806,60 @@ function closeFigureModal() {
   }
 }
 
+function openPdfModal(documentId, filename, pageNumber = 1) {
+  if (!documentId) {
+    showToast("Document ID not available", "error");
+    return;
+  }
+  const modal = document.getElementById("pdf-modal");
+  const iframe = document.getElementById("pdf-modal-iframe");
+  const title = document.getElementById("pdf-modal-title");
+  const badge = document.getElementById("pdf-modal-page-badge");
+  const newTabBtn = document.getElementById("pdf-modal-open-new-tab");
+
+  if (!modal || !iframe) return;
+
+  const authQuery = token ? `?token=${encodeURIComponent(token)}` : "";
+  const pageFragment = pageNumber ? `#page=${pageNumber}` : "";
+  const pdfUrl = `/api/documents/${documentId}/file${authQuery}${pageFragment}`;
+
+  if (title) title.textContent = filename || "Document Preview";
+  if (badge) {
+    if (pageNumber && pageNumber > 1) {
+      badge.textContent = `Page ${pageNumber}`;
+      badge.style.display = "inline-flex";
+    } else {
+      badge.style.display = "none";
+    }
+  }
+  if (newTabBtn) {
+    newTabBtn.href = pdfUrl;
+  }
+
+  iframe.src = pdfUrl;
+  modal.style.display = "flex";
+  modal.classList.add("active");
+}
+
+function closePdfModal() {
+  const modal = document.getElementById("pdf-modal");
+  const iframe = document.getElementById("pdf-modal-iframe");
+  if (modal) {
+    modal.style.display = "none";
+    modal.classList.remove("active");
+  }
+  if (iframe) {
+    iframe.src = "";
+  }
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closePdfModal();
+    closeFigureModal();
+  }
+});
+
 async function selectFolder(folderId) {
   if (searchController) {
     searchController.abort();
@@ -813,6 +873,110 @@ async function selectFolder(folderId) {
   renderFolders();
   renderActiveView();
   await loadFolderConversations(folderId);
+
+}
+
+const CHAT_COPY_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+const CHAT_CHECK_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+
+function getChatCopyButtonHtml(rawText) {
+  const encoded = encodeURIComponent(rawText || "");
+  return `
+    <div class="chat-message-footer">
+      <button class="chat-copy-icon-btn" data-copy-text="${encoded}" onclick="copyChatMessage(this, event)" title="Copy answer to clipboard">
+        ${CHAT_COPY_SVG}
+        <span>Copy</span>
+      </button>
+    </div>
+  `;
+}
+
+function copyToClipboard(text) {
+  if (!text) return Promise.reject(new Error("No text to copy"));
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject) => {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "-9999px";
+    textarea.setAttribute("readonly", "");
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      if (successful) resolve();
+      else reject(new Error("document.execCommand failed"));
+    } catch (err) {
+      document.body.removeChild(textarea);
+      reject(err);
+    }
+  });
+}
+
+async function copyChatMessage(btn, event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  if (!btn) return;
+
+  let textToCopy = "";
+
+  if (btn.dataset.copyText) {
+    try {
+      textToCopy = decodeURIComponent(btn.dataset.copyText);
+    } catch (_) {
+      textToCopy = btn.dataset.copyText;
+    }
+  }
+
+  if (!textToCopy) {
+    const messageEl = btn.closest(".chat-message");
+    if (messageEl) {
+      const bodyEl = messageEl.querySelector(".direct-answer-body");
+      if (bodyEl) {
+        textToCopy = bodyEl.innerText.trim();
+      } else {
+        const bubble = messageEl.querySelector(".chat-bubble");
+        if (bubble) {
+          const clone = bubble.cloneNode(true);
+          clone.querySelectorAll(".citations-group, .diagram-card, .table-card, button, .typewriter-skip-hint").forEach(el => el.remove());
+          textToCopy = clone.innerText.trim();
+        }
+      }
+    }
+  }
+
+  if (!textToCopy) {
+    showToast("No text available to copy.", "error");
+    return;
+  }
+
+  try {
+    await copyToClipboard(textToCopy);
+    showToast("📋 Copied answer to clipboard!", "success");
+
+    btn.classList.add("copied");
+    btn.innerHTML = `
+      ${CHAT_CHECK_SVG}
+      <span style="color:#059669; font-weight:600;">Copied!</span>
+    `;
+
+    setTimeout(() => {
+      btn.classList.remove("copied");
+      btn.innerHTML = `
+        ${CHAT_COPY_SVG}
+        <span>Copy</span>
+      `;
+    }, 2000);
+  } catch (err) {
+    console.error("Clipboard error:", err);
+    showToast("Failed to copy to clipboard.", "error");
+  }
 }
 
 function formatInlineMarkdown(str) {
@@ -824,16 +988,22 @@ function formatInlineMarkdown(str) {
 
 function formatDirectAnswerHtml(text) {
   if (!text) return "";
-  const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  // Ensure any accidentally joined inline headers or goals are broken into separate lines, but do not break '1. Goal' or '### Header'
+  const normalizedText = text
+    .replace(/(?<!^)(?<!\n)(?<!#)\s{2,}(#{1,4}\s+)/g, "\n$1")
+    .replace(/(?<!^)(?<!\n)(?<!\d\.)(?<!\d\))\s{2,}(\*{0,2}(?:Goal|Step|Objective|Feature|Phase|Stage)\s+\d+[:.]?\*{0,2})/gi, "\n$1");
+
+  const lines = normalizedText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
   const htmlParts = [];
   let inList = false;
 
   for (const line of lines) {
     const headingMatch = line.match(/^#{1,4}\s+(.+)$/);
+    const combinedStepGoal = line.match(/^(?:\d+[\.\)]\s+)?(?:\*{0,2}(Goal|Objective|Feature|Stage|Phase|Rule|Step)\s+(\d+)[:.]?\*{0,2})\s*(.*)$/i);
     const stepMatch = line.match(/^(\d+[\.\)])\s*(.+)$/);
     const bulletMatch = line.match(/^(?:[-•+]|\*(?!\*))\s*(.+)$/);
 
-    if (headingMatch) {
+    if (headingMatch && !combinedStepGoal) {
       if (inList) {
         htmlParts.push("</ul>");
         inList = false;
@@ -845,6 +1015,20 @@ function formatDirectAnswerHtml(text) {
         inList = false;
       }
       htmlParts.push(`<div class="direct-answer-flow" style="background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.25); border-radius:8px; padding:10px 14px; margin:10px 0; font-size:0.95rem; line-height:1.6; color:var(--text-primary);">${formatInlineMarkdown(line)}</div>`);
+    } else if (combinedStepGoal) {
+      if (inList) {
+        htmlParts.push("</ul>");
+        inList = false;
+      }
+      const label = `${combinedStepGoal[1]} ${combinedStepGoal[2]}`;
+      let rest = combinedStepGoal[3] || "";
+      rest = rest.replace(/^[:.-]\s*/, "").replace(/\*{1,2}$/, "").replace(/^\*{1,2}/, "").trim();
+      htmlParts.push(`
+        <div class="direct-answer-step" style="margin-top:8px;">
+          <span class="direct-answer-step-num" style="min-width:64px; font-weight:700; background:rgba(99,102,241,0.18); color:var(--brand-primary); padding:3px 8px; border-radius:6px; font-size:0.82rem;">${escapeHtml(label)}</span>
+          <span class="direct-answer-step-text" style="font-weight:600; color:var(--text-primary); margin-left:8px;">${formatInlineMarkdown(rest)}</span>
+        </div>
+      `);
     } else if (stepMatch) {
       if (inList) {
         htmlParts.push("</ul>");
@@ -869,7 +1053,7 @@ function formatDirectAnswerHtml(text) {
         htmlParts.push("</ul>");
         inList = false;
       }
-      if (line.length < 80 && !/[.:;]$/.test(line) && /^[A-Z]/.test(line) && !line.startsWith("Based on") && !line.startsWith("According to")) {
+      if (line.length < 80 && !/[.:;]$/.test(line) && /^[A-Z]/.test(line) && !line.startsWith("Based on") && !line.startsWith("According to") && !line.startsWith("Example:")) {
         htmlParts.push(`<div class="direct-answer-section-header">${formatInlineMarkdown(line)}</div>`);
       } else {
         htmlParts.push(`<p class="direct-answer-para">${formatInlineMarkdown(line)}</p>`);
@@ -1208,16 +1392,22 @@ async function handleSemanticSearch(event) {
           <div class="citations-group">
             <span class="citations-label">Sources:</span>
             ${citationList.map(r => `
-              <span class="citation-pill" title="${r.section_title ? escapeHtml(r.section_title) : ''}">
+              <span class="citation-pill cursor-pointer" title="${r.section_title ? escapeHtml(r.section_title) : ''} — Click to view PDF on page ${r.page_number || 1}" onclick="openPdfModal('${r.document_id}', '${escapeHtml(r.source_filename)}', ${r.page_number || 1})">
                 📄 <strong>${escapeHtml(r.source_filename)}</strong>
                 ${r.page_number != null ? `· p. ${r.page_number}` : ''}
                 ${r.section_title ? `· ${escapeHtml(r.section_title.substring(0, 30))}` : ''}
                 <span style="color:var(--status-completed-text); font-weight:600;">(${Math.round(r.relevance_score * 100)}%)</span>
+                <span class="material-symbols-outlined text-[12px] opacity-75">open_in_new</span>
               </span>
             `).join('')}
           </div>
         `;
       }
+    }
+
+    const fullAnswer = data.direct_answer || "";
+    if (fullAnswer) {
+      bubbleContent += getChatCopyButtonHtml(fullAnswer);
     }
 
     assistantMsgEl.innerHTML = `
@@ -1317,6 +1507,11 @@ function renderActiveView() {
     const bentoQuizTitle = document.getElementById("bento-quiz-title");
     if (bentoQuizTitle) bentoQuizTitle.textContent = `Practice Quiz: ${activeFolder.name}`;
 
+    const bentoGraphTitle = document.getElementById("bento-graph-title");
+    if (bentoGraphTitle) bentoGraphTitle.textContent = `Knowledge Graph: ${activeFolder.name}`;
+    const bentoGraphNodesCount = document.getElementById("bento-graph-nodes-count");
+    if (bentoGraphNodesCount) bentoGraphNodesCount.textContent = `${documents.length} document${documents.length === 1 ? '' : 's'}`;
+
     // Chat Scope Label
     const chatScopeLabel = document.getElementById("rag-scope-label");
     if (chatScopeLabel) chatScopeLabel.textContent = `Personal AI Learning Assistant · ${activeFolder.name}`;
@@ -1384,8 +1579,12 @@ function renderRecentDocuments() {
             <span class="text-label-sm text-outline">${folderName} • ${formatBytes(doc.file_size_bytes)} • ${formatDate(doc.created_at)}</span>
           </div>
         </div>
-        <div class="flex items-center gap-3 shrink-0">
+        <div class="flex items-center gap-2.5 shrink-0">
           ${statusPill}
+          <button class="px-2.5 py-1 rounded-lg border border-outline-variant text-label-sm font-medium text-on-surface hover:text-primary hover:border-primary/50 flex items-center gap-1 transition-colors" title="View Document PDF" onclick="event.stopPropagation(); openPdfModal('${doc.id}', '${escapeHtml(doc.original_filename)}')">
+            <span class="material-symbols-outlined text-[15px]">visibility</span>
+            <span>View PDF</span>
+          </button>
           <button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container transition-colors" title="Select in context" onclick="selectDocument('${doc.id}', event)">
             <span class="material-symbols-outlined">chevron_right</span>
           </button>
@@ -1430,6 +1629,12 @@ function renderSourceDrawerList() {
       statusPill = `<span class="text-[12px] text-outline">Pending</span>`;
     }
 
+    const summaryBtn = doc.ingestion_summary ? `
+      <button class="p-1 rounded-lg text-outline hover:text-primary hover:bg-surface-container transition-colors" title="Knowledge Integration Summary" onclick="event.stopPropagation(); openIngestionSummaryModal(${escapeHtml(JSON.stringify(doc.ingestion_summary))}, '${escapeHtml(doc.original_filename)}')">
+        <span class="material-symbols-outlined text-[17px]">auto_stories</span>
+      </button>
+    ` : '';
+
     return `
       <div class="p-2.5 rounded-xl border border-outline-variant bg-surface-container-low hover:border-primary/40 transition-all flex items-center justify-between gap-2">
         <div class="flex items-center gap-2.5 truncate cursor-pointer" onclick="selectDocument('${doc.id}', event)">
@@ -1439,8 +1644,15 @@ function renderSourceDrawerList() {
             <span class="text-label-sm text-outline">${formatBytes(doc.file_size_bytes)}</span>
           </div>
         </div>
-        <div>
+        <div class="flex items-center gap-1.5 shrink-0">
           ${statusPill}
+          ${summaryBtn}
+          <button class="p-1 rounded-lg text-outline hover:text-primary hover:bg-surface-container transition-colors" title="View PDF" onclick="event.stopPropagation(); openPdfModal('${doc.id}', '${escapeHtml(doc.original_filename)}')">
+            <span class="material-symbols-outlined text-[17px]">visibility</span>
+          </button>
+          <button class="p-1 rounded-lg text-outline hover:text-error hover:bg-surface-container transition-colors" title="Delete Document" onclick="event.stopPropagation(); handleDeleteDocument('${doc.id}', '${escapeHtml(doc.original_filename)}')">
+            <span class="material-symbols-outlined text-[17px]">delete</span>
+          </button>
         </div>
       </div>
     `;
@@ -1451,6 +1663,8 @@ function renderDocumentsTable() {
   renderRecentDocuments();
   renderSourceDrawerList();
 }
+
+let knownProcessedDocIds = new Set();
 
 // Background Status Polling
 function checkAndStartPolling() {
@@ -1464,7 +1678,18 @@ function checkAndStartPolling() {
         try {
           const res = await apiFetch(`/api/folders/${activeFolderId}/documents`);
           if (res.ok) {
-            documents = await res.json();
+            const updatedDocs = await res.json();
+            // Check for newly completed documents to present knowledge integration summary
+            updatedDocs.forEach((d) => {
+              if (d.status === "completed" && !knownProcessedDocIds.has(d.id)) {
+                knownProcessedDocIds.add(d.id);
+                if (d.ingestion_summary) {
+                  openIngestionSummaryModal(d.ingestion_summary, d.original_filename);
+                }
+              }
+            });
+
+            documents = updatedDocs;
             renderDocumentsTable();
             // Also refresh folder document counts
             const fRes = await apiFetch("/api/folders");
@@ -1489,6 +1714,68 @@ function checkAndStartPolling() {
   } else if (!hasActiveJob && pollingTimer) {
     clearInterval(pollingTimer);
     pollingTimer = null;
+  }
+}
+
+function openIngestionSummaryModal(summary, filename) {
+  const modal = document.getElementById("ingestion-summary-modal");
+  if (!modal || !summary) return;
+
+  const nameEl = document.getElementById("ingestion-modal-filename");
+  const matchedEl = document.getElementById("summary-matched-count");
+  const enrichedEl = document.getElementById("summary-enriched-count");
+  const createdEl = document.getElementById("summary-created-count");
+  const skippedEl = document.getElementById("summary-skipped-count");
+  const conflictsBox = document.getElementById("ingestion-modal-conflicts-box");
+  const conflictsMsg = document.getElementById("summary-conflicts-msg");
+  const msgEl = document.getElementById("ingestion-modal-message");
+
+  if (nameEl) nameEl.textContent = filename || "Uploaded Document";
+  if (matchedEl) matchedEl.textContent = summary.items_matched || 0;
+  if (enrichedEl) enrichedEl.textContent = summary.concepts_enriched || 0;
+  if (createdEl) createdEl.textContent = summary.concepts_created || 0;
+  if (skippedEl) skippedEl.textContent = summary.duplicates_skipped || 0;
+
+  if (conflictsBox && conflictsMsg) {
+    if (summary.conflicts_flagged && summary.conflicts_flagged > 0) {
+      conflictsBox.classList.remove("hidden");
+      conflictsMsg.textContent = `${summary.conflicts_flagged} potentially conflicting statement(s) flagged across documents.`;
+    } else {
+      conflictsBox.classList.add("hidden");
+    }
+  }
+
+  if (msgEl) {
+    msgEl.textContent = summary.summary_message || "Upload processed and integrated into knowledge base.";
+  }
+
+  modal.style.display = "flex";
+}
+
+function closeIngestionSummaryModal() {
+  const modal = document.getElementById("ingestion-summary-modal");
+  if (modal) modal.style.display = "none";
+}
+
+async function handleDeleteDocument(documentId, filename) {
+  if (!confirm(`Are you sure you want to delete "${filename}"? Any knowledge concepts independently supported by other materials will be preserved.`)) {
+    return;
+  }
+  try {
+    showToast(`Deleting "${filename}"...`);
+    const res = await apiFetch(`/api/documents/${documentId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      showToast(`Document "${filename}" deleted successfully.`);
+      await loadDocuments(activeFolderId);
+      await loadFolders();
+    } else {
+      const err = await res.json();
+      showToast(err.detail || "Failed to delete document", "error");
+    }
+  } catch (err) {
+    showToast("Error deleting document", "error");
   }
 }
 
@@ -2385,29 +2672,29 @@ function renderMarkdownToHtml(md) {
    ========================================================================== */
 
 function getCurrentRoute() {
-  // 1. Check URL pathname (e.g. /chat, /notes, /quiz, /home)
+  // 1. Check URL pathname (e.g. /chat, /notes, /quiz, /graph, /home)
   const path = window.location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
-  if (["home", "chat", "notes", "quiz"].includes(path)) {
+  if (["home", "chat", "notes", "quiz", "graph"].includes(path)) {
     return path;
   }
 
-  // 2. Check hash route (e.g. #/chat, #chat, #/notes)
+  // 2. Check hash route (e.g. #/chat, #chat, #/notes, #/graph)
   const hash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
-  if (["home", "chat", "notes", "quiz"].includes(hash)) {
+  if (["home", "chat", "notes", "quiz", "graph"].includes(hash)) {
     return hash;
   }
 
   // 3. Check query parameter ?view=...
   const params = new URLSearchParams(window.location.search);
   const qView = (params.get("view") || "").toLowerCase();
-  if (["home", "chat", "notes", "quiz"].includes(qView)) {
+  if (["home", "chat", "notes", "quiz", "graph"].includes(qView)) {
     return qView;
   }
 
   // 4. Fallback to localStorage saved view only when on root path "/" or "index.html"
   if (path === "" || path === "index.html") {
     const saved = (localStorage.getItem("nalanda_active_view") || "").toLowerCase();
-    if (["home", "chat", "notes", "quiz"].includes(saved)) {
+    if (["home", "chat", "notes", "quiz", "graph"].includes(saved)) {
       return saved;
     }
   }
@@ -2416,6 +2703,7 @@ function getCurrentRoute() {
 }
 
 function switchView(viewName, updateUrl = true) {
+  if (viewName === "graph" || viewName === "readiness") viewName = "home";
   if (!viewName || !["home", "chat", "notes", "quiz"].includes(viewName)) {
     viewName = "home";
   }

@@ -16,6 +16,15 @@ from .answer_refiner import (
 )
 from .quiz_generator import QuizGenerator, QuizQuestion, QuizResponse
 from .notes_generator import NotesGenerator, NotesSection, NotesResponse
+from .autoencoder_models import (
+    UndercompleteAutoencoder,
+    VariationalAutoencoder,
+    DenoisingAutoencoder,
+    SparseAutoencoder,
+)
+from .autoencoder_service import AutoencoderOutlierDetector
+from .pca_benchmark import compare_pca_vs_autoencoder, format_comparison_table
+from .ocr_denoiser import OCREmbeddingDenoiser, get_ocr_denoiser
 
 __all__ = [
     "ATMLConfig",
@@ -33,4 +42,13 @@ __all__ = [
     "NotesGenerator",
     "NotesSection",
     "NotesResponse",
+    "UndercompleteAutoencoder",
+    "VariationalAutoencoder",
+    "DenoisingAutoencoder",
+    "SparseAutoencoder",
+    "AutoencoderOutlierDetector",
+    "compare_pca_vs_autoencoder",
+    "format_comparison_table",
+    "OCREmbeddingDenoiser",
+    "get_ocr_denoiser",
 ]

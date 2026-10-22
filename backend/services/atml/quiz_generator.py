@@ -497,9 +497,10 @@ class QuizQuestion:
     page_number: Optional[int]
     section_title: Optional[str]
     concept: str
+    prerequisite_review: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "id": self.id,
             "question": self.question,
             "options": self.options,
@@ -511,6 +512,9 @@ class QuizQuestion:
             "section_title": self.section_title,
             "concept": self.concept,
         }
+        if self.prerequisite_review:
+            d["prerequisite_review"] = self.prerequisite_review
+        return d
 
 
 @dataclass

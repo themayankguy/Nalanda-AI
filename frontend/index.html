@@ -5,6 +5,7 @@
   <meta charset="utf-8" />
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
   <title>Nalanda AI — Academic Workspace</title>
+  <link rel="icon" type="image/png" href="/assets/nalanda_icon.png" />
   <link href="https://fonts.googleapis.com" rel="preconnect" />
   <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
   <link
@@ -89,7 +90,7 @@
       }
     };
   </script>
-  <link rel="stylesheet" href="/assets/styles.css?v=20" />
+  <link rel="stylesheet" href="/assets/styles.css?v=27" />
 </head>
 
 <body
@@ -110,8 +111,8 @@
         <div class="flex items-center justify-between pb-1">
           <div class="flex items-center gap-2.5 cursor-pointer" onclick="switchView('home')">
             <div
-              class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center text-on-primary font-bold shadow-xs">
-              N
+              class="w-9 h-9 rounded-xl overflow-hidden shadow-sm flex items-center justify-center bg-[#0b0f19] border border-outline-variant/40 flex-shrink-0 transition-transform hover:scale-105">
+              <img src="/assets/nalanda_icon.png" alt="Nalanda AI Logo" class="w-full h-full object-cover" />
             </div>
             <div class="flex flex-col">
               <span class="text-headline-md font-bold text-primary tracking-tight leading-none">Nalanda</span>
@@ -207,7 +208,6 @@
             id="nav-btn-quiz" onclick="switchView('quiz')">
             <span class="material-symbols-outlined">quiz</span>
             <span>Practice Quizzes</span>
-          </button>
         </nav>
 
         <!-- Knowledge Folders / Document Hierarchy -->
@@ -339,10 +339,15 @@
     <main class="workspace-view flex-1 overflow-y-auto px-8 py-8 custom-scrollbar active" id="view-home">
       <div class="max-w-4xl mx-auto flex flex-col gap-8 pb-12">
 
-        <!-- Centered Calm Scholarly Greeting -->
+        <!-- Centered Calm Scholarly Greeting with Brand Emblem -->
         <div class="text-center flex flex-col items-center pt-2">
           <div
-            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant text-label-sm font-semibold mb-3">
+            class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[#0b0f19] border border-outline-variant/40 shadow-md p-1.5 flex items-center justify-center mb-3.5 transition-transform hover:scale-105 duration-200 cursor-pointer"
+            title="Nalanda AI — Privacy-First Edge Academic Vault">
+            <img src="/assets/nalanda_icon.png" alt="Nalanda AI Logo" class="w-full h-full object-cover rounded-xl" />
+          </div>
+          <div
+            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant text-label-sm font-semibold mb-3 shadow-xs">
             <span class="material-symbols-outlined text-[14px]">auto_awesome</span>
             <span>Nalanda RAG Knowledge Model 3.5</span>
           </div>
@@ -742,6 +747,8 @@
       </div>
     </main>
 
+
+
   </div>
 
   <!-- =========================================================================
@@ -871,7 +878,10 @@
   <div class="modal-overlay" id="auth-modal" style="display: none;">
     <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl p-6 w-full max-w-md shadow-2xl">
       <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
-        <h3 class="text-headline-sm font-bold text-on-surface" id="auth-modal-title">Sign In to Nalanda AI</h3>
+        <div class="flex items-center gap-2.5">
+          <img src="/assets/nalanda_icon.png" alt="Nalanda AI" class="w-7 h-7 rounded-lg object-cover shadow-xs" />
+          <h3 class="text-headline-sm font-bold text-on-surface" id="auth-modal-title">Sign In to Nalanda AI</h3>
+        </div>
         <button class="text-outline hover:text-on-surface p-1 rounded-lg" id="auth-modal-close-btn"
           onclick="closeAuthModal()">✕</button>
       </div>
@@ -923,11 +933,95 @@
     </div>
   </div>
 
+  <!-- Original PDF & Document Viewer Modal -->
+  <div class="modal-overlay" id="pdf-modal" style="display: none;">
+    <div
+      class="bg-surface-container-lowest border border-outline-variant rounded-2xl w-[94vw] max-w-6xl h-[90vh] shadow-2xl flex flex-col overflow-hidden">
+      <!-- Modal Header -->
+      <div
+        class="flex items-center justify-between px-5 py-3 border-b border-outline-variant bg-surface-container-low shrink-0">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="material-symbols-outlined text-primary text-[22px]">picture_as_pdf</span>
+          <h3 class="text-title-md font-semibold text-on-surface truncate" id="pdf-modal-title">Document Preview</h3>
+          <span class="text-label-sm px-2.5 py-0.5 rounded-full bg-primary-container text-on-primary font-medium"
+            id="pdf-modal-page-badge" style="display: none;">Page 1</span>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <a class="p-1.5 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
+            href="#" id="pdf-modal-open-new-tab" target="_blank" title="Open in new browser tab">
+            <span class="material-symbols-outlined text-[20px]">open_in_new</span>
+          </a>
+          <button
+            class="p-1.5 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container-high transition-colors"
+            onclick="closePdfModal()" title="Close viewer">
+            <span class="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+      </div>
+      <!-- Modal Body (Embed PDF) -->
+      <div class="flex-1 w-full h-full bg-[#323639] relative overflow-hidden">
+        <iframe class="w-full h-full border-0" id="pdf-modal-iframe" src="" title="PDF Document Viewer"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Knowledge Ingestion Summary Modal -->
+  <div class="modal-overlay" id="ingestion-summary-modal" style="display: none;" onclick="if (event.target === this) closeIngestionSummaryModal()">
+    <div class="modal-card max-w-md w-full p-6 bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between pb-3 border-b border-outline-variant">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-[22px]">auto_stories</span>
+          <h3 class="text-title-md font-bold text-on-surface">Knowledge Integration</h3>
+        </div>
+        <button class="text-outline hover:text-on-surface p-1 rounded-lg" onclick="closeIngestionSummaryModal()">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <div class="text-body-sm text-on-surface font-semibold truncate" id="ingestion-modal-filename">
+        Uploaded Document
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 py-1" id="ingestion-modal-metrics">
+        <div class="p-3 rounded-xl bg-surface-container border border-outline-variant/60 flex flex-col gap-0.5">
+          <span class="text-label-xs text-outline font-semibold uppercase tracking-wider">Items Matched</span>
+          <span class="text-headline-xs font-bold text-on-surface" id="summary-matched-count">0</span>
+        </div>
+        <div class="p-3 rounded-xl bg-surface-container border border-outline-variant/60 flex flex-col gap-0.5">
+          <span class="text-label-xs text-outline font-semibold uppercase tracking-wider">Concepts Enriched</span>
+          <span class="text-headline-xs font-bold text-primary" id="summary-enriched-count">0</span>
+        </div>
+        <div class="p-3 rounded-xl bg-surface-container border border-outline-variant/60 flex flex-col gap-0.5">
+          <span class="text-label-xs text-outline font-semibold uppercase tracking-wider">New Concepts</span>
+          <span class="text-headline-xs font-bold text-secondary" id="summary-created-count">0</span>
+        </div>
+        <div class="p-3 rounded-xl bg-surface-container border border-outline-variant/60 flex flex-col gap-0.5">
+          <span class="text-label-xs text-outline font-semibold uppercase tracking-wider">Duplicates Skipped</span>
+          <span class="text-headline-xs font-bold text-tertiary" id="summary-skipped-count">0</span>
+        </div>
+      </div>
+
+      <div id="ingestion-modal-conflicts-box" class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-body-xs font-medium flex items-center gap-2 hidden">
+        <span class="material-symbols-outlined text-[18px]">warning</span>
+        <span id="summary-conflicts-msg">0 conflicting statements flagged</span>
+      </div>
+
+      <p class="text-body-xs text-outline leading-relaxed bg-surface-container-low p-3 rounded-xl border border-outline-variant/40" id="ingestion-modal-message">
+        Upload processed successfully.
+      </p>
+
+      <button class="w-full py-2.5 rounded-xl bg-primary text-on-primary text-label-sm font-semibold hover:bg-primary-container transition-colors cursor-pointer" onclick="closeIngestionSummaryModal()">
+        Got It
+      </button>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Nalanda Application Controller -->
-  <script src="/assets/app.js?v=20"></script>
+  <script src="/assets/app.js?v=38"></script>
+
 </body>
 
 </html>

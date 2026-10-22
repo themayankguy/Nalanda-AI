@@ -270,7 +270,7 @@ class AnswerRefinementEngine:
             logger.info("Preserving comprehensive multi-point evidence over shortened summary.")
             if "Based on" in structured_fallback or "According to" in structured_fallback:
                 structured_answer = structured_fallback
-            elif structured_fallback.startswith("### "):
+            elif structured_fallback.startswith("#"):
                 lines_fb = structured_fallback.splitlines()
                 first_heading = lines_fb[0]
                 rest_fb = "\n".join(lines_fb[1:]).strip()

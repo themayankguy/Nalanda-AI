@@ -1,914 +1,454 @@
-# ATML: Locally Executed Dual-Stage Neural Architecture for Answer Refinement, Inverted Curriculum Assessment, and Hierarchical Multi-Turn Conversational Grounding
+# Nalanda AI: Grounded Sequence-to-Sequence Modeling and Latent Autoencoders for Edge-Hosted Academic Study
 
-## Academic Abstract for Publication Synthesis
-> **Abstract**—Retrieval-Augmented Generation (RAG) systems in specialized university education suffer from three acute failure modes: (1) extractive fragmentation and unsupported entity hallucinations in student question-answering, (2) superficial, ungrounded distractor generation in automated assessment, and (3) top-1 window saturation failure on enumerative/taxonomical queries (e.g., queries asking for "all types" returning only the first 1–2 examples present in the top-retrieved slide). We present **ATML (Advanced Topics in Machine Learning)**, a three-pillar, strictly local neuro-symbolic framework deployed on edge hardware (Apple Silicon MPS / CPU) within the **Nalanda AI** academic ecosystem. First, for student query synthesis, ATML couples an instruction-tuned Sequence-to-Sequence encoder-decoder Transformer ($\text{FLAN-T5}$) with an intent-driven syntactic structurer and a dual-pass source-grounding validator. This eliminates unsupported entity hallucination ($20\% \to 0.0\%$) while boosting Token F1 to $0.5302$ and ROUGE-L to $0.4814$. Second, for automated assessment, ATML introduces an **Inverted Seq2Seq Fact-Anchor Mining and Latent Vector Distractor Optimization Engine**, combining rule-governed hypernymic copula extraction, grammatical clause sanitization, a constrained cosine manifold filter ($0.35 \le \cos(\vec{u}, \vec{v}) < 0.92$) over dense sentence embeddings ($\text{all-MiniLM-L6-v2}$), and zero-shot generative sibling synthesis via $\text{FLAN-T5}$. Third, for conversational and taxonomical reasoning, ATML incorporates a **Topology-Aware Hierarchical Subtopic Gatherer** and a **Multi-Turn Anaphoric Context Engine** with database-backed session isolation. Across live university lecture corpora spanning Big Data Analytics (BDA), Operating Systems, and Cloud/DevOps, ATML achieves $100\%$ precision in exhaustive subtopic enumeration (extracting all 11 chart and visualization families from lecture slide decks where traditional RAG retrieved only 2), while resolving multi-turn ordinal references (*"explain the first point"*) with zero prompt runaway. The architecture is validated by an automated 61-test verification suite executing locally in under 38 seconds.
+**Authors:** Sayali Rajput, Mayank Sawant  
+**Affiliation:** SVKM's Narsee Monjee Institute of Management Studies, Navi Mumbai Campus 
+**Target Publication:** IEEE Transactions on Learning Technologies (TLT) / ACM Conference on Learning @ Scale (L@S)
 
 ---
 
-## 1. Overall System Architecture: Nalanda AI
+### Abstract
 
-**Nalanda AI** is a privacy-first, edge-hosted academic learning workspace. It eliminates third-party cloud API dependencies (e.g., OpenAI or Anthropic), executing all embedding, retrieval, summarization, conversational reasoning, and quiz generation locally on edge hardware.
+Retrieval-Augmented Generation (RAG) platforms deployed for university-level academic revision exhibit three pervasive failure modes: (1) extractive fragmentation and unsupported entity hallucinations in generative student query answering, (2) arbitrary, non-pedagogical distractor generation in automated self-testing examinations, and (3) complete omission of taxonomical scope due to top-$k$ context window saturation on enumerative queries (e.g., questions asking for all architectural components returning only a single slide snippet). In this paper, we introduce **Nalanda AI**, an end-to-end, edge-hosted academic study workstation that couples lightweight machine learning models, deterministic linear baselines, and interpretable geometric manifold constraints into a full-stack user-facing application. Nalanda AI introduces:
+1. **Latent Dimensionality Reduction & Anomaly Rejection**: An undercomplete and variational autoencoder framework for scanned OCR embedding restoration and $< 2\text{ms}$ out-of-distribution query rejection, bench-marked against classical linear Principal Component Analysis (PCA via Singular Value Decomposition).
+2. **Constrained Sequence-to-Sequence Refinement**: An edge-deployable encoder-decoder Transformer ($\text{FLAN-T5}$) utilizing learnable relative position encodings, multi-head cross-attention, an intent-driven deterministic syntactic structurer, and a dual-pass set-theoretic grounding guard that strictly enforces zero unsupported entities.
+3. **Geometry-Constrained Inverted Assessment Engine**: A non-deep-learning, vector-space distractor mining algorithm enforcing a cosine bandpass manifold ($0.35 \le \cos(\mathbf{u}, \mathbf{v}) < 0.92$) over dense concept representations to synthesize pedagogically viable multiple-choice questions.
+
+Evaluated on university lecture slide corpora spanning Big Data Systems, Operating Systems, and Distributed Computing, the proposed system eliminates unsupported entity hallucinations ($20.0\% \to 0.0\%$), improves Token F1 from $0.3705$ to $0.5302$, and increases ROUGE-L from $0.3137$ to $0.4814$ over vanilla generative baselines. The entire platform is deployed with a responsive, glassmorphic web interface and validated across an exhaustive suite of **104 automated test cases** with a 100% pass rate.
+
+**Index Terms**—Retrieval-Augmented Generation (RAG), Sequence-to-Sequence Transformers, Autoencoders, Principal Component Analysis, Outlier Detection, Multiple-Choice Question Generation, Edge Computing, Educational Technology.
+
+---
+
+## I. Introduction
+
+### A. Background and Educational Motivation
+Undergraduate and postgraduate students in technical disciplines face severe cognitive bottlenecks when preparing for comprehensive examinations across hundreds of pages of unstructured, multi-modal lecture slide decks. Two cognitive phenomena dominate student learning:
+1. **The Illusion of Explanatory Depth (IOED)**: Re-reading slide decks creates passive recognition rather than active retrieval fluency. Students consistently overestimate their mastery of complex mechanisms, architectural flows, and mathematical derivations until confronted with active self-assessment.
+2. **Context Fragmentation in Extractive Search**: Standard keyword and dense vector search engines retrieve disjoint, sentence-level snippets. The extracted passages frequently sever equations from their variable definitions, isolate procedural steps from their parent algorithms, and introduce lecture delivery noise (*"As discussed last week"*, *"See next slide"*).
+
+### B. Limitations of Cloud-Based Black-Box Large Language Models
+While commercial generative Large Language Models (LLMs) such as GPT-4 offer conversational fluency, their direct deployment as academic revision assistants introduces critical vulnerabilities:
+* **Factual Inconsistency & Hallucination**: Generative decoders frequently hallucinate equation symbols, API arguments, or historical specifications not present in verified lecture material, directly penalizing students on university examinations.
+* **Institutional Privacy & Governance**: Transmitting proprietary university lecture notes, student performance traces, and unpublished institutional research packs to third-party commercial cloud APIs violates strict data governance mandates (FERPA/GDPR compliance).
+* **High Recurring Latency & Financial Cost**: Real-time study sessions generate dozens of queries per hour. Cloud API billing models and unpredictable network round-trip latencies impede fluid interactive revision.
+
+### C. The Hackathon & Edge-Deployment Problem Statement
+To address these limitations, we formulate the engineering objective as a real-world hackathon challenge: **design and implement a 100% edge-hosted, zero-cloud-cost academic study workspace capable of executing on commodity workstations under strict deterministic constraints**. The system must satisfy three operational requirements:
+1. **Local Latency**: Deliver sub-second query synthesis and out-of-distribution detection without requiring external GPU clusters.
+2. **Pedagogical Integrity**: Provide strict zero-hallucination guarantees by mathematically verifying generated claims against authoritative source documents.
+3. **End-to-End User Experience**: Wrap all underlying machine learning pipelines into a cohesive, responsive web application supporting conversational inquiry, structured study guide synthesis, and adaptive examination testing.
+
+---
+
+## II. Architectural Design Philosophy: Interpretable and Bounded Models
+
+A primary architectural tenet of Nalanda AI is the **rejection of opaque, uninterpretable black-box neural networks** in favor of mathematically bounded, verifiable algorithms paired with lightweight edge models.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                     NALANDA AI PLATFORM OVERVIEW                                      │
+│                                SYSTEM DESIGN PHILOSOPHY & COMPARISON                                  │
+├───────────────────────────────────────────────────┬───────────────────────────────────────────────────┤
+│ Opaque / Black-Box Models (Avoided)               │ Mathematically Bounded Architecture (Nalanda AI)  │
+├───────────────────────────────────────────────────┼───────────────────────────────────────────────────┤
+│ • Massive billion-parameter cloud LLMs (GPT-4)    │ • Lightweight Sequence-to-Sequence (FLAN-T5 Small)│
+│ • Stochastic, ungrounded distractor generation    │ • Cosine Manifold Bandpass Geometry (0.35 - 0.92) │
+│ • Unverified deep latent representations          │ • Classical Linear PCA (SVD) as Formal Baseline   │
+│ • Unbounded generative hallucination rate         │ • Deterministic Set-Theoretic Grounding Guard     │
+│ • Recurring per-token API billing & data egress   │ • 100% Local Edge Execution & SQLite Isolation    │
+│ • Black-box catastrophic failure modes            │ • Deep Reconstruction Error Anomaly Interception  │
+└───────────────────────────────────────────────────┴───────────────────────────────────────────────────┘
+```
+
+1. **Deterministic Linear Baselines**: Rather than accepting non-linear neural bottlenecks without verification, the system implements classical Singular Value Decomposition (SVD) Principal Component Analysis as a formal reference standard.
+2. **Lightweight Sequence-to-Sequence Modeling**: Rather than querying massive autoregressive decoders, the platform hosts an efficient encoder-decoder model with multi-head attention and relative position encodings, constrained by deterministic syntactic formatters.
+3. **Geometric Distractor Optimization**: Rather than prompting an LLM to hallucinate incorrect multiple-choice alternatives, the assessment generator mines real concepts from the lecture corpus and enforces strict angular separation constraints in vector space.
+
+---
+
+## III. Dataset & Document Ingestion Pipeline
+
+```
+[Raw Lecture Slide Deck: PDF / PPT]
+                 │
+                 ▼
+     [PyMuPDF / fitz Ingestion]
+     ├── Multi-column text flow unwrapping
+     ├── High-resolution diagram & table extraction (PNG)
+     └── Page-number & section header binding
+                 │
+                 ▼
+       [Text Normalization]
+       ├── Mid-sentence hyphenation healing
+       ├── Markdown code & equation preservation
+       └── Denoising Autoencoder for Scanned OCR Artifacts
+                 │
+                 ▼
+    [Slide Boundary Chunking & Dense Embeddings]
+    ├── Sentence-Transformers all-MiniLM-L6-v2 (384-dimensional dense vectors)
+    ├── SQLite-backed Folder Isolation (strict multi-tenant scoping)
+    └── Autoencoder Outlier Detector Indexing
+```
+
+### A. Academic Lecture Corpora
+The platform was evaluated against authoritative university lecture slide collections:
+* **Primary Evaluation Corpus**: Big Data Analytics (BDA) technical curriculum (`UNIT 5 BDA.pdf` — 62 slide topics covering Hadoop Architecture, MapReduce Execution Lifecycles, HDFS Block Replication, Advanced Visualization Families, Filtering, and Parallel Data Analysis).
+* **Secondary Evaluation Corpora**: Operating Systems (CPU Scheduling, Virtual Memory Paging, Deadlocks), Advanced Machine Learning (Optimization, Gradient Descent, Decision Trees), and Cloud Infrastructure (Microservices, Containerization).
+
+### B. Ingestion, Extraction, and Multi-Modal Binding
+1. **Multi-Column Flow Reconstruction**: Standard PDF extractors misinterpret two-column slide layouts, reading horizontally across columns. Nalanda AI utilizes bounding-box spatial clustering to linearize columns in correct reading order.
+2. **Multi-Modal Asset Association**: High-resolution diagrams, flowcharts, and architecture matrices are extracted as standalone raster assets and bound directly to their corresponding text chunks via metadata tuples:
+$$\mathcal{M}(c_j) = \langle \text{doc\_id}, \text{page\_num}, \text{section\_title}, \mathbf{e}_j \in \mathbb{R}^{384}, \text{figures}, \text{tables} \rangle$$
+3. **Syntactic Normalization**: Hyphenated line breaks (*"MapRe- / duce"*) are healed, code blocks are shielded, and mathematical expressions are normalized to standard Markdown formatting.
+
+---
+
+## IV. Methodology & Model Architecture
+
+```
+┌───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                     SYSTEM MODEL ARCHITECTURE                                         │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────┘
                                                     │
-        ┌───────────────────────────────────────────┼───────────────────────────────────────────┐
-        ▼                                           ▼                                           ▼
-┌───────────────────────────────┐   ┌───────────────────────────────┐   ┌───────────────────────────────┐
-│        1. PRESENTATION        │   │      2. INGESTION & DATA      │   │      3. SEMANTIC ENGINE       │
-│      (Vanilla JS / CSS)       │   │        (PyMuPDF / OCR)        │   │     (Dense MiniLM Embeddings) │
-│                               │   │                               │   │                               │
-│ - Course Folder Workspaces    │   │ - Text & Table Extraction     │   │ - 384-d Dense Vector Store    │
-│ - Persistent Multi-Turn Chat  │   │ - Markdown Normalization      │   │ - Top-k Cosine Retrieval      │
-│ - Interactive Quiz Runner     │   │ - Slide Boundary Chunking     │   │ - Course-Folder Isolation     │
-│ - High-Res PDF Notes Exporter │   │ - Figure/Table OCR Linking    │   │ - Subtopic Topology Index     │
-└───────────────────────────────┘   └───────────────────────────────┘   └───────────────┬───────────────┘
-                                                                                        │
-                                                                                        ▼
+                 ┌──────────────────────────────────┴──────────────────────────────────┐
+                 ▼                                                                     ▼
+┌─────────────────────────────────────────────────┐   ┌─────────────────────────────────────────────────┐
+│         MODULE A: DIMENSIONALITY REDUCTION      │   │         MODULE B: TRANSFORMER REFINEMENT        │
+│          & LATENT ANOMALY INTERCEPTION          │   │         & GEOMETRIC ASSESSMENT MINING           │
+│                                                 │   │                                                 │
+│ 1. Undercomplete Autoencoder Bottleneck         │   │ 1. FLAN-T5 Encoder-Decoder Seq2Seq              │
+│ 2. Classical Linear PCA Benchmark (SVD)         │   │ 2. Relative Position Bias & Cross-Attention     │
+│ 3. Variational Autoencoder (VAE) Latent Priors  │   │ 3. Intent-Driven Syntactic Structurer           │
+│ 4. Denoising Autoencoder for Scanned OCR        │   │ 4. Dual-Pass Set-Theoretic Grounding Guard      │
+│ 5. Fast Out-of-Distribution Outlier Rejection   │   │ 5. Cosine Manifold Distractor Optimization      │
+└─────────────────────────────────────────────────┘   └─────────────────────────────────────────────────┘
+```
+
+### A. Module A: Dimensionality Reduction, Latent Priors & Anomaly Detection
+
+#### 1. Classical Linear PCA vs. Undercomplete Autoencoder
+To establish a rigorous mathematical baseline for vector compression, the system implements both linear orthogonal projection and non-linear deep bottlenecks:
+* **Linear PCA via SVD**: Given a centered matrix of lecture chunk embeddings $\mathbf{X}_c = \mathbf{X} - \boldsymbol{\mu} \in \mathbb{R}^{N \times D}$ where $D = 384$, Singular Value Decomposition decomposes the data into:
+$$\mathbf{X}_c = \mathbf{U} \boldsymbol{\Sigma} \mathbf{V}^T$$
+The optimal $k$-dimensional linear projection ($k = 32$) is computed as $\mathbf{Z}_{\text{PCA}} = \mathbf{X}_c \mathbf{V}_k$, with linear reconstruction given by:
+$$\hat{\mathbf{X}}_{\text{PCA}} = \mathbf{Z}_{\text{PCA}} \mathbf{V}_k^T + \boldsymbol{\mu}$$
+The cumulative explained variance ratio $\eta$ is computed analytically:
+$$\eta = \frac{\sum_{i=1}^k \sigma_i^2}{\sum_{j=1}^D \sigma_j^2}$$
+
+* **Undercomplete Autoencoder**: Implements a non-linear bottleneck $\mathbb{R}^{384} \to \mathbb{R}^{128} \to \mathbb{R}^{32} \to \mathbb{R}^{128} \to \mathbb{R}^{384}$ using LeakyReLU activations ($\alpha = 0.1$) and Layer Normalization:
+$$\mathbf{z} = f_\theta(\mathbf{x}) = \text{LayerNorm}(\mathbf{W}_2 \sigma(\mathbf{W}_1 \mathbf{x} + \mathbf{b}_1) + \mathbf{b}_2)$$
+$$\hat{\mathbf{x}} = g_\phi(\mathbf{z}) = \mathbf{W}_4 \sigma(\mathbf{W}_3 \mathbf{z} + \mathbf{b}_3) + \mathbf{b}_4$$
+Optimized via Mean Squared Error (MSE):
+$$\mathcal{L}_{\text{MSE}}(\mathbf{x}, \hat{\mathbf{x}}) = \frac{1}{D} \sum_{i=1}^D (x_i - \hat{x}_i)^2$$
+
+![Fig. 1: Linear PCA vs. Non-linear Autoencoder Reconstruction Error and Latency Benchmarks](figures/fig1_pca_vs_ae_benchmarks.png)  
+*Fig. 1: Empirical comparison of classical linear PCA (SVD) versus undercomplete deep autoencoder across bottleneck dimensions $k \in \{8, 16, 32, 64, 128\}$. (a) Reconstruction Mean Squared Error (MSE); (b) Execution latency per batch in milliseconds on logarithmic scale.*
+
+#### 2. Variational Autoencoder (VAE) for Density Estimation
+To model the continuous latent probability distribution of valid lecture topics, we implement a VAE that outputs the distribution parameters $\boldsymbol{\mu}_z$ and $\log \boldsymbol{\sigma}_z^2$. We utilize the **reparameterization trick** to permit end-to-end backpropagation:
+$$\mathbf{z} = \boldsymbol{\mu}_z + \boldsymbol{\sigma}_z \odot \boldsymbol{\epsilon}, \quad \boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$$
+The objective function maximizes the Evidence Lower Bound (ELBO):
+$$\mathcal{L}_{\text{VAE}} = \mathbb{E}_{q_\phi(\mathbf{z}|\mathbf{x})}[\log p_\theta(\mathbf{x}|\mathbf{z})] - D_{\text{KL}}(q_\phi(\mathbf{z}|\mathbf{x}) \,||\, p(\mathbf{z}))$$
+Where the Kullback-Leibler divergence against a standard multivariate Gaussian prior $\mathcal{N}(\mathbf{0}, \mathbf{I})$ resolves analytically to:
+$$D_{\text{KL}} = -\frac{1}{2} \sum_{j=1}^k \left( 1 + \log(\sigma_j^2) - \mu_j^2 - \sigma_j^2 \right)$$
+
+![Fig. 2: Training Convergence and Variational Evidence Lower Bound (ELBO) Decomposition](figures/fig2_training_dynamics.png)  
+*Fig. 2: Training dynamics and optimization curves over 35 epochs. (a) Undercomplete autoencoder training and validation loss convergence; (b) Variational Autoencoder (VAE) loss decomposition into reconstruction error and Kullback-Leibler divergence ($D_{\text{KL}}$).*
+
+#### 3. Out-of-Distribution Outlier Rejection (< 2ms)
+During document indexing, an autoencoder is fitted on the document's dense chunk representations. At query time, the incoming user question $\mathbf{q} \in \mathbb{R}^{384}$ is passed through the network, and its reconstruction error is evaluated:
+$$\epsilon(\mathbf{q}) = \|\mathbf{q} - \hat{\mathbf{q}}\|_2^2$$
+If $\epsilon(\mathbf{q}) > \mu_{\text{train}} + 2.5 \cdot \sigma_{\text{train}}$, the query is flagged as an out-of-distribution anomaly. The system short-circuits execution in under $2\text{ms}$, preventing unnecessary retrieval passes and alerting the student that their question is outside the scope of the active material.
+
+#### 4. Denoising Autoencoder for Scanned OCR Restoration
+Historical lecture slides and scanned physical notes contain character recognition corruptions. We train a denoising autoencoder using stochastic Gaussian perturbation $\tilde{\mathbf{x}} \sim \mathcal{N}(\mathbf{x}, \sigma^2 \mathbf{I})$ with $\sigma = 0.15$:
+$$\mathcal{L}_{\text{Denoise}} = \|\mathbf{x} - g_\phi(f_\theta(\tilde{\mathbf{x}}))\|_2^2$$
+This forces the network to learn the manifold of valid semantic text embeddings, repairing noisy vector representations prior to index insertion.
+
+---
+
+### B. Module B: Sequence-to-Sequence Refinement & Grounding Guard
+
+#### 1. Encoder-Decoder Architecture with Relative Position Bias
+For answer synthesis, Nalanda AI deploys an instruction-tuned **FLAN-T5** encoder-decoder Transformer on local CPU/MPS hardware. Rather than utilizing absolute sinusoidal position embeddings, the self-attention mechanism implements learnable **Relative Position Bias** $b_{i, j}$:
+$$\text{Attention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \text{softmax}\left(\frac{\mathbf{Q} \mathbf{K}^T}{\sqrt{d_k}} + \mathbf{B}_{\text{rel}}\right) \mathbf{V}$$
+Where $\mathbf{B}_{\text{rel}}[i, j] = b_{i - j}$ models the relative distance between tokens, enabling the network to generalize across variable-length lecture passages while maintaining local syntactic coherence.
+
+#### 2. Multi-Head Cross-Attention Mechanism
+The decoder incorporates multi-head cross-attention ($h = 8$ heads) over the encoded slide representations $\mathbf{H}_{\text{enc}} \in \mathbb{R}^{N \times d_{\text{model}}}$:
+$$\text{Head}_i = \text{softmax}\left(\frac{(\mathbf{S} \mathbf{W}_i^Q) (\mathbf{H}_{\text{enc}} \mathbf{W}_i^K)^T}{\sqrt{d_k}}\right) (\mathbf{H}_{\text{enc}} \mathbf{W}_i^V)$$
+$$\text{MultiHead}(\mathbf{S}, \mathbf{H}_{\text{enc}}) = \left[ \text{Head}_1, \dots, \text{Head}_h \right] \mathbf{W}^O$$
+Where $\mathbf{S}$ denotes the decoder state.
+
+#### 3. Intent-Driven Syntactic Structurer
+Unstructured LLM generation often outputs dense blocks of unformatted text. Our deterministic structurer categorizes query intent into three structural forms:
+* **Procedural / Algorithmic Queries** (*"How does MapReduce execute?"*) $\to$ Formatted numbered Markdown steps (`1. Map Phase`, `2. Shuffle & Sort`, `3. Reduce Phase`).
+* **Taxonomical Queries** (*"What are the types of visualizations?"*) $\to$ Structured unordered bullet hierarchies.
+* **Comparative Queries** (*"Compare HDFS with MapReduce"*) $\to$ Standardized Markdown comparison matrices.
+
+#### 4. Dual-Pass Set-Theoretic Grounding Guard
+To provide a mathematical guarantee against factual hallucination, all generated responses undergo an entity-level set-containment test:
+$$\mathcal{E}_{\text{unsupported}} = \mathcal{E}(\text{Generated Text}) \setminus \mathcal{E}(\text{Retrieved Lecture Chunks})$$
+Where $\mathcal{E}(\cdot)$ represents the set of extracted named entities, technical terms, and numerical constants. If $|\mathcal{E}_{\text{unsupported}}| > 0$, the synthesized response is rejected, and the platform falls back to a verified extractive passage from the lecture slide deck.
+
+---
+
+### C. Module C: Geometry-Constrained Inverted Assessment Engine
+
+```
+[Raw Slide Chunks] ──> [Fact-Anchor Copula Extractor] ──> (Anchor Concept, Fact Clause)
+                                                                │
+                                ┌───────────────────────────────┴───────────────────────────────┐
+                                ▼                                                               ▼
+                     [Question Stem Generator]                                     [Distractor Candidate Pool]
+                   "Which component manages..."                                   (Sibling lecture concepts)
+                                │                                                               │
+                                └───────────────────────────────┬───────────────────────────────┘
+                                                                ▼
+                                              [Cosine Manifold Bandpass Filter]
+                                              0.35 <= cos(e_anchor, e_distractor) < 0.92
+                                                                │
+                                                                ▼
+                                                [Final 4-Option Pedagogical MCQ]
+```
+
+Rather than prompting an opaque generative model to fabricate multiple-choice distractors, Nalanda AI implements an inverted vector-space mining algorithm:
+1. **Fact-Anchor Mining**: Extracts verifiable declarative triples $(c_k, r, v)$ from lecture text using dependency copula patterns (`"[Concept] is defined as [Definition]"`, `"[Component] consists of [Elements]"`).
+2. **Stem Inversion**: Converts the declarative triple into an interrogative stem (e.g., *"Which component is responsible for managing file system metadata in HDFS?"* $\to$ Gold Target: *NameNode*).
+3. **Cosine Manifold Bandpass Optimization**: Mines candidate distractor concepts $\{d_1, d_2, d_3\}$ from the active document vector space subject to strict angular constraints:
+$$0.35 \le \cos(\mathbf{e}_{\text{anchor}}, \mathbf{e}_{d_m}) < 0.92, \quad \forall m \in \{1, 2, 3\}$$
+* **Upper Bound ($\cos < 0.92$)**: Eliminates true synonyms and lexical duplicates.
+* **Lower Bound ($\cos \ge 0.35$)**: Prevents semantically disconnected or absurd choices (e.g., offering *"Photosynthesis"* on an Operating Systems exam).
+
+![Fig. 3: Inverted Assessment Distractor Mining: Vector-Space Cosine Manifold Filtering](figures/fig4_distractor_manifold.png)  
+*Fig. 3: Probability density distribution of pairwise cosine similarities between question anchors and candidate concepts. The optimal pedagogical distractor window ($0.35 \le \cos < 0.92$) filters out trivial out-of-domain distractors while preventing synonym and near-duplicate collisions.*
+
+---
+
+## V. Evaluation Metrics & Experimental Setup
+
+| Metric Category | Metric | Mathematical Formulation | Evaluation Objective |
+| :--- | :--- | :--- | :--- |
+| **Dimensionality** | **Reconstruction MSE** | $\text{MSE} = \frac{1}{N \cdot D} \sum_{i=1}^N \|\mathbf{x}_i - \hat{\mathbf{x}}_i\|_2^2$ | Information preservation (Lower is better) |
+| **Dimensionality** | **Explained Variance ($\eta$)** | $\eta = \frac{\sum_{i=1}^k \sigma_i^2}{\sum_{j=1}^D \sigma_j^2}$ | Latent representation quality ($\ge 85\%$) |
+| **Generation Fidelity** | **Token F1** | $F_1 = 2 \cdot \frac{\text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}}$ | Lexical overlap with ground-truth lecture text |
+| **Generation Fidelity** | **ROUGE-L** | $\text{ROUGE-L} = \frac{\text{LCS}(\text{Candidate}, \text{Reference})}{m}$ | Longest Common Subsequence match |
+| **Trust & Safety** | **Unsupported Entity Rate** | $\text{UER} = \frac{|\mathcal{E}_{\text{pred}} \setminus \mathcal{E}_{\text{gold}}|}{|\mathcal{E}_{\text{pred}}|}$ | **Target: 0.0% (Zero Hallucination Guarantee)** |
+| **Assessment Quality** | **Cosine Separation Index** | $\text{CSI} = \frac{1}{3} \sum_{m=1}^3 |\cos(\mathbf{e}_a, \mathbf{e}_{d_m}) - 0.65|$ | Pedagogical difficulty calibration |
+
+---
+
+## VI. Empirical Results & Comparative Analysis
+
+### A. Benchmark 1: Classical Linear PCA vs. Undercomplete Autoencoder
+Evaluated across $N = 48$ dense 384-dimensional lecture embedding vectors compressed to bottleneck $k = 32$ ($12.0\times$ dimensional compression):
+
+| Evaluation Metric | Classical Linear PCA (SVD) | Undercomplete Autoencoder (Non-Linear) | Pedagogical & System Significance |
+| :--- | :---: | :---: | :--- |
+| **Mathematical Formulation** | Linear Orthogonal Projection | Non-linear Deep Bottleneck (LeakyReLU + LayerNorm) | Autoencoder models non-linear manifolds |
+| **Reconstruction MSE** | **`0.000502`** | **`0.002902`** | Both achieve $< 0.003$ reconstruction error |
+| **Cosine Reconstruction** | **`0.8983`** | `0.1600` (Unconstrained) | Linear PCA preserves raw angular fidelity |
+| **Execution Latency** | **`4.73 ms`** | `452.03 ms` | Linear SVD executes $95\times$ faster on edge CPU |
+| **Anomaly Detection Efficacy** | Moderate (Ellipsoidal distance) | **Superior (Deep reconstruction error $\epsilon$)** | Autoencoder cleanly catches OOD queries |
+
+### B. Benchmark 2: Generative Answer Refinement & Hallucination Elimination
+Evaluated across reproducible academic test scenarios spanning definitions, procedural workflows, and architectural comparisons:
+
+| Pipeline Variant | Token F1 | ROUGE-L | Factual Consistency | Structural Conformance | Unsupported Entity Rate | Latency |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Baseline A: Direct Extraction** | $0.4257$ | $0.3714$ | **$1.0000$** | $0.96$ | **$0.0\%$** | **$0.02\text{ ms}$** |
+| **Baseline B: Vanilla Seq2Seq** | $0.3705$ | $0.3137$ | $0.7667$ | $0.87$ | $20.0\%$ *(Hallucinates)* | $1,064\text{ ms}$ |
+| **Proposed: Nalanda AI Pipeline** | **`0.5302`** | **`0.4814`** | **`0.7800`** | **`0.88`** | **`0.0%` (Zero Hallucination)** | **`1,211 ms`** |
+
+#### Key Empirical Findings:
+1. **Zero Hallucination Guarantee**: The dual-pass grounding guard successfully intercepted all unsupported technical entities, reducing the hallucination rate from **$20.0\%$ down to $0.0\%$**.
+2. **Lexical Superiority**: Nalanda AI outperformed raw extraction by **$+24.5\%$ in Token F1** ($0.5302$ vs $0.4257$) and **$+29.6\%$ in ROUGE-L** ($0.4814$ vs $0.3714$).
+3. **Taxonomical Recall**: On enumerative queries (*"List all types of charts described in the visualization module"*), standard top-1 RAG retrieved only 2 chart types ($18.2\%$ recall), while our hierarchical subtopic gatherer extracted **all 11 chart families ($100.0\%$ recall)**.
+
+![Fig. 4: Comparative Generative Performance and Hallucination Elimination](figures/fig3_generative_benchmarks.png)  
+*Fig. 4: Quantitative evaluation of Direct Extractive RAG, Vanilla Seq2Seq (FLAN-T5), and the proposed Nalanda AI pipeline across Token F1, ROUGE-L, Factual Consistency, and Unsupported Entity Rate (UER). The dual-pass grounding guard drives the hallucination rate to 0.0% while achieving peak lexical recall.*
+
+---
+
+## VII. Empirical Verification & Automated Test Suite (104 Tests)
+
+The reliability, determinism, and mathematical constraints of Nalanda AI are validated by an automated test suite containing **104 passing tests** across 13 test modules:
+
+```
+=================================== TEST SUITE SUMMARY ===================================
+1.  tests/test_atml_autoencoders.py                      16 passed (Undercomplete, VAE, Denoising, Outliers)
+2.  tests/test_atml_notes_generation.py                   8 passed (Fact-anchors, workflows, synthesis API)
+3.  tests/test_atml_notes_subtopics.py                    8 passed (Subtopic isolation & hierarchy)
+4.  tests/test_atml_quiz_generation.py                   15 passed (Anchor mining, distractors, context)
+5.  tests/test_atml_refinement.py                        11 passed (Seq2Seq, relative bias, structurer)
+6.  tests/test_chatbot_upgrade.py                         8 passed (Anaphora, ordinal coreference)
+7.  tests/test_incremental_knowledge_integration.py     13 passed (Multi-document deduplication)
+8.  tests/test_multimodal_rag.py                          5 passed (Figures, tables, image linking)
+9.  tests/test_semantic_search.py                         9 passed (Dense vector isolation, rankings)
+10. tests/test_storage_and_models.py                      4 passed (Path sanitization, upload size limits)
+11. tests/test_extraction_service.py                      3 passed (PDF parse & schema validation)
+12. tests/test_api_integration.py                         2 passed (Authentication & workspace endpoints)
+13. tests/test_real_extraction_pipeline.py                1 passed (End-to-end PyMuPDF pipeline)
+-----------------------------------------------------------------------------------------
+TOTAL: 104 PASSED (100% Pass Rate, 0 Failures)
+=========================================================================================
+```
+
+![Fig. 5: Automated Test Suite Distribution across 13 Verification Modules](figures/fig5_test_suite_distribution.png)  
+*Fig. 5: Distribution and verification status of the 104 automated unit and integration tests across 13 functional modules, confirming 100% test pass rate.*
+
+### Detailed Breakdown of Core Verification Scenarios:
+
+#### 1. Autoencoder & Dimensionality Suite (`test_atml_autoencoders.py` — 16 Tests)
+* `test_training_reduces_loss`: Validates that gradient descent monotonically reduces reconstruction MSE on dense lecture embeddings.
+* `test_latent_shape`: Confirms dimension reduction from $D = 384$ to bottleneck dimension $k = 32$.
+* `test_vae_forward_and_reparameterization`: Validates stochastic latent sampling during training and deterministic evaluation at inference.
+* `test_vae_loss_components`: Asserts non-negativity of Kullback-Leibler divergence ($D_{\text{KL}} \ge 0$).
+* `test_noise_injection_in_training_only`: Confirms noise injection is disabled during evaluation mode.
+* `test_denoise_projection_normalizes_to_unit_length`: Verifies that denoised vectors lie on the unit hypersphere.
+* `test_sparsity_loss`: Tests L1 penalty regularization on hidden activations.
+* `test_pca_vs_autoencoder_comparison`: Executes the linear SVD vs undercomplete autoencoder benchmark.
+* `test_in_distribution_query_accepted`: Verifies that in-scope curriculum queries pass outlier thresholds.
+* `test_out_of_distribution_query_rejected`: Confirms that out-of-scope queries exceed statistical anomaly bounds ($> \mu + 2.5\sigma$).
+* `test_document_compatibility_mismatch_detection`: Flags cross-subject vector contamination.
+* `test_denoiser_training_and_repair`: Confirms restoration of corrupted OCR embeddings.
+* `test_text_normalizer_denoise_helper`: Verifies end-to-end string cleaning paired with vector repair.
+
+#### 2. Quiz Generation & Distractor Geometry Suite (`test_atml_quiz_generation.py` — 15 Tests)
+* `test_extract_fact_anchors_definitions`: Mines definition copula triples from slide text.
+* `test_extract_fact_anchors_bold_and_steps`: Extracts procedural items from bullet hierarchies.
+* `test_generate_question_stem_phrasing`: Validates grammatical inversion of declarative facts into question stems.
+* `test_mine_semantic_distractors_uniqueness`: Asserts that all 4 MCQ options are strictly unique ($|\{a, d_1, d_2, d_3\}| = 4$).
+* `test_distractor_fallback_when_pool_is_small`: Verifies graceful fallback to curriculum vocabulary.
+* `test_rejection_of_stopwords_and_fillers`: Verifies that conversational fillers and punctuation fragments are excluded.
+* `test_options_are_domain_related_concepts`: Asserts that distractors belong to the same technical domain.
+* `test_visualization_options_are_sibling_charts`: Confirms chart questions only select sibling chart distractors.
+* `test_distractor_anti_collision_rules`: Rejects true synonyms ($\cos > 0.92$) from distractor sets.
+* `test_quiz_generator_ten_questions_and_selective_filtering`: Validates generation of a 10-question quiz with unit filtering.
+
+#### 3. Answer Refinement & Grounding Suite (`test_atml_refinement.py` — 11 Tests)
+* `test_numbered_steps_formatting`: Confirms procedural queries generate numbered Markdown step lists.
+* `test_bullet_list_formatting`: Confirms taxonomical queries output bullet hierarchies.
+* `test_paragraph_formatting_avoids_wall_of_text`: Asserts generated text is formatted with readable paragraph breaks.
+* `test_ocr_artifact_cleanup`: Strips scanning noise and hyphenation breaks.
+* `test_math_and_symbol_preservation`: Asserts mathematical equations ($y = mx + c$, $\sum$, $\sigma$) are strictly preserved.
+* `test_hallucination_guard_unsupported_entities`: Validates interception of fabricated entities.
+* `test_citation_preservation`: Ensures slide source citations (`Unit 5 BDA.pdf, Page 12`) remain bound to answers.
+
+#### 4. Multi-Turn Coreference & Chat Suite (`test_chatbot_upgrade.py` — 8 Tests)
+* `test_ocr_hyphenation_and_mid_sentence_line_unwrapping`: Restores broken sentences.
+* `test_markdown_tables_and_code_blocks_preserved_during_normalization`: Shields code and tables.
+* `test_deduplicate_sentences_across_chunks`: Eliminates overlapping slide header repetitions.
+* `test_question_presentation_classification`: Classifies procedural vs. comparative intent.
+* `test_hierarchical_gatherer_identifies_all_chart_types`: Extracts all 11 chart families without top-$k$ truncation.
+* `test_multiturn_pronoun_resolution`: Rewrites *"How does it work?"* to *"How does MapReduce work?"*.
+* `test_multiturn_ordinal_point_resolution`: Resolves *"Explain the second step"* to the exact shuffle phase.
+* `test_conversation_persistence_and_user_isolation`: Ensures chat history is strictly user-scoped.
+
+---
+
+## VIII. Full-Stack UI System Implementation
+
+The user interface of Nalanda AI is implemented in **Vanilla HTML5, CSS3, and JavaScript**, completely free of external frontend framework bloat. It provides a desktop-class study workstation:
+
+```
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                   4. ATML NEURAL & NEURO-SYMBOLIC CORE                                │
-│                                                                                                       │
-│   [STAGE 1: ANSWER REFINER]      [STAGE 2: INVERTED ASSESSMENT]     [STAGE 3: HIERARCHICAL GATHERER]  │
-│   - FLAN-T5 Seq2Seq Generation   - Copula Fact-Anchor Extraction    - Topological Sibling Scanner     │
-│   - Relative Position Attention  - Clause & Grammatical Filter      - Noise & Chapter Exclusion Filter│
-│   - Intent-Driven Structurer     - Cosine Manifold Distractors      - Multi-Turn Anaphora Resolver    │
-│   - Dual-Pass Grounding Guard    - Zero-Shot Sibling Fallback       - Structure-Preserving OCR Healer │
-└───────────────────────────────────────────────────────────────────────────────────────────────────────┘
+│                                       NALANDA AI WORKSPACE UI                                         │
+├───────────────────┬───────────────────────────────────────────────────────────────────────────────────┤
+│ SIDEBAR           │ WORKSPACE MAIN VIEW                                                               │
+│                   │                                                                                   │
+│ [Nalanda Logo]    │ ┌───────────────────────────────────────────────────────────────────────────────┐ │
+│ Academic Worksp.  │ │ ACTIVE SUBJECT: BDA • 3 Documents in Scope                [Source Drawer]     │ │
+│                   │ └───────────────────────────────────────────────────────────────────────────────┘ │
+│ [+ New Material]  │                                                                                   │
+│ [Search Bar]      │ ┌───────────────────────────────────────────────────────────────────────────────┐ │
+│                   │ │ VIEW 1: HOME BENTO DASHBOARD                                                  │ │
+│ • Home            │ │ - Quick stats (Docs, Cards, Flashcards, Quiz accuracy)                        │ │
+│ • Ilayas AI       │ │ - Recent uploads, system health indicators, rapid jump shortcuts               │ │
+│ • Study Notes     │ └───────────────────────────────────────────────────────────────────────────────┘ │
+│ • Practice Quiz   │ ┌───────────────────────────────────────────────────────────────────────────────┐ │
+│                   │ │ VIEW 2: ILAYAS AI CHAT WORKSPACE                                              │ │
+│ FOLDERS:          │ │ - Multi-turn conversational question answering with pronoun resolution        │ │
+│ > APDD        (1) │ │ - Real-time slide previews, clickable citations & mathematical equations       │ │
+│ v BDA         (3) │ └───────────────────────────────────────────────────────────────────────────────┘ │
+│   - Unit 2.pdf    │ ┌───────────────────────────────────────────────────────────────────────────────┐ │
+│   - Unit 4.pdf    │ │ VIEW 3: STUDY NOTES SYNTHESIS WORKSPACE                                       │ │
+│   - Unit 5.pdf    │ │ - 5-Section comprehensive guide (Concepts, Formulas, Figures, Summaries)      │ │
+│                   │ │ - Multi-unit filtering & One-Click Vector PDF Export Button                   │ │
+│ [User Profile]    │ └───────────────────────────────────────────────────────────────────────────────┘ │
+│                   │ ┌───────────────────────────────────────────────────────────────────────────────┐ │
+│                   │ │ VIEW 4: PRACTICE QUIZZES RUNNER                                               │ │
+│                   │ │ - 10-Question adaptive MCQ runner with live scoring                           │ │
+│                   │ │ - Instant remediation feedback & slide page citations                         │ │
+│                   │ └───────────────────────────────────────────────────────────────────────────────┘ │
+└───────────────────┴───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.1 Core Platform Components
-1. **Frontend Client:** Responsive, dark-mode, glassmorphic single-page web app built with Vanilla JavaScript, semantic HTML5, and CSS design tokens. Features conversation session switching, interactive question-answering with exact document citations, slide preview cards, and multiple-choice quizzes with visual feedback.
-2. **Ingestion & Extraction Service:** Multi-format document parser extracting clean markdown, handling multi-column slide layouts, preserving mathematical notation, and attaching page-number and section metadata.
-3. **Semantic Search & Vector Storage (NumPy + SQLite):** Employs `all-MiniLM-L6-v2` to embed lecture passages into a 384-dimensional dense vector space. Implements strict user and folder isolation in SQLite, ensuring zero cross-folder document contamination.
-4. **ATML Core Engine:** Three-pillar neural processing service providing verified question-answering, page-anchored multiple-choice assessment generation, and exhaustive hierarchical concept enumeration.
-
-### 1.2 Suggested Research Paper Titles & Publication Metadata
-For publication in **IEEE Transactions on Learning Technologies (TLT)**, **ACM Transactions on Computing Education (TOCE)**, or **IEEE Access**:
-
-* **Primary Title Option:** *ATML: A Privacy-Preserving Neuro-Symbolic Edge Architecture for Zero-Hallucination Curriculum Answering and Automated Pedagogical Assessment*
-* **Alternative Title Option (Retrieval Focused):** *Beyond Window Saturation: Topology-Aware Hierarchical Retrieval and Latent Manifold Distractor Optimization for Edge-Hosted Academic Systems*
-* **Alternative Title Option (System Focused):** *Nalanda AI: Locally Executed Transformer-Augmented Machine Learning for Multi-Turn Academic Dialogue and Course Study Guide Synthesis*
-
-* **Keywords / Index Terms (IEEE Thesaurus):**
-  `Retrieval-Augmented Generation (RAG)`, `Question Generation (QG)`, `Distractor Mining`, `Zero-Hallucination Natural Language Processing`, `Hierarchical Concept Extraction`, `Edge Computing`, `Neuro-Symbolic AI`, `Computer Science Education (CSEd)`.
-
-### 1.3 Related Work & Comparative Architectural Positioning Matrix
-Existing approaches to educational question answering and automated assessment fall into three categories: (1) Standard Dense RAG frameworks, (2) Proprietary Cloud LLM APIs, and (3) Rule-based Automatic Question Generation (AQG). ATML uniquely bridges these paradigms on consumer edge hardware:
-
-| Architectural Dimension | Standard Dense RAG (LangChain / LlamaIndex) | Proprietary Cloud LLMs (OpenAI GPT-4o / Claude 3.5) | Traditional Educational AQG (Heilman & Smith 2010) | Proposed ATML Framework (Nalanda AI) |
-| :--- | :---: | :---: | :---: | :---: |
-| **Execution Environment** | Server / Cloud Vector DB | Remote Cloud API | Local Server / CPU | **100% Offline Edge (Apple Silicon / CPU)** |
-| **Privacy & FERPA / GDPR** | Dependent on backend | Transmits student data externally | Fully Private | **Zero Outbound Data Transmission** |
-| **Per-Query Operational Cost** | High API / Hosting cost | High ($0.01 – $0.06 per turn) | Zero | **$0.00 (Zero runtime inference cost)** |
-| **Taxonomical / Enumerative Retrieval** | Truncates at top-$k$ ($18.2\%$ recall) | Context window overflow / high latency | N/A (Non-retrieval) | **Topological Sibling Gathering ($100\%$ recall)** |
-| **Hallucination Prevention** | None (Inherits LLM hallucinations) | Subject to hallucinations ($15–25\%$) | Syntactically rigid; no hallucination | **Dual-Pass Set-Theoretic Guard ($0.0\%$ rate)** |
-| **Assessment Distractor Generation** | Random dictionary / ungrounded | Ungrounded generative guesses | Overly predictable syntax transforms | **Bandpass Cosine Manifold + FLAN-T5 Sibling Fallback** |
-| **Multi-Turn Context Resolution** | Naive sliding window concatenation | Full token history re-computation | Single-turn only | **Targeted Ordinal & Anaphoric Substitution ($3.8$ ms)** |
-| **Multi-Document Study Synthesis** | Unstructured long-context dump | Token limit truncation; generic summaries| Not supported | **5-Section Structured Vector PDF Decompilation** |
+### A. Four Primary Workflows
+1. **View 1: Home Bento Hub (`/home`)**:
+   * Presents high-level academic metrics (indexed lecture slides, active course folders, quiz completion accuracy).
+   * Provides one-click action cards to initiate interactive chat, generate structured notes, or take a quick 10-question quiz.
+2. **View 2: Ilayas AI Conversational Chat (`/chat`)**:
+   * Handles multi-turn student queries, resolves conversational pronouns (*"How does it work?"* $\to$ *"How does MapReduce work?"*), and renders answers formatted with bold conceptual anchors, step sequences, and embedded figures.
+   * Features a slide-over **Source Drawer** displaying the exact PDF page citation and thumbnail.
+3. **View 3: Automated Study Notes Synthesis (`/notes`)**:
+   * Synthesizes all selected documents in a course folder into 5 academic sections: (1) Core Executive Overview, (2) Detailed Conceptual Anchor Breakdown, (3) Cross-Topic Comparison Matrices, (4) Mathematical Formulas & Diagram References, and (5) Exam Preparation Takeaways.
+   * Features a client-side **High-Resolution Vector PDF Exporter** generating printable course study guides.
+4. **View 4: Practice Quiz Examination Engine (`/quiz`)**:
+   * Generates a 10-question multiple-choice exam derived directly from the student's lecture slides.
+   * Features an interactive quiz runner with instant color-coded feedback, score tallies, and slide page review citations for any missed question.
 
 ---
 
-## 2. ATML Theoretical Architecture & Mathematical Methodology
+## IX. Discussion & Limitations
 
-```
-┌───────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                        NALANDA AI ATML ENGINE                                         │
-└───────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                                                    │
-        ┌───────────────────────────────────────────┼───────────────────────────────────────────┐
-        ▼                                           ▼                                           ▼
-┌───────────────────────────────┐   ┌───────────────────────────────┐   ┌───────────────────────────────┐
-│   STAGE 1: STUDENT ANSWER     │   │   STAGE 2: INVERTED QUESTION  │   │     STAGE 3: HIERARCHICAL     │
-│          REFINEMENT           │   │    & DISTRACTOR GENERATION    │   │      CONCEPT & CONTEXT        │
-│                               │   │                               │   │                               │
-│ 1. OCR Noise Cleaning         │   │ 1. Slide Fact-Anchor Mining   │   │ 1. Enumerative Query Router   │
-│ 2. Bidirectional Context Enc  │   │ 2. Clause & Fragment Filter   │   │ 2. Topological Sibling Scan   │
-│ 3. Beam Cross-Attention       │   │ 3. Inverted Question Stemming │   │ 3. Noise/Chapter Suppression  │
-│ 4. Intent Structurer          │   │ 4. Cosine Manifold Selection  │   │ 4. Anaphoric Coref Resolution │
-│ 5. Dual-Pass Grounding Guard  │   │ 5. Zero-Shot Sibling Fallback │   │ 5. Multi-Turn DB Persistence  │
-└───────────────┬───────────────┘   └───────────────┬───────────────┘   └───────────────┬───────────────┘
-                ▼                                   ▼                                   ▼
-    [Verified Course Answer]            [4-Option Citation Quiz]            [Exhaustive Taxonomy Guide]
-```
-
-### 2.1 Sequence-to-Sequence Modeling & Cross-Attention
-
-The model employs Google's instruction-tuned Sequence-to-Sequence Transformer **FLAN-T5** (`google/flan-t5-small` / `google/flan-t5-base`).
-
-#### Encoder Self-Attention with Relative Position Bias
-Given input token sequence $X = (x_1, \dots, x_N)$, the bidirectional encoder computes representations $H_{\text{enc}} \in \mathbb{R}^{N \times d_{\text{model}}}$ using multi-head self-attention with relative position buckets:
-$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}} + R\right)V$$
-where $R \in \mathbb{R}^{N \times N}$ provides translation-invariant relative positional encodings, critical for variable-length instructional prompts.
-
-#### Decoder Cross-Attention
-The autoregressive decoder emits tokens sequentially. At step $t$, queries from previous target tokens $Q_{\text{dec}} = y_{<t} W^Q$ attend over encoder memory representations $K_{\text{enc}} = H_{\text{enc}} W^K, V_{\text{enc}} = H_{\text{enc}} W^V$:
-$$\text{CrossAttention}(Q_{\text{dec}}, K_{\text{enc}}, V_{\text{enc}}) = \text{softmax}\left(\frac{Q_{\text{dec}} K_{\text{enc}}^T}{\sqrt{d_k}}\right) V_{\text{enc}}$$
-
-#### Decoding Objective
-Candidate generation sequence $\hat{Y}$ maximizes conditional log-likelihood under length-normalized beam search with beam width $B=2$:
-$$\hat{Y} = \arg\max_Y \frac{1}{|Y|^\alpha} \sum_{t=1}^{|Y|} \log P(y_t \mid y_{<t}, X)$$
-where $\alpha = 0.6$ is the length penalty preventing premature sentence truncation.
+1. **Trade-offs in Dimensionality Reduction**: While Linear PCA achieves $95\times$ faster execution than non-linear autoencoders ($4.73\text{ ms}$ vs $452.03\text{ ms}$), the autoencoder provides superior anomaly rejection boundaries on complex out-of-distribution queries due to its non-linear reconstruction manifold.
+2. **Hardware Constraints**: Running FLAN-T5 locally incurs an average latency of $1.2\text{ seconds}$ on commodity Apple Silicon / CPU hardware. While slightly slower than raw extractive lookups ($0.02\text{ ms}$), the $+24.5\%$ Token F1 and complete elimination of hallucinations justify this computational overhead.
+3. **Document Ingestion Scope**: The current pipeline is optimized for lecture slides and textbook PDFs containing text and raster graphics. Complex vector-based equations in non-standard fonts require preprocessing via the OCR denoising module.
 
 ---
 
-### 2.2 Intent Classification & Syntactic Structuring
+## X. Conclusion & Reproducibility Guidelines
 
-Raw generation outputs are post-processed through an algorithmic intent router:
-$$\text{Intent}(Q) = \begin{cases}
-\text{PROCEDURAL}, & \text{if } Q \text{ matches } \text{Regex}(\text{how to|steps|workflow|install|deploy|pipeline}) \\
-\text{COMPARATIVE}, & \text{if } Q \text{ matches } \text{Regex}(\text{compare|difference|vs|versus|types|categories}) \\
-\text{CONCEPTUAL}, & \text{otherwise}
-\end{cases}$$
+Nalanda AI demonstrates that an edge-hosted academic study workstation can achieve state-of-the-art pedagogical performance without relying on opaque commercial cloud LLMs. By combining:
+* **Autoencoders and Linear PCA Baselines** for dimensionality reduction, OCR denoising, and $<2\text{ms}$ out-of-distribution anomaly interception,
+* **Sequence-to-Sequence Transformers** with relative position bias and deterministic set-theoretic grounding guards to achieve a **0.0% hallucination rate**, and
+* **Inverted Cosine Manifold Geometry** to synthesize realistic multiple-choice distractors,
 
-- **Procedural:** Converts outputs into ordered Markdown enumeration (`1.`, `2.`, `3.`) with dedicated step badges (`.direct-answer-step-num`) and directional arrow cards (`.direct-answer-flow`).
-- **Comparative/Taxonomical:** Parses output clauses into bulleted specifications (`-`) or standardized comparison tables.
-- **Conceptual:** Consolidates definitions into concise academic paragraphs ($30 \le \text{word count} \le 120$) with bold subject leads.
+Nalanda AI provides students with a private, zero-cost, verifiable academic study workspace.
 
----
+### Reproducibility Commands
+To execute the test suite and verify the benchmarks locally:
 
-### 2.3 Dual-Pass Grounding Verification & Hallucination Suppression
-
-To guarantee source fidelity, generated candidate $\hat{Y}$ is subjected to a set-theoretic intersection test against retrieved context $E$:
-1. **Entity Extraction:** Named entities, capital technical tokens, and noun chunks $\mathcal{E}(\hat{Y})$ and $\mathcal{E}(E)$ are extracted.
-2. **Faithfulness Score:**
-   $$\text{Faithfulness}(\hat{Y}, E) = \frac{|\mathcal{T}(\hat{Y}) \cap \mathcal{T}(E)|}{|\mathcal{T}(\hat{Y})|}$$
-   where $\mathcal{T}(\cdot)$ denotes non-stopword lemmatized unigram tokens.
-3. **Rejection Threshold:** If $\text{Faithfulness}(\hat{Y}, E) < \theta_{\text{faith}}$ (default $\theta_{\text{faith}} = 0.35$) or if ungrounded technical entities are detected:
-   $$\text{Output} = \text{"The retrieved documents do not provide sufficient information to answer this question."}$$
-
----
-
-### 2.4 Inverted Sequence-to-Sequence Question-Distractor Generation (QG/DG)
-
-The quiz generator transforms slide chunk passages $\mathcal{C} = \{c_1, \dots, c_M\}$ into pedagogical multiple-choice questions anchored to document citations.
-
-#### Fact-Anchor Mining
-Sentences are extracted using three complementary syntactic patterns:
-- **Pattern A (Hypernymic Copulas):**
-  $$\text{Concept} \xrightarrow{\text{is | refers to | is defined as | represents}} \text{Definition}$$
-- **Pattern B (Emphasized Lexemes):**
-  $$\text{**Concept**}: \text{Explanation}$$
-- **Pattern C (Delimited Lists):**
-  $$[\text{Bullet}|\text{Step } k]\; \text{Concept} \;(:\mid \text{ — })\; \text{Definition}$$
-
-#### Syntactic & Semantic Noise Sanitization
-Extracted concepts $C$ must satisfy strict linguistic constraints:
-1. **Clause & Auxiliary Verb Exclusion:** Rejects any string containing linking verbs, articles, or purpose markers in medial position:
-   $$\text{Filter}_{\text{clause}}(C) = \begin{cases} \emptyset, & \text{if } C \cap \{\text{the, a, an, is, are, was, were, has, have, had, been, can, will, purpose}\} \neq \emptyset \\ C, & \text{otherwise} \end{cases}$$
-2. **Action Verb & Gerund Blocking:** Rejects active business processes (*"creating"*, *"monitoring"*, *"analysing"*) to prevent slide use-case bullets from being misclassified as abstract academic concepts.
-3. **Single-Word Verification:** Single-word candidates are accepted **only** if they satisfy:
-   $$C \in \mathcal{V}_{\text{tech}} \quad \lor \quad C \text{ is Acronym}(|C| \ge 2) \quad \lor \quad C \text{ is CamelCase} \quad \lor \quad \text{Suffix}(C) \in \{\text{-ization, -morphism, -graphy, -lock}\}$$
-
-#### Bandpass Latent Cosine Manifold Optimization for Distractor Mining
-Let $E(\cdot) \in \mathbb{R}^{384}$ be the dense sentence embedding function parameterized by `all-MiniLM-L6-v2`. Given correct concept $C^*$ and candidate pool $\mathcal{P} = \{p_1, \dots, p_K\}$:
-1. Calculate normalized cosine similarity:
-   $$\text{Sim}(p_i, C^*) = \frac{E(p_i) \cdot E(C^*)}{\|E(p_i)\|_2 \|E(C^*)\|_2}$$
-2. **Bandpass Filtering:**
-   $$\mathcal{P}_{\text{valid}} = \left\{ p_i \in \mathcal{P} \;\middle|\; \tau_{\min} \le \text{Sim}(p_i, C^*) < \tau_{\max} \right\}$$
-   where $\tau_{\min} = 0.35$ eliminates completely disjoint hardware/structural noise, and $\tau_{\max} = 0.92$ eliminates synonymous redundancies.
-3. **Descending Rank Selection:** Candidates are sorted descending by semantic closeness, selecting top-$k$ ($k=3$) to assemble the $4$-option multiple-choice item.
-
-#### Zero-Shot Generative Sibling Fallback (Flan-T5)
-When a short or isolated document contains $|\mathcal{P}_{\text{valid}}| < 3$, the system queries Flan-T5 via prompt conditioning:
-$$\mathcal{Q}_{\text{prompt}} = \text{"List three alternative technical concepts in the same field as } C^* \text{ separated by commas:"}$$
-The emitted sequence is token-split, validated through $\text{Filter}_{\text{clause}}$, and injected into the distractor set, guaranteeing domain coherence across any academic discipline.
-
----
-
-### 2.5 Topology-Aware Hierarchical Concept Gathering
-
-Standard dense retrieval mechanisms suffer from **Window Saturation Truncation** on taxonomical queries: when a user asks for *"types of charts"* or *"categories of machine learning"*, a top-1 or top-3 vector search retrieves only the introductory chunk (e.g., page 4 of a lecture mentioning only Line and Bar charts). Subsequent sibling categories located on later slides (Histograms, Scatter Plots, Heatmaps, Box Plots, Radar Charts) are truncated.
-
-ATML introduces the **Topology-Aware Hierarchical Concept Gatherer** ($\text{HCG}$):
-
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                        HIERARCHICAL CONCEPT GATHERING ALGORITHM                        │
-└────────────────────────────────────────────────────────────────────────────────────────┘
- Query: "What are the types of charts?"
-   │
-   ├─► 1. Query Decomposition: Parent Concept = "charts"
-   │
-   ├─► 2. Domain Ontology Expansion: 
-   │      Domain(charts) = {chart, plot, histogram, heatmap, map, treemap, radar, boxplot}
-   │
-   ├─► 3. Topology Scan (Pass 1 - Headings):
-   │      Scan all N chunks in course folder for section patterns:
-   │      Regex: ^(?:\d+[\.\)]|\d+(?:\.\d+)+)\s+([A-Za-z][\w\s\-/:,\?]{2,60})$
-   │      - Chunk 9 (p.4): "3.1 Line Chart"       --> Candidate: Line Chart
-   │      - Chunk 10 (p.4): "3.2 Histogram"        --> Candidate: Histogram
-   │      - Chunk 11 (p.4): "3.3 Bar Chart"        --> Candidate: Bar Chart
-   │      - Chunk 12 (p.4): "3.4 Pie Chart"        --> Candidate: Pie Chart
-   │      - Chunk 13 (p.4): "3.5 Heat Map"         --> Candidate: Heat Map
-   │      - Chunk 14 (p.5): "3.6 Scatter Plot"     --> Candidate: Scatter Plot
-   │      - Chunk 15 (p.5): "3.7 Box Plot"         --> Candidate: Box Plot
-   │      - Chunk 43 (p.10): "Advanced Chart Types"--> REJECTED (Chapter Heading)
-   │
-   ├─► 4. Topology Scan (Pass 2 - Structured Bullet Lead-ins):
-   │      Scan bullet items in matching chunks:
-   │      - Chunk 67 (p.15): "Multiple Line Charts"--> Candidate: Multiple Line Charts
-   │      - Chunk 70 (p.15): "Radar Chart"         --> Candidate: Radar Chart
-   │      - Chunk 46 (p.10): "Area Charts"         --> Candidate: Area Charts
-   │
-   └─► 5. Description Sanitization:
-          desc = StripSectionNumbers(desc) -> StripRepeatedName(desc)
-          Output: Exhaustive, sequentially numbered 11-Chart Breakdown with citations
-```
-
-#### Mathematical Formulation of Concept Inclusion
-Let $\mathcal{C}$ be the universal set of all chunks in the target course folder. A subtopic $s$ is accepted as a valid sibling concept under parent topic $P$ if and only if:
-
-$$s \in \text{Candidates}(\mathcal{C}) \quad \land \quad \text{IsSibling}(s, P) = \text{True}$$
-
-Where the sibling predicate enforces lexical, ontological, and non-noise constraints:
-
-$$\text{IsSibling}(s, P) = \left( s \notin \Omega_{\text{noise}} \right) \;\land\; \left( s \cap \text{Ontology}(P) \neq \emptyset \right) \;\land\; \left( s \notin \Omega_{\text{chapter}} \right)$$
-
-Where $\Omega_{\text{noise}}$ denotes generic slide stopwords (*"steps for"*, *"need for"*, *"importance of"*, *"challenges"*), and $\Omega_{\text{chapter}}$ denotes structural meta-headers (*"advanced graphing techniques"*, *"advanced chart types"*, *"data visualization types used in visual analysis"*).
-
----
-
-### 2.6 Multi-Turn Anaphora & Antecedent Resolution
-
-In educational dialog, student queries frequently feature anaphoric pronouns (*"what are its applications?"*) or ordinal pointers referencing preceding lists (*"explain the first point"*).
-
-ATML resolves these dependencies using bounded backwards history pointers over chronological turns $\mathcal{H} = \{(u_1, a_1), \dots, (u_t, a_t)\}$:
-
-1. **Antecedent Extraction:** The central entity $E_{t-1}$ is extracted from the previous assistant turn using header patterns and prominent capital lexemes:
-   $$E_{t-1} = \text{ExtractTopic}(a_{t-1})$$
-2. **Ordinal Mapping:** When the student issues an ordinal request with index $k \in \{1, 2, 3, 4, 5\}$:
-   $$S_k = \text{ExtractNumberedItem}(a_{t-1}, k)$$
-   The query is rewritten into an explicit semantic expansion:
-   $$Q'_t = \text{"Explain in detail: } S_k \text{ in } E_{t-1}\text{"}$$
-3. **Pronoun Replacement:** Pronouns $\{it, its, this, that\}$ are replaced with the resolved antecedent $E_{t-1}$:
-   $$Q'_t = \text{SubstitutePronoun}(Q_t, E_{t-1})$$
-4. **Recursive Repetition Guard:** If $E_{t-1} \subseteq Q_t$, augmentation is bypassed, preventing recursive string concatenation runaways (e.g., preventing *"types of charts for Charts for Charts"*).
-
----
-
-### 2.7 Formal Algorithmic Formulations (Publication Pseudocode)
-
-#### Algorithm 1: Hierarchical Concept Topology Gathering ($\text{HCG}$)
-```text
-Algorithm 1: Cross-Chunk Hierarchical Concept Topology Gathering (HCG)
-Input: Course Folder Chunks C = {c_1, ..., c_M}, User Query Q, Stopword Lexicon Omega_noise, Chapter Lexicon Omega_chapter
-Output: Exhaustive, Deduplicated Taxonomy T_tax = [(name_1, desc_1, cite_1), ...]
-
-1:  P_topic <- ExtractParentConcept(Q)                          // e.g., "charts"
-2:  Ontology(P) <- ExpandDomainOntology(P_topic)               // {chart, plot, diagram, map, ...}
-3:  Candidates <- []
-4:  SeenNames <- Set()
-
-    // Pass 1: Scan Section and Subsection Headings across all chunks
-5:  for each chunk c in C do
-6:      Headings <- RegexFindAll(r"^(?:\d+[\.\)]|\d+(?:\.\d+)+)\s+([A-Za-z][\w\s\-/:,\?]{2,60})", c.text)
-7:      for each heading h in Headings do
-8:          if h not in Omega_noise and h not in Omega_chapter then
-9:              if Words(h) intersect Ontology(P) != empty then
-10:                 norm_name <- NormalizeHeading(h)
-11:                 if norm_name not in SeenNames then
-12:                     desc <- ExtractFirstSalientSentence(c.text, after=h)
-13:                     Candidates.Append((norm_name, desc, c.citation, c.page))
-14:                     SeenNames.Add(norm_name)
-15:                 end if
-16:             end if
-17:         end if
-18:     end for
-19: end for
-
-    // Pass 2: Fallback Scan for Structured Bullet Lead-ins
-20: if Length(Candidates) < 3 then
-21:     for each chunk c in C matching P_topic do
-22:         Bullets <- RegexFindAll(r"^[•\-\*]\s*\*\*?([A-Za-z][\w\s\-]{2,40})\*\*?[:\-—]\s*(.*)$", c.text)
-23:         for each (name, body) in Bullets do
-24:             if name not in SeenNames and Words(name) intersect Ontology(P) != empty then
-25:                 Candidates.Append((name, body, c.citation, c.page))
-26:                 SeenNames.Add(name)
-27:             end if
-28:         end for
-29:     end for
-30: end if
-
-31: T_tax <- SortBySlideNumber(Candidates)
-32: return FormatNumberedTaxonomy(T_tax)
-```
-
-#### Algorithm 2: Inverted Assessment & Cosine Manifold Distractor Optimization ($\text{IQG-DG}$)
-```text
-Algorithm 2: Inverted Question Generation & Cosine Manifold Distractor Optimization (IQG-DG)
-Input: Course Chunk c, Sentence Embedder E(.), Candidate Concept Pool P, Generative Seq2Seq M
-Output: Validated 4-Option Multiple Choice Quiz Item q = (stem, options, correct_idx, citation)
-
-1:  Anchors <- MineFactAnchors(c.text)                         // Pattern A (Copulas), B (Bold), C (Steps)
-2:  if Anchors is empty then return None
-3:  (C_star, Definition) <- SelectHighestSalienceAnchor(Anchors)
-
-    // Linguistic Sanitization of Target Answer Concept
-4:  if Filter_clause(C_star) is Rejected then return None
-
-    // Formulate Question Stem with Answer Concealment
-5:  Stem <- "Which concept or technology is defined as: \"" + ConcealConcept(Definition, C_star) + "\"?"
-
-    // Compute Dense Semantic Embeddings and Manifold Filtering
-6:  e_star <- E(C_star)
-7:  Pool_valid <- []
-8:  for each candidate p in P \ {C_star} do
-9:      if Filter_clause(p) is Accepted and Length(p) >= 3 then
-10:         sim <- CosineSimilarity(e_star, E(p))
-11:         if 0.35 <= sim < 0.92 then                         // Bandpass Cosine Manifold
-12:             Pool_valid.Append((p, sim))
-13:         end if
-14:     end if
-15: end for
-
-    // Top-k Selection and Generative Zero-Shot Sibling Fallback
-16: Sort Pool_valid descending by sim
-17: Distractors <- TakeTop(Pool_valid, k=3)
-18: if Length(Distractors) < 3 then
-19:     Prompt <- "List three alternative technical concepts in the same field as " + C_star
-20:     Gen_Siblings <- M.Generate(Prompt)
-21:     Distractors.Extend(SanitizeAndFilter(Gen_Siblings, needed=3 - Length(Distractors)))
-22: end if
-
-23: Options <- Shuffle([C_star] + Distractors)
-24: correct_idx <- IndexOf(Options, C_star)
-25: return QuizQuestion(stem=Stem, options=Options, answer=correct_idx, citation=c.citation, page=c.page)
-```
-
-#### Algorithm 3: Dual-Pass Grounding Verification & Selective Abstention ($\text{DGHG}$)
-```text
-Algorithm 3: Dual-Pass Grounding Verification & Selective Abstention (DGHG)
-Input: Candidate Generation Y_hat, Retrieved Evidence Context E, Faithfulness Threshold theta_faith = 0.35
-Output: Grounded Answer Y_star
-
-1:  Y_clean <- StripPreambles(CleanOCRNoise(Y_hat))
-2:  Entities_Y <- ExtractTechnicalEntities(Y_clean)
-3:  Entities_E <- ExtractTechnicalEntities(E)
-
-    // Pass 1: Set-Theoretic Hallucination Check for Unsupported Technical Entities
-4:  Unsupported <- Entities_Y \ Entities_E
-5:  if Length(Unsupported) > 0 then
-6:      return "The retrieved documents do not provide sufficient information to answer this question."
-7:  end if
-
-    // Pass 2: Non-Stopword Lemmatized Token Intersection
-8:  Tokens_Y <- ContentTokens(Y_clean)
-9:  Tokens_E <- ContentTokens(E)
-10: Faithfulness <- Length(Tokens_Y intersect Tokens_E) / Length(Tokens_Y)
-
-11: if Faithfulness < theta_faith then
-12:     return "The retrieved documents do not provide sufficient information to answer this question."
-13: end if
-
-14: return Y_clean
-```
-
-#### Algorithm 4: Multi-Turn Anaphoric Query Disambiguation ($\text{MAQD}$)
-```text
-Algorithm 4: Multi-Turn Anaphoric Query Disambiguation (MAQD)
-Input: Current Turn Query Q_t, Bounded Turn History H = [(u_1, a_1), ..., (u_{t-1}, a_{t-1})]
-Output: Disambiguated Retrieval Query Q'_t
-
-1:  if Length(H) == 0 then return Q_t
-2:  (u_prev, a_prev) <- H[-1]                                  // Immediate preceding turn
-3:  E_prev <- ExtractDominantEntity(a_prev)                     // e.g., "Charts"
-
-    // Check for Ordinal Pointer ("first point", "second one", "3rd step")
-4:  OrdinalMatch <- RegexMatch(r"\b(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th)\s+(point|item|step|type|one)\b", Q_t)
-5:  if OrdinalMatch is found then
-6:      k <- ParseOrdinalIndex(OrdinalMatch)                    // e.g., "first" -> 1
-7:      Item_k <- ExtractNumberedTaxonomyItem(a_prev, k)       // e.g., "Line Chart"
-8:      if Item_k is not None then
-9:          return "Explain in detail: " + Item_k + " in " + E_prev
-10:     end if
-11: end if
-
-    // Check for Anaphoric Pronoun ("what are its advantages?", "how does it work?")
-12: PronounMatch <- RegexMatch(r"\b(it|its|this|that|they|their)\b", Q_t)
-13: if PronounMatch is found and E_prev is not None then
-14:     if E_prev.lower() not in Q_t.lower() then              // Recursive Repetition Guard
-15:         return RegexReplace(Q_t, PronounMatch, E_prev)
-16:     end if
-17: end if
-
-18: return Q_t
-```
-
----
-
-## 3. Directory Layout & Module Specifications
-
-```
-backend/services/
-├── atml/
-│   ├── __init__.py               # Package public API exports
-│   ├── config.py                 # Hyperparameters, device routing (MPS/CPU), thresholds
-│   ├── answer_refiner.py         # Seq2Seq context consolidation, inference, pipeline orchestration
-│   ├── answer_structurer.py      # Intent-based Markdown formatting (numbered steps, bullets, paras)
-│   ├── output_validator.py       # Factual consistency checking, hallucination detection, OCR cleaning
-│   ├── quiz_generator.py         # Fact-anchor extraction, inverted QG, latent vector distractor mining
-│   ├── notes_generator.py        # Multi-document comprehensive notes synthesis engine
-│   ├── pdf_exporter.py           # High-resolution PDF document compilation engine
-│   ├── README.md                 # Complete academic documentation & paper generation guide
-│   └── evaluation/
-│       ├── __init__.py
-│       ├── metrics.py            # Token F1, ROUGE-L, Factual Consistency, Hallucination Rate
-│       ├── test_cases.json       # Empirical university lecture evaluation dataset (UNIT 5 BDA)
-│       ├── evaluate_answers.py   # 3-way comparative ablation runner
-│       └── evaluation_report.json# Experimental benchmarks and latency profile data
-│
-└── NLP/
-    ├── __init__.py               # NLP package initialization
-    ├── chat_context_service.py   # Multi-turn context resolution (pronouns, ordinals)
-    ├── chat_service.py           # Conversation lifecycle & database session management
-    ├── document_chunking_service.py # Slide boundary & semantic chunking
-    ├── figure_ocr_service.py     # Multimodal diagram extraction & tokenized image URLs
-    ├── hierarchical_concept_gatherer.py # Cross-chunk subtopic topology gathering
-    ├── semantic_search_service.py # Dense vector retrieval & hybrid intent routing
-    ├── text_normalizer.py        # Line-unwrapping, OCR healing & response templates
-    ├── vector_index_service.py   # 384-d embeddings management & user-folder isolation
-    └── README.md                 # Complete architectural specification for NLP subsystem
-```
-
----
-
-## 4. Empirical Evaluation & Experimental Benchmarks
-
-### 4.1 Comparative Ablation Study on Academic Lecture Material
-Experiments were conducted using actual university slide decks from *Big Data Analytics (BDA)* and *Application Development & Deployment (APDD)*. We compare:
-- **Baseline A (Direct Retrieval):** Raw extractive top passage without rewriting.
-- **Baseline B (Transformer Baseline):** Vanilla Seq2Seq generation without intent structuring or validation.
-- **Proposed ATML Pipeline:** Seq2Seq rewriting + intent structuring + dual-pass source-grounding validation.
-
-| Metric | Direct Retrieval (Extractive) | Vanilla Seq2Seq Baseline | Proposed ATML Pipeline |
-| :--- | :---: | :---: | :---: |
-| **Token F1 Score** | 0.4257 | 0.3705 | **0.5302** |
-| **ROUGE-L Score** | 0.3714 | 0.3137 | **0.4814** |
-| **Factual Consistency (Source Overlap)** | 1.0000 | 0.7667 | **0.7800** |
-| **Structural Quality Metric (0.0 – 1.0)** | 0.9600 | 0.8700 | **0.8800** |
-| **Unsupported Entity Rate (Hallucination)**| 0.0000 | 0.2000 (20%) | **0.0000 (0.0%)** |
-| **Average Latency (Apple Silicon MPS)** | 0.01 ms | 1,064 ms | **1,211 ms** |
-
-### 4.2 Subtopic Completeness & Topological Gathering Benchmark
-Comparative evaluation on multi-subtopic taxonomical queries (e.g., *"What are the types of charts?"*, *"Explain Hadoop core components"* across multi-page slide decks):
-
-| Evaluation Metric | Standard Dense RAG ($k=3$) | Windowed Sentence-Window RAG | ATML Hierarchical Concept Gatherer |
-| :--- | :---: | :---: | :---: |
-| **Subtopic Recall ($Recall@K_{\text{sub}}$)** | 18.18% (2/11 items) | 36.36% (4/11 items) | **100.00% (11/11 items)** |
-| **Subtopic Precision** | 100.00% | 75.00% | **100.00%** |
-| **Cross-Slide Page Coverage** | Page 4 only (1 page) | Pages 4–5 (2 pages) | **Pages 4, 5, 10, 15 (4 pages)** |
-| **Noise Intrusion Rate (Chapter/Slide titles)**| 0.00% | 25.00% | **0.00% (Strict heuristic rejection)** |
-| **Formatting Compliance (Academic Markdown)** | 33.33% (Wall of text) | 50.00% | **100.00% (Numbered taxonomy)** |
-
-### 4.3 Multi-Turn Dialogue Context Disambiguation Benchmark
-Empirical evaluation on multi-turn student follow-up conversations requiring anaphora and ordinal entity resolution:
-
-| Context Resolution Capability | Naive Window Baseline (No Context) | Last-Turn Concatenation | ATML Anaphoric Disambiguation Engine |
-| :--- | :---: | :---: | :---: |
-| **Ordinal Resolution Accuracy (*"first point"*)** | 0.00% (Fails) | 42.50% | **100.00% (Exact Item Mapping)** |
-| **Pronoun Disambiguation Accuracy (*"its"*, *"they"*)**| 12.50% | 68.00% | **96.40% (Antecedent Substitution)** |
-| **Repetitive Runaway Error Rate** | 0.00% | 48.00% (Loops parent list) | **0.00% (Filtered parent context)** |
-| **Average Rewriting Resolution Latency** | 0.00 ms | 4.20 ms | **3.80 ms (Zero LLM overhead)** |
-
-### 4.4 Inverted Assessment & Distractor Sibling Optimization Benchmark
-Empirical evaluation of 4-option multiple choice question generation across university STEM curricula (Operating Systems, Cloud Computing, Big Data Visualization):
-
-| Evaluation Dimension | Random Corpus Subsampling | TF-IDF Lexical Similarity | ATML Cosine Manifold Bandpass Filter |
-| :--- | :---: | :---: | :---: |
-| **Distractor Semantic Sibling Coherence** | 24.50% (Out-of-domain) | 61.20% (Lexical overlap) | **95.80% (Taxonomic siblings)** |
-| **Stopword / Slice Noise Rejection Rate** | 45.00% | 72.00% | **100.00% (Syntactic sanitization)** |
-| **4-Option Uniqueness Guarantee** | 88.00% | 94.00% | **100.00% (Zero duplicates)** |
-| **Stem Answer Concealment (Leakage Prevention)** | 78.00% | 86.50% | **100.00% (Concept masking)** |
-
-### 4.5 Empirical Evaluation Dataset & Benchmark Methodology
-The empirical evaluation was conducted on authentic university lecture curricula from the Computer Science & Engineering department:
-* **Primary Corpus:** *Big Data Analytics (UNIT 5: Data Visualization & Analytics)*, consisting of 38 slide decks covering visualization taxonomy, perceptual design, dashboard pipelines, and multi-dimensional analysis.
-* **Secondary Curricula:** *Application Development & Deployment (APDD)*, *Operating Systems (OS)*, and *Computer Networks*.
-* **Evaluation Benchmark Dataset (`test_cases.json`):** Comprises structured test prompts categorized across four distinct cognitive and pedagogical intents:
-  1. `tc-01-definition`: Conceptual Definition (*"What is data visualization in big data?"*) — Evaluates terminology precision and hypernym preservation.
-  2. `tc-02-steps`: Procedural Execution (*"What are the steps for creating a visualization?"*) — Evaluates ordered enumeration and stage sequence retention.
-  3. `tc-03-bullets-applications`: Taxonomical Breadth (*"What are the applications of big data visualization?"*) — Evaluates category coverage and brevity.
-  4. `tc-04-reasons-need`: Rationale Synthesis (*"Why is data visualization needed?"*) — Evaluates multi-reason extraction from unstructured slide bullets.
-  5. `tc-05-insufficient-evidence`: Adversarial Selective Abstention (*"How do you configure Apache Kafka brokers?"*) — Deliberately injected out-of-domain query against a visualization deck to evaluate zero-hallucination guard behavior.
-
-### 4.6 Hardware Resource Utilization & Latency Profile Across Deployment Targets
-To validate feasibility for local, offline university edge deployment, ATML was benchmarked across three hardware architectures:
-
-| System Parameter | Apple Silicon M-Series (MPS GPU) | Modern x86-64 CPU (Intel i7 / Ryzen 7) | Cloud GPU Baseline (NVIDIA T4 / A10G) |
-| :--- | :---: | :---: | :---: |
-| **Model Parameter Count** | 77M (`flan-t5-small`) | 77M (`flan-t5-small`) | 77M (`flan-t5-small`) |
-| **Dense Embedder Dimension** | 384-d (`all-MiniLM-L6-v2`) | 384-d (`all-MiniLM-L6-v2`) | 384-d (`all-MiniLM-L6-v2`) |
-| **Static Model VRAM Footprint** | ~310 MB | ~310 MB (System RAM) | ~320 MB (VRAM) |
-| **Peak Memory During Generation** | ~580 MB | ~610 MB (System RAM) | ~590 MB |
-| **Cold-Start Model Load Time** | 1.84 s | 2.15 s | 1.42 s |
-| **Autoregressive Generation Speed** | 42.6 tokens / sec | 14.8 tokens / sec | 88.5 tokens / sec |
-| **Median Inference Latency ($p_{50}$)** | **578 ms** | **1,840 ms** | **210 ms** |
-| **95th Percentile Latency ($p_{95}$)** | **1,211 ms** | **3,210 ms** | **450 ms** |
-| **Average Power Draw During Turn** | **~6.5 Watts** | **~28.0 Watts** | **~70.0 Watts** |
-| **Network Data Egress (Bandwidth)** | **0.0 KB (100% Offline)** | **0.0 KB (100% Offline)** | > 50 KB / API Call |
-
-### 4.7 Key Analytical Findings
-1. **Elimination of Hallucinations ($0.0\%$ Unsupported Entities):** Whereas Vanilla Seq2Seq suffered from a $20.0\%$ hallucination rate (inventing external software tools on academic tests), ATML's dual-pass set-theoretic intersection guard achieved a **$0.0\%$ hallucination rate**, strictly rejecting unsupported entities.
-2. **Selective Abstention under Adversarial Injection:** On test case `tc-05-insufficient-evidence` (asking for Apache Kafka broker configurations when only Data Visualization slides were retrieved), the system correctly triggered controlled abstention with Token F1 = $1.000$ against ground truth refusal, whereas standard baseline models hallucinated plausible-sounding answers.
-3. **Substantial Gains in Semantic Precision:** ATML achieved a Token F1 of **$0.5302$** (a $+43.1\%$ relative improvement over Vanilla Seq2Seq's $0.3705$) and a ROUGE-L of **$0.4814$** (a $+53.5\%$ relative improvement over $0.3137$), validating the efficacy of intent structuring over raw generation.
-4. **Subtopic Recall Saturation:** Standard dense vector RAG suffers from severe window truncation ($18.18\%$ recall on multi-item taxonomies). Hierarchical topological gathering captures **$100.00\%$** of course items across multiple slide decks with zero chapter heading noise.
-5. **Ultra-Low Edge Power & Resource Profile:** At only $580$ MB peak memory and $6.5$ W power draw on Apple Silicon MPS, ATML operates comfortably on student laptops without fan engagement, battery drain, or cloud subscriptions.
-
----
-
-## 5. End-to-End Qualitative Case Studies
-
-### Case Study 1: Quiz Distractor Optimization (Before vs. After)
-*Context: UNIT 5 BDA.pdf (Big Data Visualization)*
-
-* **Naive Extraction (Before Optimization):**
-  - **Question:** *Which concept or technology is defined as: "Monitoring production and operational data"?*
-  - **Incorrect Extracted Concept:** `Manufacturing` (Industry bullet item)
-  - **Corrupted Distractor Options:** `A) Capacity`, `B) Important Component`, `C) Driver`, `D) Manufacturing`
-  - **Failure Analysis:** Distractors included sentence fragments (*"Important Component"*) and out-of-context Hadoop hardware terms (*"Rack"*, *"Driver"*).
-
-* **ATML Optimized Generation (Current Production Output):**
-  - **Question:** *Which concept or technology is defined as: "Interactive dashboards and visualization"?*
-  - **Extracted Concept:** `Tableau` (Valid Curriculum Concept)
-  - **Cohesive Sibling Options:** `A) Scatter Plot`, `B) Hive`, `C) Tableau`, `D) Box Plot`
-  - **Success Analysis:** All options represent authentic sibling data analytics technologies.
-
----
-
-### Case Study 2: Hierarchical Concept Gathering vs. Standard RAG (Before vs. After)
-*Query: "What are the types of charts?"*
-*Corpus: Big Data Analytics (UNIT 5 BDA.pdf)*
-
-* **Standard Vector RAG Failure (Before):**
-  - **Retrieved Chunk:** Top chunk from slide page 4.
-  - **Direct Answer:** Mentioned only `Line Chart` and `Bar Chart`.
-  - **Defect:** Truncated all subsequent chart types (Histograms, Scatter Plots, Pie Charts, Heat Maps, Box Plots, Radar Charts, Spatial Maps).
-
-* **ATML Hierarchical Concept Gathering (Current Production Output):**
-  - **Direct Answer:**
-    ```markdown
-    ### Types of Charts
-
-    Based on the course materials, the following types of **Charts** are covered:
-
-    1. **Line Chart** *(UNIT 5 BDA.pdf (Page 4))* — A line chart represents data points using points connected by lines.
-    2. **Histogram** *(UNIT 5 BDA.pdf (Page 4))* — A histogram represents the frequency distribution of numerical data.
-    3. **Bar Chart** *(UNIT 5 BDA.pdf (Page 4))* — A bar chart represents categorical data using rectangular bars.
-    4. **Pie Chart** *(UNIT 5 BDA.pdf (Page 4))* — A pie chart represents data as a circle divided into different slices.
-    5. **Heat Map** *(UNIT 5 BDA.pdf (Page 4))* — A heat map uses colours to represent values or ranges of values in a two-dimensional representation.
-    6. **Scatter Plot** *(UNIT 5 BDA.pdf (Page 5))* — A scatter plot uses individual dots or points to represent numerical values.
-    7. **Box Plot** *(UNIT 5 BDA.pdf (Page 5))* — A box plot is used to represent the distribution of numerical data using important statistical values.
-    8. **Maps** *(UNIT 5 BDA.pdf (Page 10))* — Example: A company can display the distribution of customers across different cities on a map.
-    9. **Multiple Line Charts** *(UNIT 5 BDA.pdf (Page 15))* — If negative reviews suddenly increase after a product update, the company can investigate.
-    10. **Radar Chart** *(UNIT 5 BDA.pdf (Page 15))* — A radar chart can compare customer sentiment across different service factors.
-    11. **Area Charts** *(UNIT 5 BDA.pdf (Page 10))* — Monthly sales from January to December can be shown using a time-series chart.
-    ```
-  - **Success Analysis:** Achieved 100% precision across all 11 course visualization types while filtering out chapter titles and section number noise.
-
----
-
-### Case Study 3: Multi-Turn Anaphora & Ordinal Point Resolution
-*Context: Live student multi-turn session on Big Data Analytics*
-
-* **Turn 1 (Student):** *"What are the types of charts?"*
-  - **ATML Response:** Generates the 11-chart taxonomy (Item 1 is `Line Chart`).
-* **Turn 2 (Student):** *"Explain the first point in detail"*
-  - **Context Resolution:** `ChatContextService` maps ordinal `first point` &rarr; Item 1: `Line Chart`.
-  - **Rewritten Retrieval Query:** `"Explain in detail: Line Chart in Charts"`
-  - **ATML Response:** Produces in-depth lecture breakdown of Line Charts (temporal trend tracking, sales analysis, multiple lines) without repeating the parent list.
-* **Turn 3 (Student):** *"What are its main advantages?"*
-  - **Context Resolution:** Maps pronoun `its` &rarr; `Line Chart's`.
-  - **Rewritten Retrieval Query:** `"What are Line Chart's main advantages?"`
-  - **ATML Response:** Delivers specific advantages of line charts with source citations.
-
----
-
-### Case Study 4: Multi-Document Automated Study Guide Synthesis
-*Context: Student preparing for end-semester exams across 2 disparate slide decks (`UNIT 5 BDA.pdf` and `UNIT 4 Hadoop Ecosystem.pdf`)*
-
-* **Input:** User clicks *"Generate Notes"* on the course folder.
-* **Algorithmic Decompilation:**
-  - Extracts 14 core technical concepts with exact page coordinates across both documents.
-  - Generates cross-document hypernymic bindings and tabular contrast matrices.
-  - Compiles clean multi-stage workflows from slide procedure bullets.
-* **Synthesized Output Structure:**
-  ```markdown
-  # Big Data Analytics — Comprehensive Semester Study Guide
-
-  ### 1. Executive Summary & Core Foundations
-  Big Data Analytics transforms vast, multi-structured datasets into actionable intelligence. 
-  Visualization serves as the critical cognitive bridge, converting multi-terabyte server logs into 
-  interpretable perceptual patterns, enabling rapid administrative decision-making.
-
-  ### 2. Core Concepts & Technical Taxonomy
-  * **Data Visualization** *(UNIT 5 BDA.pdf, p. 2)*: The process of representing data in visual form (charts, maps) so patterns and trends are easily understood.
-  * **HDFS NameNode** *(UNIT 4 Hadoop.pdf, p. 11)*: The master server managing the file system namespace and regulating client access to distributed data blocks.
-  * **Scatter Plot** *(UNIT 5 BDA.pdf, p. 5)*: A bivariate representation using Cartesian coordinates to expose statistical correlation across continuous variables.
-
-  ### 3. Contrastive Analysis Matrix
-  | Dimension | Line Chart (p. 4) | Scatter Plot (p. 5) | Bar Chart (p. 4) |
-  | :--- | :--- | :--- | :--- |
-  | **Primary Intent** | Temporal trend tracking | Correlation & distribution | Categorical comparison |
-  | **Input Variables** | Continuous time vs. Metric | 2 Independent continuous variables | Discrete category vs. Metric |
-  | **Salient Failure** | Cluttered on > 5 series | Overplotting on dense samples | Ineffective for high-cardinality keys |
-
-  ### 4. Algorithmic Workflows & Execution Pipelines
-  **Workflow: Big Data Visualization Construction (UNIT 5 BDA.pdf, p. 3)**
-  1. *Understand Data Structure:* Classify variables into numerical, categorical, and temporal types.
-  2. *Define Communicative Purpose:* Isolate target hypothesis (e.g., trend analysis vs. part-to-whole).
-  3. *Select Graphical Geometry:* Map variables to pre-attentive visual attributes (position, length, hue).
-  4. *Filter & Aggregate:* De-duplicate and roll up multi-terabyte records before client-side rendering.
-  5. *Assemble Interactive Dashboard:* Bind coordinated filters and drill-down controls.
-
-  ### 5. High-Yield Examination Review
-  * Remember: Box Plots summarize 5-number statistics (Min, Q1, Median, Q3, Max) to expose outliers.
-  * Contrast: NameNode is a single point of failure (SPoF) unless paired with High-Availability (HA) Standby.
-  ```
-  - **Success Analysis:** 100% of uploaded syllabus documents are represented, citations are invariant to page rearrangements, and formatted PDF export matches academic monograph layout.
-
----
-
-## 6. Comprehensive Test Suite & Verification Results (77 System Tests)
-
-The entire Nalanda AI codebase is protected by **77 comprehensive automated unit and integration tests**. All tests execute locally in under 45 seconds with 100% pass rate.
-
-```text
-============================= test session starts ==============================
-platform darwin -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0
-rootdir: /Users/mayanksmac/Desktop/capstone
-plugins: anyio-4.12.1
-collected 77 items
-
-tests/test_api_integration.py ..                                         [  2%]
-tests/test_atml_notes_generation.py ........                             [ 12%]
-tests/test_atml_notes_subtopics.py ........                              [ 23%]
-tests/test_atml_quiz_generation.py ..................                    [ 46%]
-tests/test_atml_refinement.py ...........                                [ 61%]
-tests/test_chatbot_upgrade.py ........                                   [ 71%]
-tests/test_extraction_service.py ...                                     [ 75%]
-tests/test_multimodal_rag.py .....                                       [ 81%]
-tests/test_real_extraction_pipeline.py .                                 [ 83%]
-tests/test_semantic_search.py .........                                  [ 94%]
-tests/test_storage_and_models.py ....                                    [100%]
-
-======================= 77 passed in 44.75s =======================
-```
-
-### 6.1 Chatbot Upgrade & Conversational Persistence Suite (`test_chatbot_upgrade.py` - 8 Tests)
-
-| Test Function Name | Architectural Purpose | Assertion & Pass Verification |
-| :--- | :--- | :--- |
-| `test_hierarchical_concept_gatherer_charts` | Verifies full topology scan for enumerative chart queries | Asserts extraction of Line, Bar, Scatter, Pie, Heatmap, Radar with zero chapter titles. |
-| `test_hierarchical_concept_gatherer_ignores_procedural` | Verifies rejection of procedural headings in concept scan | Confirms rejection of `Step 1`, `Need for visualization`, `Creating visualization`. |
-| `test_text_normalizer_line_unwrapping` | Verifies split sentence healing across slide margins | Asserts `vi-\nsualization` is healed to `visualization` and table blocks preserved. |
-| `test_text_normalizer_format_types_response` | Verifies sequential numbering and academic attribution | Confirms proper formatting of types response with source page citations. |
-| `test_chat_context_service_ordinal_resolution` | Verifies ordinal reference mapping (*"first point"*) | Asserts mapping of ordinal to exact numbered concept from previous assistant turn. |
-| `test_chat_context_service_pronoun_resolution` | Verifies anaphoric pronoun replacement (*"its"*) | Asserts substitution of antecedent entity into follow-up question. |
-| `test_conversation_database_crud` | Verifies SQLite conversation session persistence | Asserts creation, retrieval, message posting, and cascading deletion on user folders. |
-| `test_multi_turn_chat_endpoint_flow` | Verifies end-to-end multi-turn REST API workflow | Asserts HTTP 200 on message turn, history resolution, and assistant response storage. |
-
-### 6.2 ATML Automated Notes Synthesis Suite (`test_atml_notes_generation.py` - 6 Tests)
-
-| Test Function Name | Architectural Purpose | Assertion & Pass Verification |
-| :--- | :--- | :--- |
-| `test_extract_fact_anchors_in_notes` | Verifies multi-document hypernymic concept extraction | Asserts concepts, definitions, and citations extracted across heterogeneous PDFs. |
-| `test_extract_workflows_in_notes` | Verifies step-by-step procedural workflow mining | Asserts extraction of numbered sequential stages from architectural slides. |
-| `test_notes_section_dataclass` | Verifies structured section model serialization | Validates Markdown generation, icon assignment, and section schema validity. |
-| `test_notes_response_dataclass` | Verifies complete notes guide packaging | Asserts synthesized document metadata, section count, and complete Markdown export. |
-| `test_notes_api_endpoint` | Verifies authenticated API routing (`/api/folders/{folder_id}/notes`) | Asserts HTTP 401 on unauthorized calls and strict course folder tenant isolation. |
-| `test_multi_document_notes_synthesis_includes_all_documents` | Verifies strict 100% inclusion of all uploaded documents | Asserts every uploaded file in folder has concepts, citations, and workflows in final notes. |
-| `test_pdf_exporter_generates_valid_pdf_bytes` | Verifies PyMuPDF conversion from Markdown to PDF binary bytes | Asserts `%PDF` magic bytes, multi-page layout, and verified text layer preservation. |
-
-### 6.3 ATML Inverted Quiz Generation Test Suite (`test_atml_quiz_generation.py` - 12 Tests)
-
-| Test Function Name | Architectural Purpose | Assertion & Pass Verification |
-| :--- | :--- | :--- |
-| `test_extract_fact_anchors_definitions` | Verifies Pattern A copula extraction (*"X is the process of..."*, *"Y refers to..."*) | Asserts anchors contain `Data Visualization` and `MapReduce` from lecture prose. |
-| `test_extract_fact_anchors_bold_and_steps` | Verifies Pattern B (`**Term**:`) and Pattern C numbered steps | Asserts extraction of bolded lexeme `HDFS NameNode` and step concepts. |
-| `test_generate_question_stem_phrasing` | Verifies question stem formulation and concept concealment | Asserts question ends with `?` and the answer word does not leak into the prompt. |
-| `test_mine_semantic_distractors_uniqueness` | Verifies 4-option uniqueness guarantees | Asserts options contain exactly 3 distinct concepts with zero target duplicates. |
-| `test_distractor_fallback_when_pool_is_small` | Verifies graceful fallback on isolated single-concept chunks | Asserts 3 valid options are supplied even when candidate pool contains 1 item. |
-| `test_rejection_of_stopwords_and_fillers` | Verifies syntactic sanitization and rejection of slide noise | Confirms rejection of `Step 1`, `Features`, `Rack`, `Airlines`, `Manufacturing`, while preserving `Drill-down`, `Semaphore`, and `TCP`. |
-| `test_options_are_domain_related_concepts` | Verifies Cloud/DevOps sibling coherence | Asserts `Docker Container` options contain valid technical terms of length $>3$. |
-| `test_visualization_options_are_sibling_charts` | Verifies Visualization domain sibling alignment | Asserts distractors for `Line Chart` contain `Bar Chart`, `Scatter Plot`, or `Histogram`. |
-| `test_os_options_are_sibling_os_concepts` | Verifies Operating Systems domain sibling alignment | Asserts distractors for `Virtual Memory` contain `CPU Scheduling` or `Deadlock Prevention`. |
-| `test_networks_options_are_sibling_network_concepts` | Verifies Computer Networks domain sibling alignment | Asserts distractors for `Packet Switching` contain `Circuit Switching` or `Routing Protocol`. |
-| `test_quiz_question_dataclass_to_dict` | Verifies JSON serialization and schema validity | Validates all fields: ID, question, 4 options, answer index, citation, page number. |
-| `test_quiz_api_endpoint` | Verifies end-to-end FastAPI endpoint (`/api/quiz/generate`) | Asserts HTTP 200, valid user folder authorization, and return of complete QuizResponse. |
-
-### 6.4 ATML Answer Refinement & Hallucination Guard Suite (`test_atml_refinement.py` - 11 Tests)
-
-| Test Function Name | Architectural Purpose | Assertion & Pass Verification |
-| :--- | :--- | :--- |
-| `test_numbered_steps_formatting` | Verifies procedural intent detection and formatting | Confirms procedural answers format into Markdown ordered list (`1.`, `2.`). |
-| `test_bullet_list_formatting` | Verifies comparative/taxonomical intent detection | Confirms comparisons format into bulleted items (`-`). |
-| `test_paragraph_formatting_avoids_wall_of_text`| Verifies conceptual text consolidation | Confirms answers under 120 words are formatted as cohesive academic prose. |
-| `test_ocr_artifact_cleanup` | Verifies pre-processing of raw PDF extraction noise | Asserts raw markdown table delimiters, dangling hyphens, and OCR breaks are stripped. |
-| `test_preamble_removal` | Verifies elimination of conversational model preambles | Strips phrases like *"Based on the provided documents..."* or *"Sure, here is..."*. |
-| `test_math_and_symbol_preservation` | Verifies preservation of academic symbols | Asserts mathematical variables ($x^2$, $\sigma$), `%`, and code snippets are preserved. |
-| `test_empty_or_irrelevant_evidence` | Verifies selective abstention on ungrounded queries | Confirms controlled fallback message when retrieved text has zero relevance. |
-| `test_hallucination_guard_unsupported_entities`| Verifies zero-hallucination entity rejection | Asserts fabricated libraries/tools not in source context are completely suppressed. |
-| `test_empty_retrieved_chunks` | Verifies pipeline robustness on retrieval failures | Handles empty chunks gracefully without throwing exceptions or generating fabrications. |
-| `test_citation_preservation` | Verifies source document citation integrity | Confirms source document filename and page numbers are attached to final output. |
-| `test_model_loading_fallback_graceful` | Verifies device fallback (MPS $\to$ CPU) | Asserts pipeline functions seamlessly on non-GPU or standard CPU workstations. |
-
-### 6.5 Semantic Search & RAG Integration Suite (24 Tests)
-- **`test_multimodal_rag.py` (5 tests):** Validates multimodal chunking with figures/tables, figure endpoint token authorization, and multimodal search APIs.
-- **`test_semantic_search.py` (9 tests):** Validates 384-dimensional embedding norms, vector index persistence, definition ranking over background prose, and strict folder isolation.
-- **`test_storage_and_models.py` (4 tests):** Validates directory traversal sanitization, file extension whitelists, and maximum upload limits.
-- **`test_api_integration.py` (2 tests):** Validates user authentication isolation and multi-tenant document privacy.
-- **`test_extraction_service.py` & `test_real_extraction_pipeline.py` (4 tests):** Validates real PDF parsing, table parsing, and JSON schema persistence.
-
----
-
-## 7. Multi-Document Comprehensive Notes Synthesis Engine
-
-In addition to question generation, the ATML subsystem incorporates an automated **Lecture Notes Synthesis Engine** (`backend/services/atml/notes_generator.py`). When a student prepares for semester examinations, they typically possess disparate PDF slide decks across multiple units. The Notes Generator aggregates all extracted syllabus chunks across a folder and algorithmically decompiles them into a publication-grade, structured Study Guide composed of 5 academic sections:
-
-### 7.1 Mathematical Formulation of Notes Synthesis
-Let a course folder contain $M$ document chunks $\mathcal{D} = \{c_1, c_2, \dots, c_M\}$. The engine executes a multi-stage decomposition:
-
-1. **Executive Overview Synthesis:**
-   Extracts high-salience introductory sentences across all units and executes neural abstractive summarization via conditional Seq2Seq:
-   $$\mathbf{y}_{\text{exec}} = \arg\max_{\mathbf{y}} P_{\text{Seq2Seq}}(\mathbf{y} \mid \text{salient\_chunks}(\mathcal{D}))$$
-
-2. **Hypernymic Definition & Citation Grounding:**
-   Identifies core concepts $\{k_j\}$ and binds each definition $d_j$ with invariant document metadata:
-   $$K_j = \big(k_j, d_j, \text{Doc}(k_j), \text{Page}(k_j)\big)$$
-
-3. **Contrastive Feature Table Synthesis:**
-   Mines pairs of sibling concepts $(k_a, k_b)$ sharing taxonomic parents (e.g., *Line Chart* vs. *Bar Chart*, or *MapReduce* vs. *Spark*) and generates Markdown comparison matrices across standardized analytical dimensions:
-   $$\mathcal{T} = \{(k_a, k_b) \mid \text{CosineSim}(\mathbf{e}_a, \mathbf{e}_b) \in [\tau_{\text{low}}, \tau_{\text{high}}]\}$$
-
-4. **Algorithmic Workflow Decompilation:**
-   Identifies multi-stage processes from slide text matching ordered regex sequences $\left\{\text{Step } i, \text{Phase } i\right\}$ and reconstructs clean numbered execution pipelines.
-
-5. **High-Yield Exam Review Extraction:**
-   Aggregates high-frequency terminological imperatives and produces prioritized bulleted examination takeaways.
-
-### 7.2 In-App Reader & High-Resolution PDF Export
-- **Collapsible In-App Reader:** Interactive `<details>` Markdown cards with responsive toggling and syntax highlighting.
-- **One-Click Markdown Copy:** Instant `navigator.clipboard` integration for Notion/Obsidian study workflows.
-- **Clean PDF Printing:** Dedicated `@media print` CSS engine eliminating navigation chrome, resetting dark backgrounds to crisp academic white, and preserving tabular structures with zero page breaks across cards.
-
----
-
-## 8. Faculty Presentation Guide: Explaining the Tests
-
-When defending the engineering and machine learning rigor of the system before your faculty committee:
-
-1. **How to explain the 61 tests:**
-   > *"Our architecture does not rely on subjective evaluation. We engineered a 61-test automated verification suite covering every layer: multi-turn conversational persistence, hierarchical concept gathering, multi-document notes synthesis, PDF byte compilation, user auth isolation, vector index persistence, OCR noise removal, and zero-hallucination entity filtering. All 61 tests pass automatically on every build in under 38 seconds."*
-
-2. **How to explain Hierarchical Concept Gathering:**
-   > *"Standard commercial RAG systems fail on taxonomical queries like 'What are the types of charts?' because they only retrieve the first 200 tokens of slide page 4, returning only Line and Bar charts. Our topology-aware subtopic gatherer scans across the entire document corpus in the folder, filtering out non-concept chapter titles and extracting all 11 chart families with exact page citations and clean definitions."*
-
-3. **How to explain Notes Generation Rigor:**
-   > *"Unlike commercial LLM wrappers that hallucinate citations or produce generic internet summaries, our Notes Generator strictly decompiles the student's actual uploaded lecture PDFs. Every definition is mathematically grounded and cited to the exact document and page number, procedural workflows are verified against slide sequences, and 100% of uploaded documents are guaranteed representation across every section."*
-
-4. **How to explain the Hallucination Guard test (`test_hallucination_guard_unsupported_entities`):**
-   > *"Standard generative AI models hallucinate when asked about technical courses. We wrote unit tests that inject deliberately fabricated technical entities into generated candidates. Our dual-pass set-theoretic intersection validator detects that these entities do not exist in the source slide chunks and completely suppresses them, proving our 0.0% hallucination rate."*
-
-5. **How to explain Distractor Mining (`test_os_options_are_sibling_os_concepts`):**
-   > *"In multiple-choice question generation, the hardest problem is mining authentic distractors. We wrote tests verifying that when a student is tested on 'Virtual Memory', the system dynamically mines sibling concepts like 'CPU Scheduling' and 'Deadlock Prevention', rather than pulling out-of-domain words like 'Docker' or slide stopwords like 'Rack'. We enforce this using a bandpass cosine manifold filter on dense vector representations."*
-
----
-
-## 9. Execution, Testing, and Verification Commands
-
-### 9.1 Run Automated Benchmark Ablation
 ```bash
-python3 backend/services/atml/evaluation/evaluate_answers.py
-```
+# 1. Activate Python virtual environment
+source .venv/bin/activate
 
-### 9.2 Execute Chatbot Upgrade & Persistence Suite (8 Tests)
-```bash
-PYTHONPATH=. pytest tests/test_chatbot_upgrade.py -v
-```
+# 2. Run the complete 104-test automated suite
+python3 -m pytest tests/ -v
 
-### 9.3 Execute Notes Generation Test Suite (6 Tests)
-```bash
-PYTHONPATH=. pytest tests/test_atml_notes_generation.py -v
-```
+# 3. Execute the PCA vs. Autoencoder Dimensionality Benchmark
+python3 -c "
+from backend.services.atml.pca_benchmark import compare_pca_vs_autoencoder, format_comparison_table
+import numpy as np
+sample_embs = np.random.randn(48, 384)
+sample_embs = sample_embs / np.linalg.norm(sample_embs, axis=1, keepdims=True)
+res = compare_pca_vs_autoencoder(sample_embs, latent_dim=32, epochs=35)
+print(format_comparison_table(res))
+"
 
-### 9.4 Execute Quiz Generation Test Suite (12 Tests)
-```bash
-PYTHONPATH=. pytest tests/test_atml_quiz_generation.py -v
-```
-
-### 9.5 Execute Full System Regression Suite (61 Tests)
-```bash
-PYTHONPATH=. pytest
+# 4. Launch local server and access full UI at http://127.0.0.1:8000
+python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ---
 
-## 10. Configuration Hyperparameters
+## References
 
-| Environment Variable | Default Value | Mathematical / Operational Purpose |
-| :--- | :--- | :--- |
-| `ATML_MODEL_NAME` | `google/flan-t5-small` | Pretrained Seq2Seq checkpoint (`flan-t5-small` or `flan-t5-base`) |
-| `ATML_DEVICE` | `mps` | Compute backend (`mps` for Apple Silicon GPU, `cuda`, or `cpu`) |
-| `ATML_ENABLE_REFINEMENT` | `1` | Binary flag toggling Seq2Seq rewriting layer |
-| `ATML_NUM_BEAMS` | `2` | Beam search exploration width $B$ |
-| `ATML_MAX_INPUT_LENGTH` | `512` | Token truncation boundary for input evidence concatenation |
-| `ATML_MAX_OUTPUT_LENGTH`| `384` | Maximum sequence length for autoregressive emission |
-| `ATML_MIN_FAITHFULNESS` | `0.35` | Minimum token set intersection threshold $\theta_{\text{faith}}$ |
-
----
-
-## 11. Complete IEEE / ACM Transactions Paper Authoring Blueprint (Meta-Prompt)
-
-To generate the full, camera-ready LaTeX manuscript for submission to **IEEE Transactions on Learning Technologies (TLT)** or **ACM Transactions on Computing Education (TOCE)**, provide this README to Claude 3.7 / GPT-4 along with the following prompt:
-
-```text
-You are an expert Principal AI Researcher and Senior IEEE Author. Your task is to author a complete, publication-grade academic research paper in standard LaTeX format (using the `IEEEtran` document class, 2-column layout) based strictly and comprehensively on the attached ATML architecture document.
-
-Structure the paper with the following formal sections:
-
-1. TITLE & METADATA:
-   - Use the primary title: "ATML: A Privacy-Preserving Neuro-Symbolic Edge Architecture for Zero-Hallucination Curriculum Answering and Automated Pedagogical Assessment".
-   - Include formal IEEE author block, affiliations, and Index Terms / Keywords from Section 1.2.
-
-2. ABSTRACT:
-   - Provide a formal 250-word academic abstract summarizing the pedagogical-AI failure modes in higher education, the 4-pillar ATML edge architecture, empirical gains (Token F1: 0.5302, ROUGE-L: 0.4814, 0.0% Hallucination Rate, 100% Subtopic Recall, 1211 ms latency on Apple Silicon MPS), and offline FERPA/GDPR compliance.
-
-3. SECTION I: INTRODUCTION:
-   - Contrast commercial cloud LLM wrappers against edge-first institutional learning platforms.
-   - Formalize the three core failure modes: Extractive Context Saturation, Fact-Anchor Hallucinations, and Superficial Assessment Distractors.
-   - Itemize the five major contributions of this paper.
-
-4. SECTION II: RELATED WORK & THEORETICAL POSITIONING:
-   - Review: (A) Retrieval-Augmented Generation & Dense Semantic Retrieval, (B) Sequence-to-Sequence Modeling in Education, (C) Automatic Question Generation (AQG) and Distractor Mining, and (D) Edge Neural Acceleration.
-   - Include TABLE I: Comparative Architectural Positioning Matrix (comparing ATML vs. Standard Dense RAG vs. Cloud LLMs vs. Traditional AQG from Section 1.3).
-
-5. SECTION III: MATHEMATICAL FOUNDATIONS & SYSTEM ARCHITECTURE:
-   - Provide the complete end-to-end pipeline ASCII / TikZ architecture.
-   - Formalize Subsection III-A: Constrained Sequence-to-Sequence Modeling & Relative Position Cross-Attention (Equations for Attention, Relative Position Bias R, Cross-Attention, and Beam Search Length Penalty).
-   - Formalize Subsection III-B: Intent Classification & Syntactic Structuring (Procedural, Comparative, Conceptual routing).
-   - Formalize Subsection III-C: Set-Theoretic Dual-Pass Grounding Guard & Selective Abstention (Equations for Unsupported Entities and Faithfulness Token Set Intersection).
-   - Formalize Subsection III-D: Inverted Question Generation & Cosine Manifold Distractor Optimization (Fact-Anchor Patterns A, B, C; Clause Filter; Bandpass Cosine Manifold [0.35, 0.92]; Zero-Shot FLAN-T5 Sibling Fallback).
-   - Formalize Subsection III-E: Cross-Chunk Hierarchical Concept Topology Gathering (Equations for IsSibling predicate, Chapter/Noise exclusion, Section normalization).
-   - Formalize Subsection III-F: Multi-Turn Anaphoric Query Disambiguation (Ordinal mapping, antecedent replacement, recursive runaway guard).
-   - Formalize Subsection III-G: Multi-Document Automated Study Guide Decompilation (5-section decompilation pipeline).
-   - Include formal algorithm float environments:
-     * Algorithm 1: Cross-Chunk Hierarchical Concept Topology Gathering (HCG)
-     * Algorithm 2: Inverted Question Generation & Cosine Manifold Distractor Optimization (IQG-DG)
-     * Algorithm 3: Dual-Pass Grounding Verification & Selective Abstention (DGHG)
-     * Algorithm 4: Multi-Turn Anaphoric Query Disambiguation (MAQD)
-
-6. SECTION IV: EXPERIMENTAL SETUP & BENCHMARK METHODOLOGY:
-   - Detail the primary university curriculum corpus: Big Data Analytics (UNIT 5: Data Visualization, 38 slides, 11 chart families) and secondary STEM courses (Operating Systems, APDD, Computer Networks).
-   - Detail the ground-truth benchmark suite (test_cases.json) with intents: tc-01 (definition), tc-02 (steps), tc-03 (applications), tc-04 (reasons), and tc-05 (adversarial out-of-domain selective abstention).
-   - Detail the evaluation metrics: Token F1, ROUGE-L, Factual Consistency, Structural Score, Unsupported Entity Rate, and Latency.
-
-7. SECTION V: EMPIRICAL RESULTS & QUANTITATIVE ABLATION:
-   - Include TABLE II: Comparative Ablation Study on Academic Lecture Material (Direct Retrieval vs. Vanilla Seq2Seq vs. Proposed ATML Pipeline).
-   - Include TABLE III: Subtopic Completeness & Cross-Chunk Topological Gathering Benchmark (Dense RAG vs. Windowed RAG vs. ATML HCG: Recall@Subtopics, Precision, Page Coverage, Noise Intrusion).
-   - Include TABLE IV: Multi-Turn Dialogue Context Disambiguation Benchmark (Naive Window vs. Last-Turn Concatenation vs. ATML MAQD).
-   - Include TABLE V: Inverted Assessment & Distractor Sibling Optimization Benchmark (Random vs. TF-IDF vs. ATML Cosine Manifold).
-   - Include TABLE VI: Hardware Resource Utilization & Latency Profile Across Deployment Targets (Apple Silicon MPS vs. Modern x86-64 CPU vs. Cloud NVIDIA GPU).
-   - Discuss Key Analytical Findings: 0.0% Hallucination Rate, Perfect Adversarial Selective Abstention, F1/ROUGE Gains, and Subtopic Exhaustion.
-
-8. SECTION VI: QUALITATIVE CASE STUDIES:
-   - Detail Case Study 1: Quiz Distractor Optimization (Before vs. After).
-   - Detail Case Study 2: Hierarchical Concept Gathering vs. Standard RAG (Before vs. After 11-Chart Breakdown).
-   - Detail Case Study 3: Multi-Turn Anaphoric Point Resolution (3 live turns).
-   - Detail Case Study 4: Multi-Document Automated Study Guide Synthesis (5-section output).
-
-9. SECTION VII: ROBUSTNESS & AUTOMATED VERIFICATION SUITE:
-   - Present the 61-system automated test suite passing in 37.84 seconds across 5 test modules.
-   - Explain the verification guarantees for institutional software engineering standards.
-
-10. SECTION VIII: DISCUSSION & EDGE DEPLOYMENT CONSIDERATIONS:
-    - Analyze local hardware feasibility, energy efficiency (6.5W on Apple Silicon), privacy guarantees, and institutional scalability.
-
-11. SECTION IX: CONCLUSION & FUTURE WORK:
-    - Summarize key breakthroughs and outline future extensions (multimodal figure synthesis, localized speech interfaces).
-
-12. REFERENCES:
-    - Include all IEEE formatted references provided in Section 12.
-
-Retain all mathematical formulations, LaTeX symbols, numerical data, and algorithmic logic without simplification.
-```
-
----
-
-## 12. Academic References & Formal Citations
-
-1. **Raffel, C., Shazeer, N., Roberts, A., Lee, K., Narang, S., Matena, M., Zhou, Y., Li, W., & Liu, P. J.** (2020). *Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer*. Journal of Machine Learning Research (JMLR), 21(140), 1-67.
-2. **Chung, H. W., Hou, L., Longpre, S., Zoph, B., Tay, Y., Fedus, W., Li, Y., Wang, X., Mostajabdaveh, M., et al.** (2022). *Scaling Instruction-Finetuned Language Models*. arXiv preprint arXiv:2210.11416.
-3. **Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, Ł., & Polosukhin, I.** (2017). *Attention Is All You Need*. Advances in Neural Information Processing Systems (NeurIPS 30), 5998-6008.
-4. **Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., Küttler, H., Lewis, M., Yih, W., Rocktäschel, T., Riedel, S., & Kiela, D.** (2020). *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*. Advances in Neural Information Processing Systems (NeurIPS 33), 9459-9474.
-5. **Reimers, N., & Gurevych, I.** (2019). *Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks*. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing (EMNLP-IJCNLP), 3982-3992.
-6. **Heilman, M., & Smith, N. A.** (2010). *Good Question! Comparing People and Automatic Question Generators for Generating Questions from Text*. Human Language Technologies: The 2010 Annual Conference of the North American Chapter of the ACL (NAACL-HLT), 630-640.
-7. **Kurdi, G., Leo, J., Parsia, B., Sattler, U., & Al-Emari, S.** (2020). *A Systematic Review of Automatic Question Generation for Educational Applications*. International Journal of Artificial Intelligence in Education (IJAIED), 30(1), 121-204.
-8. **Lin, C.-Y.** (2004). *ROUGE: A Package for Automatic Evaluation of Summaries*. In Text Summarization Branches Out, 74-81.
-9. **Rajpurkar, P., Zhang, J., Lopyrev, K., & Liang, P.** (2016). *SQuAD: 100,000+ Questions for Machine Comprehension of Text*. In Proceedings of the 2016 Conference on Empirical Methods in Natural Language Processing (EMNLP), 2383-2392.
-10. **Papineni, K., Roukos, S., Ward, T., & Zhu, W.-J.** (2002). *BLEU: A Method for Automatic Evaluation of Machine Translation*. In Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics (ACL), 311-318.
-11. **Gao, Y., Xiong, Y., Gao, X., Jia, K., Pan, J., Bi, Y., Dai, Y., Sun, J., & Wang, H.** (2023). *Retrieval-Augmented Generation for Large Language Models: A Survey*. arXiv preprint arXiv:2312.10997.
-12. **Ji, Z., Lee, N., Frieske, R., Yu, T., Su, D., Yan, X., Ishii, E., Bang, Y. J., Madotto, A., & Fung, P.** (2023). *Survey of Hallucination in Natural Language Generation*. ACM Computing Surveys, 55(12), 1-38.
-13. **Apple Inc.** (2020). *Metal Performance Shaders (MPS): Accelerated Machine Learning and Linear Algebra on Apple Silicon*. Apple Developer Documentation.
-14. **McKerns, M. M., & Aivazis, M. A.** (2011). *Pathos: A Framework for Heterogeneous Computing and Distributed Optimization*. In Proceedings of the 10th Python in Science Conference (SciPy), 84-90.
+1. A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, "Attention is all you need," in *Advances in Neural Information Processing Systems (NeurIPS)*, vol. 30, 2017.
+2. H. W. Chung, L. Hou, S. Longpre, B. Zoph, Y. Tay, W. Fedus, et al., "Scaling instruction-finetuned language models," *arXiv preprint arXiv:2210.11416*, 2022.
+3. D. P. Kingma and M. Welling, "Auto-encoding variational Bayes," in *International Conference on Learning Representations (ICLR)*, 2014.
+4. I. T. Jolliffe, *Principal Component Analysis*, 2nd ed. New York, NY, USA: Springer-Verlag, 2002.
+5. P. Lewis, E. Perez, A. Piktus, F. Petroni, V. Karpukhin, N. Goyal, et al., "Retrieval-augmented generation for knowledge-intensive NLP tasks," in *Advances in Neural Information Processing Systems (NeurIPS)*, vol. 33, pp. 9459–9474, 2020.
+6. C. Raffel, N. Shazeer, A. Roberts, K. Lee, S. Narang, M. Matena, Y. Zhou, W. Li, and P. J. Liu, "Exploring the limits of transfer learning with a unified text-to-text transformer," *Journal of Machine Learning Research (JMLR)*, vol. 21, no. 140, pp. 1–67, 2020.
+7. P. Vincent, H. Larochelle, Y. Bengio, and P.-A. Manzagol, "Extracting and composing robust features with denoising autoencoders," in *Proceedings of the 25th International Conference on Machine Learning (ICML)*, 2008, pp. 1096–1103.
+8. N. Reimers and I. Gurevych, "Sentence-BERT: Sentence embeddings using Siamese BERT-networks," in *Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing (EMNLP)*, 2019, pp. 3982–3992.

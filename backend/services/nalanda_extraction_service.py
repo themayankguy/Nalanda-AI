@@ -135,6 +135,32 @@ def parse_and_store_extraction_output(
         "total_processing_time": json_data.get("total_processing_time", 0.0),
     }
 
+    # ATML Unit 2: Check folder autoencoder outlier compatibility
+    try:
+        from backend.services.storage_service import BASE_STORAGE_DIR
+        from backend.services.NLP.vector_index_service import get_folder_index_dir, FolderVectorIndex
+        from backend.services.atml.autoencoder_service import AutoencoderOutlierDetector
+        index_dir = get_folder_index_dir(BASE_STORAGE_DIR, document.user_id, document.folder_id)
+        folder_idx = FolderVectorIndex(index_dir)
+        if folder_idx.embeddings is not None and len(folder_idx.embeddings) >= 5:
+            detector = AutoencoderOutlierDetector.get_or_train_folder_model(
+                embeddings=folder_idx.embeddings,
+                cache_key=document.folder_id,
+                weights_path=index_dir / "autoencoder.pt",
+            )
+            if detector and full_text:
+                from backend.services.NLP.vector_index_service import get_embedding_model
+                model = get_embedding_model()
+                sample_lines = [l.strip() for l in full_text.splitlines() if len(l.strip()) > 30][:12]
+                if sample_lines:
+                    doc_vecs = model.encode(sample_lines)
+                    compat = AutoencoderOutlierDetector.evaluate_document_compatibility(doc_vecs, detector)
+                    metadata["outlier_compatibility"] = compat
+                    if compat.get("is_mismatched_document"):
+                        logger.warning("Document %s flagged as out-of-distribution for folder %s", document.id, document.folder_id)
+    except Exception as ood_exc:
+        logger.debug("Document outlier compatibility check bypassed: %s", ood_exc)
+
     # If extraction already exists for this document (e.g. on retry), update it
     extraction = (
         db.query(DocumentExtraction)
@@ -237,7 +263,22 @@ def process_document_extraction(document_id: str) -> None:
             document.status = "completed"
             document.error_message = None
             db.commit()
-            logger.info("Extraction successfully completed for document %s", document_id)
+
+            # Incrementally index into folder vector index and integrate knowledge base
+            try:
+                from backend.services.NLP.semantic_search_service import index_single_document
+                index_single_document(db, document)
+            except Exception as idx_exc:
+                logger.warning("Vector indexing during extraction: %s", idx_exc)
+
+            try:
+                from backend.services.NLP.knowledge_integration_service import KnowledgeIntegrationService
+                KnowledgeIntegrationService.integrate_document_knowledge(db, document)
+            except Exception as integ_exc:
+                logger.exception("Knowledge integration during extraction: %s", integ_exc)
+
+            logger.info("Extraction and incremental knowledge integration completed for document %s", document_id)
+
 
         except subprocess.TimeoutExpired:
             logger.error("Extraction subprocess timed out for document %s", document_id)

@@ -47,6 +47,7 @@ def get_folder_quiz(
             num_questions=num_questions,
             document_ids=selected_doc_ids,
         )
+
         return quiz_result.to_dict()
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

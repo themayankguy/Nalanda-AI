@@ -1,7 +1,7 @@
 """SQLAlchemy models for Nalanda AI."""
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from backend.database import Base
 
@@ -46,6 +46,7 @@ class Folder(Base):
 
     user = relationship("User", back_populates="folders")
     documents = relationship("Document", back_populates="folder", cascade="all, delete-orphan")
+    concepts = relationship("KnowledgeConcept", back_populates="folder", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -66,6 +67,7 @@ class Document(Base):
     user = relationship("User", back_populates="documents")
     folder = relationship("Folder", back_populates="documents")
     extraction = relationship("DocumentExtraction", back_populates="document", uselist=False, cascade="all, delete-orphan")
+    ingestion_log = relationship("DocumentIngestionLog", back_populates="document", uselist=False, cascade="all, delete-orphan")
 
 
 class DocumentExtraction(Base):
@@ -141,3 +143,66 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
     conversation = relationship("Conversation", back_populates="messages")
+
+
+class KnowledgeConcept(Base):
+    """Represents a canonical academic or technical concept synthesized within a folder."""
+    __tablename__ = "knowledge_concepts"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    folder_id = Column(String(36), ForeignKey("folders.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    normalized_name = Column(String(255), nullable=False, index=True)
+    summary = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    folder = relationship("Folder", back_populates="concepts")
+    items = relationship("KnowledgeItem", back_populates="concept", cascade="all, delete-orphan", order_by="KnowledgeItem.created_at")
+
+
+class KnowledgeItem(Base):
+    """Represents an atomic factual statement, definition, formula, or table snippet under a concept."""
+    __tablename__ = "knowledge_items"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    concept_id = Column(String(36), ForeignKey("knowledge_concepts.id", ondelete="CASCADE"), nullable=False, index=True)
+    folder_id = Column(String(36), ForeignKey("folders.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    chunk_id = Column(String(255), nullable=True)
+    subtopic = Column(String(255), nullable=False, default="General")
+    content = Column(Text, nullable=False)
+    normalized_hash = Column(String(64), nullable=False, index=True)
+    page_number = Column(Integer, nullable=True)
+    source_filename = Column(String(255), nullable=False)
+    provenance_sources_json = Column(Text, nullable=True)  # JSON-encoded list of [{"document_id", "filename", "page", "chunk_id"}]
+    is_conflict = Column(Boolean, default=False, nullable=False)
+    conflict_details = Column(Text, nullable=True)  # JSON-encoded description of contradiction
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    concept = relationship("KnowledgeConcept", back_populates="items")
+    document = relationship("Document")
+
+
+class DocumentIngestionLog(Base):
+    """Persists integration audit counts and summary whenever a document is ingested."""
+    __tablename__ = "document_ingestion_logs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    folder_id = Column(String(36), ForeignKey("folders.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    items_matched = Column(Integer, default=0, nullable=False)
+    concepts_enriched = Column(Integer, default=0, nullable=False)
+    concepts_created = Column(Integer, default=0, nullable=False)
+    duplicates_skipped = Column(Integer, default=0, nullable=False)
+    conflicts_flagged = Column(Integer, default=0, nullable=False)
+    summary_message = Column(String(500), nullable=True)
+    details_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+    document = relationship("Document", back_populates="ingestion_log")
+

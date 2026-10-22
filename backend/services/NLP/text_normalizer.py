@@ -244,3 +244,14 @@ def deduplicate_sentences_across_chunks(chunks: List[str]) -> List[str]:
             cleaned_chunks.append(" ".join(unique_sents))
 
     return cleaned_chunks
+
+
+def denoise_ocr_embeddings(embeddings):
+    """Project noisy OCR text embeddings through the ATML Denoising Autoencoder (DAE).
+    
+    Restores clean semantic manifold coordinates for vectors generated from noisy
+    or low-confidence scanned slide text.
+    """
+    from backend.services.atml.ocr_denoiser import get_ocr_denoiser
+    denoiser = get_ocr_denoiser()
+    return denoiser.repair_noisy_embeddings(embeddings)

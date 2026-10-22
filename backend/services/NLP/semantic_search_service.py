@@ -96,14 +96,16 @@ def extract_direct_answer(query: str, chunk_text: str, model=None) -> Optional[s
 
     for line in raw_lines:
         is_bullet = bool(re.match(r"^[-•*+]\s+", line) or re.match(r"^\d+[\.\)]\s+", line))
+        is_heading = bool(re.match(r"^#{1,6}\s+", line) or re.match(r"^(?:Goal|Step|Objective|Feature|Phase|Stage|Item)\s*\d+", line, flags=re.I))
         is_question = bool(line.endswith("?") or re.match(r"^(?:what|why|how|when|where)\b", line, flags=re.I))
-        if is_bullet or is_question:
+        if is_bullet or is_question or is_heading:
             if curr:
                 units.append(" ".join(curr))
             curr = [line]
         elif curr:
             last_line = curr[-1]
-            if not last_line.endswith((".", "?", "!", ":")) or (line and line[0].islower()):
+            last_is_heading = bool(re.match(r"^#{1,6}\s+", last_line) or re.match(r"^(?:Goal|Step|Objective|Feature|Phase|Stage|Item)\s*\d+", last_line, flags=re.I))
+            if not last_is_heading and (not last_line.endswith((".", "?", "!", ":")) or (line and line[0].islower())):
                 curr.append(line)
             else:
                 units.append(" ".join(curr))
@@ -135,7 +137,10 @@ def extract_direct_answer(query: str, chunk_text: str, model=None) -> Optional[s
 
     # 1. Procedural, multi-step, list, reasons, features, or structured points: return full chunk content
     is_list_query = bool(re.search(r"\b(steps?|process|stages?|phases?|how to|procedure|all steps|methods?|techniques?|reasons?|why|characteristics?|features?|components?|types?|states?|lifecycle|purposes?|goals?|needs?|objectives?|applications?|challenges?|advantages?|disadvantages?)\b", q_lower))
-    has_numbered_steps = len(re.findall(r"(?:^|\n)\s*\d+[\.\)]\s+", chunk_text)) >= 2 or bool(re.search(r"\bStep\s+\d+\b", chunk_text, re.I))
+    has_numbered_steps = (
+        len(re.findall(r"(?:^|\n)\s*\d+[\.\)]\s+", chunk_text)) >= 2
+        or bool(re.search(r"\b(?:Step|Goal|Objective|Feature|Phase|Stage)\s*\d+\b", chunk_text, re.I))
+    )
     has_multiple_bullets = len(re.findall(r"(?:^|\n)\s*[-•*+]\s+", chunk_text)) >= 2
 
     if is_list_query or has_numbered_steps or has_multiple_bullets:
@@ -423,6 +428,40 @@ def execute_semantic_search(
         index = sync_folder_index(db, current_user.id, folder.id, model=model)
         raw_matches = index.search(query=clean_query, top_k=request.top_k, model=model)
 
+        # ATML Unit 2: Autoencoder Outlier / Out-of-Distribution Check
+        outlier_info = None
+        try:
+            if index.embeddings is not None and len(index.embeddings) >= 3:
+                from backend.services.atml.autoencoder_service import AutoencoderOutlierDetector
+                detector_entry = AutoencoderOutlierDetector.get_or_train_folder_model(
+                    embeddings=index.embeddings,
+                    cache_key=folder.id,
+                    weights_path=index.index_dir / "autoencoder.pt",
+                )
+                if detector_entry:
+                    q_vec = model.encode([clean_query])[0]
+                    outlier_info = AutoencoderOutlierDetector.evaluate_vector_outlier(
+                        vector=q_vec,
+                        detector_entry=detector_entry,
+                    )
+        except Exception as ood_exc:
+            logger.debug("ATML Autoencoder outlier check bypassed: %s", ood_exc)
+
+        # Fast Out-of-Syllabus Interception: If query is an extreme statistical outlier
+        # and has no high-confidence vector matches, bypass expensive RAG and return instantly (<2ms)
+        if outlier_info and outlier_info.get("is_outlier") and (not raw_matches or raw_matches[0][1] < 0.28):
+            return SemanticSearchResponse(
+                query=clean_query,
+                folder_id=folder.id,
+                detected_intent=detected_intent,
+                direct_answer="This question appears to be outside the syllabus or scope of this course folder.",
+                primary_figure=None,
+                primary_table=None,
+                total_results=0,
+                results=[],
+                refinement_metadata={"outlier_detection": outlier_info},
+            )
+
         # Stitch introductory chunks or multi-part sections across chunk boundaries
         chunks_by_doc_idx = {(c.get("document_id"), c.get("chunk_index")): c for c in index.chunks if c.get("chunk_index") is not None}
         stitched_matches = []
@@ -436,6 +475,7 @@ def execute_semantic_search(
         is_flow_or_arch_query = bool(re.search(r"\b(flow|flows|workflow|architecture|architectures|dataflow|pipeline|components?)\b", clean_query, re.I))
         is_feature_query = bool(re.search(r"\b(features?|characteristics?|properties?)\b", clean_query, re.I))
         arch_synonyms = {"flow", "flows", "architecture", "architectures", "component", "components", "working", "mechanism", "process"}
+
 
         boosted_matches = []
         for c, rel in stitched_matches:
@@ -455,6 +495,7 @@ def execute_semantic_search(
                 matched.append("features_concept")
 
             boost = 0.25 * (len(matched) / max(len(q_target_words), 1))
+
 
             # Generalized multi-token bigram phrase boost (e.g. "client communication", "main features", "big sql")
             if len(query_word_list) >= 2:
@@ -734,7 +775,21 @@ def execute_semantic_search(
     if raw_matches and not (overall_direct_answer and overall_direct_answer.startswith("### Types of")):
         top_chunk = raw_matches[0][0]
         top_text = top_chunk.get("text", "").strip()
-        has_multi_points = len(re.findall(r"(?:^|\n)\s*(?:\d+[\.\)]|[-•*+])\s+", top_text)) >= 2
+        top_doc_id = top_chunk.get("document_id")
+        top_page_num = top_chunk.get("page_number")
+
+        # Gather all sibling chunks from the same document page so multi-column slide content is fully unified
+        if top_doc_id and top_page_num is not None:
+            same_page_chunks = [
+                c for c in index.chunks
+                if c.get("document_id") == top_doc_id and c.get("page_number") == top_page_num
+            ]
+            if len(same_page_chunks) > 1:
+                combined_page_text = "\n\n".join(c.get("text", "").strip() for c in same_page_chunks if c.get("text", "").strip())
+                if len(combined_page_text) > len(top_text):
+                    top_text = combined_page_text
+
+        has_multi_points = len(re.findall(r"(?:^|\n)\s*(?:\d+[\.\)]|[-•*+]|(?:Goal|Step|Objective|Feature)\s*\d+)", top_text, re.I)) >= 2
 
         # If list/procedural query and top chunk is short or continues onto next page of same doc:
         if (is_list_query or is_asking_for_examples) and len(top_text) < 350 and len(raw_matches) > 1:
@@ -747,6 +802,7 @@ def execute_semantic_search(
 
         if is_list_query or is_asking_for_examples or has_multi_points or not overall_direct_answer or len(top_text) > len(overall_direct_answer):
             overall_direct_answer = top_text
+
     # ATML Answer Refinement Integration:
     # Synthesizes, rewrites, structures, and validates answer using Seq2Seq Transformer
     if raw_matches and not (overall_direct_answer and overall_direct_answer.startswith("### Types of")):
@@ -756,7 +812,31 @@ def execute_semantic_search(
 
             if default_config.enable_refinement:
                 atml_engine = AnswerRefinementEngine(default_config)
-                top_chunks_for_refinement = [m[0] for m in raw_matches[:default_config.max_context_chunks]]
+                # Ensure evidence chunks include all sibling chunks on the top page so multi-point slides are not truncated
+                top_chunks_for_refinement: List[Dict[str, Any]] = []
+                seen_chunk_ids = set()
+                for m in raw_matches[:default_config.max_context_chunks]:
+                    c = m[0]
+                    cid = c.get("chunk_id")
+                    c_doc = c.get("document_id")
+                    c_page = c.get("page_number")
+                    if c_page is not None and c_doc:
+                        page_siblings = [
+                            s for s in index.chunks
+                            if s.get("document_id") == c_doc and s.get("page_number") == c_page
+                        ]
+                        if len(page_siblings) > 1:
+                            for s in page_siblings:
+                                sid = s.get("chunk_id")
+                                if sid not in seen_chunk_ids:
+                                    seen_chunk_ids.add(sid)
+                                    top_chunks_for_refinement.append(s)
+                            continue
+                    if cid not in seen_chunk_ids:
+                        seen_chunk_ids.add(cid)
+                        top_chunks_for_refinement.append(c)
+
+
                 top_rel = float(raw_matches[0][1]) if raw_matches else 0.0
 
                 refinement_result = atml_engine.refine_answer(
@@ -776,6 +856,15 @@ def execute_semantic_search(
                     }
         except Exception as exc:
             logger.warning("ATML answer refinement bypassed due to: %s", exc)
+
+    # Attach Unit 2 Autoencoder Outlier diagnostics
+    if outlier_info:
+        if refinement_metadata is None:
+            refinement_metadata = {}
+        refinement_metadata["outlier_detection"] = outlier_info
+        if outlier_info.get("is_outlier") and (not raw_matches or raw_matches[0][1] < 0.28):
+            overall_direct_answer = "This question appears to be outside the syllabus or scope of this course folder."
+            results = []
 
     return SemanticSearchResponse(
         query=clean_query,

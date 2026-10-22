@@ -57,6 +57,20 @@ class FolderResponse(BaseModel):
 
 # --- Document Schemas (Document Metadata Only) ---
 
+class DocumentIngestionSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    document_id: str
+    folder_id: str
+    items_matched: int = 0
+    concepts_enriched: int = 0
+    concepts_created: int = 0
+    duplicates_skipped: int = 0
+    conflicts_flagged: int = 0
+    summary_message: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 class DocumentMetadataResponse(BaseModel):
     """Document-level metadata returned to the frontend.
     
@@ -73,6 +87,7 @@ class DocumentMetadataResponse(BaseModel):
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    ingestion_summary: Optional[DocumentIngestionSummaryResponse] = None
 
 
 class DocumentUploadResponse(BaseModel):
@@ -90,3 +105,5 @@ class DocumentStatusResponse(BaseModel):
     status: str
     error_message: Optional[str] = None
     updated_at: datetime
+    ingestion_summary: Optional[DocumentIngestionSummaryResponse] = None
+
