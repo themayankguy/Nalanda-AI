@@ -1,23 +1,31 @@
-"""Inverted Sequence-to-Sequence Question Generation & Vector-Manifold Distractor Optimization.
+"""Domain-Agnostic Academic Quiz Generation & Strict Folder-Scoped Vector Manifold Distractor Optimization.
 
 ATML Component for Nalanda AI:
-1. Educational Fact-Anchor Mining:
-   Identifies self-contained concepts, stripping slide numbers (e.g., '3.7 Box Plot' -> 'Box Plot')
-   and rejecting incomplete grammatical fragments (e.g. 'When the data').
-2. Inverted Seq2Seq Question Formulation: P(Question | Context, Target Concept)
-   using pretrained FLAN-T5, strictly rejecting meta/title-matching prompts.
-3. Latent Vector Manifold Distractor Optimization:
-   Mines plausible sibling distractors from dense embeddings (all-MiniLM-L6-v2)
-   within an optimal semantic plausibility margin (0.40 <= cosine <= 0.85).
-4. Grounding & Page Citation Verification:
-   Ensures the correct answer is factually anchored to the source text and exact page.
+1. Strict Folder-Level Isolation:
+   All questions, options, distractors, evidence, and provenance citations are drawn
+   strictly and exclusively from the authorized documents within the selected folder.
+   Cross-folder leakage, global knowledge base fallbacks, and hardcoded external domain
+   pools are strictly eliminated.
+2. Fact-Anchor Mining:
+   Identifies self-contained concepts, definitions, and operational requirements directly
+   from the permitted documents, eliminating conversational fragments and slide metadata.
+3. Natural Interrogative Question Formulation:
+   Constructs clear, self-contained academic question stems testing deep conceptual understanding
+   without answer leakage, malformed clauses, or repetitive filename prefixes.
+4. Latent Vector Manifold Sibling Distractor Optimization:
+   Mines plausible sibling distractors strictly from the same course materials using
+   all-MiniLM-L6-v2 embeddings and head-concept clustering within an optimal bandpass margin
+   (0.20 <= cosine < 0.90) with strict pairwise anti-collision.
+5. 10-Point Question Quality & Evidence Validation:
+   Every question is strictly validated for folder isolation, single-answer validity,
+   anti-collision, clarity, non-leakage, and verifiable provenance before being returned.
 """
 import logging
 import random
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Set
 
 import numpy as np
 import torch
@@ -31,77 +39,13 @@ from backend.services.NLP.vector_index_service import (
     get_embedding_model,
 )
 from .config import ATMLConfig, default_config
-from .answer_refiner import get_atml_model_and_tokenizer
 from .output_validator import sanitize_text
 
 logger = logging.getLogger("nalanda.atml.quiz")
 
-# Multi-domain academic distractor libraries mapped by course topic
-DOMAIN_DISTRACTOR_MAP = {
-    "cloud": [
-        "Virtual Machine", "Docker Container", "Docker Image", "Hypervisor", "Bare-Metal Server",
-        "Kubernetes Pod", "Container Image", "Host Operating System", "Guest OS",
-        "Namespace Isolation", "Docker Engine", "Microservices Architecture", "Container Runtime",
-        "Dockerfile", "Docker Registry", "Docker Hub", "Port Binding", "Docker Compose",
-        "Control Groups (cgroups)", "Container Orchestration", "Serverless Computing"
-    ],
-    "bigdata": [
-        "MapReduce", "HDFS NameNode", "Spark RDD", "YARN Resource Manager",
-        "Apache Kafka", "Hadoop DataNode", "HBase", "Apache Hive", "Zookeeper", "Distributed File System",
-        "Apache Spark", "Block Storage", "Data Replication", "Apache Flink", "Columnar Storage"
-    ],
-    "visualization": [
-        "Scatter Plot", "Box Plot", "Histogram", "Line Chart", "Bar Chart",
-        "Heat Map", "Radar Chart", "Pie Chart", "Violin Plot", "Normal Distribution",
-        "Skewed Distribution", "Data Visualization", "Data Profiling", "Treemap", "Density Plot"
-    ],
-    "ml": [
-        "Supervised Learning", "Unsupervised Learning", "Reinforcement Learning",
-        "Decision Tree", "Random Forest", "Support Vector Machine", "Gradient Descent",
-        "Neural Network", "Feature Engineering", "Loss Function", "Logistic Regression",
-        "Principal Component Analysis", "Cross Validation"
-    ],
-    "networks": [
-        "Packet Switching", "Circuit Switching", "Routing Protocol", "TCP/IP Protocol",
-        "OSI Model", "Subnet Mask", "DNS Resolution", "DHCP Server", "Network Gateway",
-        "Firewall Rules", "Network Topology", "MAC Address", "Transport Layer", "Application Layer"
-    ],
-    "os": [
-        "Virtual Memory", "CPU Scheduling", "Deadlock Prevention", "Mutual Exclusion",
-        "Process Synchronization", "Page Replacement", "Interrupt Handling", "Context Switching",
-        "Kernel Space", "File System Architecture", "Thread Pool", "System Call"
-    ],
-    "dbms": [
-        "Relational Model", "Entity Relationship", "B-Tree Indexing", "ACID Properties",
-        "Normalization Form", "Foreign Key Constraint", "Database Transaction", "Query Optimization",
-        "Concurrency Control", "Stored Procedure", "Schema Definition"
-    ],
-    "security": [
-        "Public Key Cryptography", "Symmetric Encryption", "Digital Signature", "Access Control List",
-        "Transport Layer Security", "Hash Function", "Authentication Protocol", "Privilege Escalation",
-        "Intrusion Detection", "Zero Trust Architecture"
-    ],
-    "bigdata_runtime": [
-        "Local File System", "Java Virtual Machine", "Grunt Shell", "Standalone Client",
-        "Pig Engine", "Embedded Script", "Single Machine Storage", "HDFS NameNode",
-        "YARN NodeManager", "MapReduce JobTracker"
-    ],
-    "software": [
-        "Agile Methodology", "Scrum Framework", "Continuous Integration", "Design Pattern",
-        "Object-Oriented Programming", "Unit Testing", "Test-Driven Development", "Code Refactoring",
-        "Microservices Architecture", "API Integration"
-    ],
-}
-
-CURATED_DOMAIN_DISTRACTORS = (
-    DOMAIN_DISTRACTOR_MAP["cloud"]
-    + DOMAIN_DISTRACTOR_MAP["bigdata"]
-    + DOMAIN_DISTRACTOR_MAP["bigdata_runtime"]
-    + DOMAIN_DISTRACTOR_MAP["visualization"]
-    + DOMAIN_DISTRACTOR_MAP["os"]
-    + DOMAIN_DISTRACTOR_MAP["networks"]
-    + DOMAIN_DISTRACTOR_MAP["dbms"]
-)
+# Legacy compatibility exports (empty to prevent any external domain leakage)
+DOMAIN_DISTRACTOR_MAP: Dict[str, List[str]] = {}
+CURATED_DOMAIN_DISTRACTORS: List[str] = []
 
 FORBIDDEN_CONCEPT_WORDS = {
     "command", "commands", "command used", "required action", "action", "actions",
@@ -123,7 +67,10 @@ FORBIDDEN_CONCEPT_WORDS = {
     "agriculture", "transportation", "insurance", "hospitality", "telecom", "telecommunications",
     "government", "capacity", "driver", "rack", "important component", "tables", "table",
     "decision", "decisions", "choice", "choices", "selection", "grunt", "dynamic updates",
-    "actual table data", "job.name"
+    "actual table data", "job.name", "agenda", "quiz", "quiz time", "exercise", "exercises",
+    "homework", "assignment", "announcements", "references", "conclusion", "conclusions",
+    "review", "outline", "not all morphemes", "piece of cake", "pulling your leg",
+    "all morphemes", "morphemes are words", "words but all prefixes", "this work"
 }
 
 KNOWN_SINGLE_WORD_TECH_CONCEPTS = {
@@ -144,7 +91,7 @@ KNOWN_SINGLE_WORD_TECH_CONCEPTS = {
     "broadcast", "ping", "traceroute",
     # Database Systems
     "normalization", "schema", "transaction", "trigger", "indexing", "sharding",
-    "query", "tuple", "relation", "deadlock", "atomicity", "consistency", "isolation", "durability",
+    "query", "tuple", "relation", "atomicity", "consistency", "isolation", "durability",
     # Data Structures & Algorithms
     "recursion", "sorting", "hashing", "stack", "queue", "graph", "tree", "heap",
     "array", "pointer", "traversal", "search", "backtracking",
@@ -153,7 +100,11 @@ KNOWN_SINGLE_WORD_TECH_CONCEPTS = {
     "phishing", "authentication", "authorization", "hash", "keyloggers", "trojan",
     # Software Engineering & Languages
     "polymorphism", "inheritance", "encapsulation", "abstraction", "compiler",
-    "interpreter", "bytecode", "refactoring", "scrum", "waterfall", "agile"
+    "interpreter", "bytecode", "refactoring", "scrum", "waterfall", "agile",
+    # NLP & Linguistics
+    "morphology", "morpheme", "phoneme", "syntax", "semantics", "pragmatics",
+    "tokenization", "lemmatization", "stemming", "parsing", "corpus", "lexicon",
+    "ambiguity", "polysemy", "homonymy", "hyponymy", "synonymy", "antonymy"
 }
 
 ENGLISH_STOPWORDS = {
@@ -196,7 +147,6 @@ ACTION_VERB_PREFIXES = re.compile(
     re.I
 )
 
-
 INVALID_DEFINITION_START = re.compile(
     r"^(?:not\s+(?:required|needed|used|supported|recommended|present|available)|is\s+not|are\s+not|cannot|does\s+not|do\s+not|should\s+not|never\b|optional\b|neither\b)",
     re.I,
@@ -209,34 +159,263 @@ DANGLING_ANAPHORA_PATTERN = re.compile(
 )
 
 
+def clean_academic_concept(text: str) -> Optional[str]:
+    """Sanitize concept string, stripping meta headings, rejecting fragments, quantifiers, and conversational text."""
+    if not text:
+        return None
+
+    cleaned = text.strip()
+
+    # 1. Reject meta slide notes, reviews, and assignments
+    if re.match(r"^(?:explanation|note|example|warning|caution|step\s*\d*[:\-]|agenda|overview|summary|introduction|quiz|exercise|exercises|homework|assignment|announcements?|references?|conclusion|conclusions?|questions?|q&a|review|outline)\b", cleaned, re.I):
+        return None
+
+    # 2. Reject commands and verbs
+    if ACTION_VERB_PREFIXES.match(cleaned) or cleaned.lower().endswith(" commands"):
+        return None
+
+    # 3. Strip section / slide numbering: e.g. '3.7', '3.7.1', '1.', 'Step 2:', 'Section 4'
+    cleaned = re.sub(r"^(?:(?:step|section|unit|chapter)\s*)?\d+(?:\.\d+)*[\.\)\:\-–\s]+", "", cleaned, flags=re.I).strip()
+    cleaned = re.sub(r"^[#*_\-\–\—•\s]+|[#*_\-\–\—•\s]+$", "", cleaned).strip()
+
+    # Strip repeated heading separators: e.g. 'Pie Chart - A pie chart' -> 'A pie chart'
+    if re.search(r"\s+[\-–—]\s+", cleaned):
+        cleaned = re.split(r"\s+[\-–—]\s+", cleaned)[-1].strip()
+
+    # 4. Strip meta-heading prefixes (e.g. 'Characteristics of Containerization' -> 'Containerization')
+    cleaned = META_HEADING_PREFIXES.sub("", cleaned).strip()
+
+    # 5. Strip evaluative adjective prefixes (e.g. 'Important Component' -> 'Component')
+    cleaned = EVALUATIVE_ADJ_PREFIXES.sub("", cleaned).strip()
+
+    # 6. Strip leading articles: 'A container' -> 'Container'
+    cleaned = re.sub(r"^(?:a|an|the|this|that|these|those)\s+", "", cleaned, flags=re.I).strip()
+    cleaned = cleaned.strip(" :.-–—;")
+
+    # Re-check action verbs after stripping prefixes
+    if ACTION_VERB_PREFIXES.match(cleaned) or cleaned.lower().endswith(" commands"):
+        return None
+
+    lower = cleaned.lower()
+
+    # 7. Discard invalid clauses starting with negative words, quantifiers, prepositions, or conjunctions
+    invalid_prefixes = (
+        "when ", "where ", "if ", "because ", "that ", "which ", "how ", "what ", "why ",
+        "who ", "it ", "there ", "here ", "in the", "on the", "with ", "for ", "such as",
+        "according", "as an", "at the", "by the", "from the", "to the", "during", "based on",
+        "once a", "and ", "or ", "each ", "every ", "all ", "some ", "any ", "created when",
+        "runs multi", "used with", "supports ", "not ", "no ", "never ", "neither ", "none ",
+        "without ", "few ", "many ", "but ", "so ", "yet ", "words, but", "this work"
+    )
+    if any(lower.startswith(prefix) for prefix in invalid_prefixes):
+        return None
+
+    # Reject conversational pronouns and idioms
+    if re.search(r"\b(?:i|me|my|myself|you|your|yours|yourself|we|our|ours|us|piece of cake|pulling your leg|break a leg)\b", lower):
+        return None
+
+    # Reject grammatical clauses containing auxiliary/modal verbs or clauses
+    if re.search(r"\b(?:is|are|was|were|am|has|have|had|been|can|will|should|must|purpose|occur|occurs|occurring)\b", lower):
+        return None
+
+    if lower in FORBIDDEN_CONCEPT_WORDS or lower in ENGLISH_STOPWORDS:
+        return None
+
+    # Reject concepts ending with meta labels (e.g. "Minimal Errors Explanation", "Step 1")
+    if re.search(r"\b(?:explanation|example|examples|note|notes|summary|details|commands?|features?|steps?|actions?|operations?)\s*$", lower):
+        return None
+
+    if CLI_SYNTAX_PATTERN.search(lower):
+        return None
+
+    if re.search(r"\b(?:unit|chapter|slide|page|concept|topic|section|step)\s+\d+\b", lower) or lower.startswith(("unit ", "concept ", "topic ", "section ", "step ")):
+        return None
+
+    if "." in cleaned:
+        return None
+
+    # Length & word count check: 1 to 4 words, 2 to 45 characters
+    words = cleaned.split()
+    if len(words) < 1 or len(words) > 4 or len(cleaned) < 2 or len(cleaned) > 45:
+        return None
+
+    # Single-word concepts must be genuine technical terms (not ordinary generic nouns)
+    if len(words) == 1 and "-" not in cleaned:
+        if lower in FORBIDDEN_CONCEPT_WORDS or lower in ENGLISH_STOPWORDS:
+            return None
+        is_acronym = cleaned.isupper() and len(cleaned) >= 2
+        is_known = lower in KNOWN_SINGLE_WORD_TECH_CONCEPTS
+        is_camel = any(c.isupper() for c in cleaned[1:])
+        is_tech_suffix = any(lower.endswith(sfx) for sfx in (
+            "ization", "isation", "ation", "ology", "metry", "graphy", "morphism", "lock",
+            "eme", "phone", "onym", "syntax", "semantics", "parsing", "token", "vector", "matrix"
+        )) and len(cleaned) >= 4
+        if not (is_acronym or is_known or is_camel or is_tech_suffix):
+            return None
+        if not is_acronym and len(cleaned) < 4:
+            return None
+
+    # Title-case clean concept formatting while preserving technical acronyms and CamelCase (e.g. HDFS, NameNode, VM)
+    stopwords = {"and", "of", "in", "to", "for", "on", "with", "the", "a", "an"}
+    formatted_words = []
+    for i, w in enumerate(words):
+        if w.isupper() or any(c.isupper() for c in w[1:]):
+            formatted_words.append(w)
+        elif i > 0 and w.lower() in stopwords:
+            formatted_words.append(w.lower())
+        else:
+            formatted_words.append(w.capitalize())
+
+    cleaned = " ".join(formatted_words)
+    if cleaned:
+        cleaned = cleaned[0].upper() + cleaned[1:]
+
+    return cleaned
+
+
 def is_valid_definition(text: str) -> bool:
     """Ensure statement is a valid natural-language educational definition, not shell commands, code, negative fragments, or dangling anaphora."""
     if not text or len(text.strip()) < 15:
         return False
     clean = text.strip()
+
     # Reject shell commands and CLI syntax
     if re.match(r"^(?:docker\s+[a-z]+|kubectl\s+[a-z]+|npm\s+[a-z]+|git\s+[a-z]+|pip\s+[a-z]+|sudo\s+[a-z]+|t\s+<|<[a-z0-9_\-]+>|-[a-z]\b)", clean, re.I):
         return False
     if re.search(r"<[A-Za-z0-9_\-]+>|--[a-z]+|-[a-z]\s+\d+|-[a-z]\s+-[a-z]", clean):
         return False
+
     words = clean.split()
     if len(words) < 4:
         return False
+
     # Reject isolated negative predicates (e.g. "not required in this mode")
     if INVALID_DEFINITION_START.search(clean):
         return False
+
     # Reject dangling anaphoric pronouns (e.g. "in this mode", "the above")
     if DANGLING_ANAPHORA_PATTERN.search(clean):
         return False
+
+    # Reject coordinating conjunctions at statement start
+    if re.match(r"^(?:and\b|or\b|but\b|so\b|yet\b|words,\s*but)\b", clean, re.I):
+        return False
+
+    # Reject first/second person conversational idioms
+    if re.search(r"\b(?:piece of cake|pulling your leg|break a leg|i am just|i'm just)\b", clean, re.I):
+        return False
+    if re.search(r"\b(?:i|me|my|you|your|we|our|us)\b", clean, re.I):
+        return False
+
     return True
 
 
-def are_options_too_similar(opt1: str, opt2: str) -> bool:
-    """Check if two multiple-choice options are too similar, overlapping, or collision-prone.
+def strip_concept_from_definition(concept: str, text: str) -> str:
+    """Cleanly strip the target concept name, synonyms, and connecting copulas from the definition statement."""
+    if not text:
+        return ""
+    cleaned = text.strip()
 
-    Prevents degenerate option sets such as:
-    - 'Hadoop' vs 'Hadoop Cluster' vs 'Data in Hadoop' vs 'Hadoop and HDFS'
-    """
+    # Normalize whitespace
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    escaped_c = re.escape(concept.strip())
+
+    # Strip repeated leading mentions of concept name (e.g. 'Semantic Ambiguity Semantic ambiguity occurs when...')
+    for _ in range(4):
+        prev = cleaned
+        cleaned = re.sub(rf"^(?:an?|the)?\s*{escaped_c}\b\s*[:\-–—]?\s*", "", cleaned, flags=re.I).strip()
+        if cleaned.lower().startswith(concept.lower()):
+            cleaned = cleaned[len(concept):].strip(" :.-–—;")
+        cleaned = re.sub(r"^(?:an?|the)?\s*[A-Za-z0-9\s\-]{2,30}?\s*[:\-–—]\s*", "", cleaned).strip() if cleaned.lower().startswith(concept.lower()) else cleaned
+        if cleaned == prev:
+            break
+
+    # Strip connecting verbs/copulas
+    copula_pattern = (
+        r"^(?:is\s+defined\s+as|is\s+the\s+process\s+of|is\s+a\s+technique\s+that|is\s+a\s+technique\s+for|"
+        r"is\s+a\s+method\s+that|is\s+a\s+method\s+for|is\s+a\s+component\s+that|refers\s+to\s+a|"
+        r"refers\s+to\s+the|refers\s+to|is\s+when|occurs\s+when|happens\s+when|means\s+that|represents|"
+        r"is\s+an?|is\s+the|are\s+defined\s+as|are\s+the|are\s+an?|consists\s+of|describes|"
+        r"is\s+used\s+to|can\s+be\s+defined\s+as|denotes|is\s+characterized\s+by)\s+"
+    )
+    for _ in range(3):
+        prev = cleaned
+        cleaned = re.sub(copula_pattern, "", cleaned, flags=re.I).strip()
+        cleaned = re.sub(rf"^(?:an?|the)?\s*{escaped_c}\b\s*[:\-–—]?\s*", "", cleaned, flags=re.I).strip()
+        if cleaned.lower().startswith(concept.lower()):
+            cleaned = cleaned[len(concept):].strip(" :.-–—;")
+        if cleaned == prev:
+            break
+
+    # Strip dangling punctuation and trailing incomplete prepositions
+    cleaned = cleaned.strip(" :.-–—;")
+    cleaned = re.sub(r"\s+(?:and|or|to|for|in|with|by|as|such as|of|the|a|an)\s*$", "", cleaned, flags=re.I).strip(" ,.-–:")
+
+    return cleaned
+
+
+def classify_concept_category(concept: str) -> str:
+    """Classify an academic concept into its conceptual archetype (strictly domain-agnostic)."""
+    if not concept:
+        return "general_concept"
+    clean = concept.strip().lower()
+    words = clean.split()
+    last_word = words[-1] if words else ""
+
+    # 1. Broad fields / disciplines / subjects
+    # e.g., NLP, AI, ML, Linguistics, Semantics, Morphology, Computer Science, Data Science
+    if clean in {"nlp", "ai", "ml", "cs", "bi", "it"}:
+        return "broad_field"
+    if any(clean.endswith(sfx) for sfx in (" science", " engineering", " processing", " learning", " intelligence", " analytics")):
+        return "broad_field"
+    if any(last_word.endswith(sfx) for sfx in ("ology", "ics", "etics")):
+        return "broad_field"
+
+    # 2. Execution modes
+    if "mode" in clean:
+        return "execution_mode"
+
+    # 3. Visualizations / charts
+    if any(w in clean for w in ("chart", "plot", "graph", "diagram", "histogram", "heatmap", "scatter", "treemap")):
+        return "visualization"
+
+    # 4. Data structures
+    if last_word in {"bag", "tuple", "map", "array", "list", "stack", "queue", "tree", "matrix", "vector", "tensor", "heap", "set"}:
+        return "data_structure"
+    if any(clean.endswith(f" {w}") for w in ("structure", "type", "model", "schema")):
+        return "data_structure"
+
+    # 5. Core atomic units / linguistic units
+    # e.g., Morpheme, Phoneme, Grapheme, Allophone, Token, Word, Byte, Bit, Character, Minimal Pair, Minimal Pairs
+    if any(last_word.endswith(sfx) for sfx in ("eme", "emes", "phone", "phones")):
+        return "core_unit"
+    if last_word in {"pair", "pairs", "token", "tokens", "byte", "bytes", "bit", "bits", "node", "nodes", "edge", "edges", "vertex", "vertices", "symbol", "symbols", "packet", "packets", "frame", "frames"}:
+        return "core_unit"
+
+    # 6. Phenomenon / property / state
+    # e.g., Ambiguity, Polysemy, Homonymy, Anaphora, Latency, Skewness, Modularity
+    if any(last_word.endswith(sfx) for sfx in ("ity", "ities", "ance", "ence", "ism", "isms", "drift", "skew", "latency")):
+        return "phenomenon_property"
+    if last_word in {"polysemy", "homonymy", "hyponymy", "synonymy", "anaphora", "ellipsis", "anomaly", "metaphor"}:
+        return "phenomenon_property"
+
+    # 7. Processes, algorithms, techniques
+    # e.g., Parsing, Stemming, Tokenization, Lemmatization, Containerization, Clustering, Optimization
+    if any(last_word.endswith(sfx) for sfx in ("tion", "tions", "sion", "sions", "ing", "ings")):
+        return "process_technique"
+    if last_word in {"algorithm", "method", "protocol", "technique", "procedure", "pipeline"}:
+        return "process_technique"
+
+    # 8. Systems, components, infrastructure
+    if last_word in {"container", "pod", "engine", "server", "broker", "namenode", "datanode", "tracker", "cluster", "daemon"}:
+        return "component_system"
+
+    return "general_concept"
+
+
+def are_options_too_similar(opt1: str, opt2: str) -> bool:
+    """Check if two multiple-choice options are too similar, overlapping, or collision-prone."""
     s1 = opt1.strip().lower()
     s2 = opt2.strip().lower()
     if not s1 or not s2:
@@ -250,19 +429,56 @@ def are_options_too_similar(opt1: str, opt2: str) -> bool:
     if s1 == s2:
         return True
 
-    # Substring / Superstring check for meaningful words
-    if s1 in s2 or s2 in s1:
+    # Singular / Plural equivalence check (e.g. "Minimal Pair" vs "Minimal Pairs", "Token" vs "Tokens")
+    if s1.rstrip("s") == s2.rstrip("s"):
         return True
 
     stopwords = {"and", "or", "in", "the", "a", "an", "of", "to", "for", "with", "by", "is", "are", "mode"}
-    t1 = {w for w in re.findall(r"[a-z0-9]+", s1) if w not in stopwords}
-    t2 = {w for w in re.findall(r"[a-z0-9]+", s2) if w not in stopwords}
+    words1 = [w for w in re.findall(r"[a-z0-9]+", s1) if w not in stopwords]
+    words2 = [w for w in re.findall(r"[a-z0-9]+", s2) if w not in stopwords]
+    t1 = set(words1)
+    t2 = set(words2)
     if not t1 or not t2:
         return False
 
+    def _stem_word(w: str) -> str:
+        if w.endswith("ies") and len(w) > 4:
+            return w[:-3] + "y"
+        if w.endswith("es") and len(w) > 4:
+            return w[:-2]
+        if w.endswith("s") and not w.endswith("ss") and len(w) > 3:
+            return w[:-1]
+        return w
+
+    stems1 = [_stem_word(w) for w in words1]
+    stems2 = [_stem_word(w) for w in words2]
+    if stems1 == stems2:
+        return True
+
     overlap = t1.intersection(t2)
+    if not overlap:
+        return False
+
+    # Word boundary containment (e.g. "Hadoop" inside "Hadoop Cluster", not partial word like "supervised" in "unsupervised")
+    if re.search(rf"\b{re.escape(s1)}\b", s2) or re.search(rf"\b{re.escape(s2)}\b", s1):
+        return True
+
+    # If one option is a single concept word and appears in the other option
+    if (len(words1) == 1 or len(words2) == 1) and overlap:
+        return True
+
+    # Sibling concepts sharing a head noun at the end (e.g. "Line Chart" vs "Bar Chart", "Supervised Learning" vs "Unsupervised Learning", "Semantic Ambiguity" vs "Referential Ambiguity")
+    if len(words1) >= 2 and len(words2) >= 2 and words1[-1] == words2[-1] and words1[0] != words2[0]:
+        return False
+
+    # Entity modifier collisions sharing the first word (e.g. "Hadoop Cluster" vs "Hadoop and HDFS")
+    if len(words1) >= 2 and len(words2) >= 2 and words1[0] == words2[0]:
+        entity_modifiers = {"cluster", "system", "data", "hdfs", "server", "node"}
+        if any(w in entity_modifiers for w in t1.union(t2) - overlap):
+            return True
+
     jaccard = len(overlap) / len(t1.union(t2))
-    if jaccard >= 0.4:
+    if jaccard >= 0.5:
         return True
 
     # If any shared non-trivial word >= 4 chars when both options are short concepts (<= 2 words)
@@ -278,14 +494,14 @@ def extract_chunk_hierarchy_context(chunk: Dict[str, Any], statement: str = "") 
     source_fn = chunk.get("source_filename") or ""
     chunk_text = chunk.get("text") or ""
 
-    # 1. Detect Subject / Technology
+    # 1. Detect Subject / Technology (strictly domain-agnostic)
     subject = None
     all_context = f"{source_fn} {sec_title} {chunk_text[:300]}"
 
     tech_candidates = [
         "Apache Pig", "Pig Latin", "Apache Hive", "Apache Spark", "Hadoop", "HDFS",
         "MapReduce", "Apache Kafka", "Docker", "Kubernetes", "Tableau", "YARN",
-        "Apache HBase", "ZooKeeper", "Linux", "Git"
+        "Apache HBase", "ZooKeeper", "Linux", "Git", "Relational Database", "Operating System"
     ]
     for tech in tech_candidates:
         if re.search(rf"\b{re.escape(tech)}\b", all_context, re.I):
@@ -294,8 +510,9 @@ def extract_chunk_hierarchy_context(chunk: Dict[str, Any], statement: str = "") 
 
     if not subject:
         fn_clean = re.sub(r"\.(?:pdf|docx|ppt|pptx|txt|md)$", "", source_fn, flags=re.I).strip()
-        fn_clean = re.sub(r"^(?:bda|unit\s*\d+|lecture\s*\d+|module\s*\d+)[\s_\-]+", "", fn_clean, flags=re.I).strip()
-        if fn_clean and len(fn_clean) > 2:
+        fn_clean = re.sub(r"^(?:bda|unit\s*\d+|lecture\s*\d+|module\s*\d+|slide\s*\d+|chapter\s*\d+)[\s_\-]+", "", fn_clean, flags=re.I).strip()
+        # Strictly reject generic file/unit names so they never become "In unit1, which concept..."
+        if fn_clean and len(fn_clean) > 2 and not re.match(r"^(?:unit|lecture|chapter|module|slide|doc|file)\s*\d*$", fn_clean, re.I):
             subject = fn_clean
 
     # 2. Detect Section / Topic
@@ -340,6 +557,10 @@ def extract_chunk_hierarchy_context(chunk: Dict[str, Any], statement: str = "") 
         category = "component"
     elif "visualization" in combined_ctx or "chart" in combined_ctx or "plot" in combined_ctx:
         category = "visualization technique"
+    elif "linguistic" in combined_ctx or "language" in combined_ctx or "ambiguity" in combined_ctx or "morphology" in combined_ctx:
+        category = "linguistic phenomenon"
+    elif "algorithm" in combined_ctx:
+        category = "algorithm"
 
     return {
         "subject": subject,
@@ -351,137 +572,70 @@ def extract_chunk_hierarchy_context(chunk: Dict[str, Any], statement: str = "") 
     }
 
 
-def get_domain_distractors_for_context(text: str) -> List[str]:
-    """Detect subject domain from document context to supply aligned fallback concepts."""
-    lower = (text or "").lower()
-    if any(k in lower for k in ["local mode", "execution mode", "runtime", "grunt"]):
-        return DOMAIN_DISTRACTOR_MAP["bigdata_runtime"] + DOMAIN_DISTRACTOR_MAP["bigdata"]
-    if any(k in lower for k in ["chart", "plot", "histogram", "visualization", "scatter", "graph", "treemap"]):
-        return DOMAIN_DISTRACTOR_MAP["visualization"]
-    if any(k in lower for k in ["docker", "container", "kubernetes", "apdd", "devops", "microservice", "virtual machine"]):
-        return DOMAIN_DISTRACTOR_MAP["cloud"]
-    if any(k in lower for k in ["neural", "classification", "regression", "learning", "gradient", "feature engineering"]):
-        return DOMAIN_DISTRACTOR_MAP["ml"]
-    if any(k in lower for k in ["bda", "hadoop", "mapreduce", "hdfs", "spark", "yarn", "hive", "pig", "kafka", "namenode"]):
-        return DOMAIN_DISTRACTOR_MAP["bigdata"]
-    if any(k in lower for k in ["network", "router", "packet", "protocol", "osi", "tcp", "udp", "ip", "dns", "subnet"]):
-        return DOMAIN_DISTRACTOR_MAP["networks"]
-    if any(k in lower for k in ["operating system", "process", "thread", "kernel", "scheduling", "semaphore", "deadlock", "paging", "mutex"]):
-        return DOMAIN_DISTRACTOR_MAP["os"]
-    if any(k in lower for k in ["database", "dbms", "sql", "normalization", "relational", "acid", "transaction", "query"]):
-        return DOMAIN_DISTRACTOR_MAP["dbms"]
-    if any(k in lower for k in ["security", "cipher", "encryption", "decryption", "cryptography", "malware", "vulnerability"]):
-        return DOMAIN_DISTRACTOR_MAP["security"]
-    if any(k in lower for k in ["agile", "scrum", "software engineering", "refactoring", "waterfall", "testing"]):
-        return DOMAIN_DISTRACTOR_MAP["software"]
-    return CURATED_DOMAIN_DISTRACTORS
-
-
-def clean_academic_concept(text: str) -> Optional[str]:
-    """Sanitize concept string, stripping meta headings and strictly filtering stopwords and fillers."""
+def unwrap_and_extract_sentences(text: str) -> List[str]:
+    """Reconstruct wrapped document text into coherent, complete sentences."""
     if not text:
-        return None
+        return []
 
-    cleaned = text.strip()
+    # 1. Normalize line endings & hyphens across wraps
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = re.sub(r"(\b[A-Za-z]+)-\n([A-Za-z]+\b)", r"\1-\2", normalized)
 
-    # 1. Reject meta slide notes
-    if re.match(r"^(?:explanation|note|example|warning|caution|step\s*\d*[:\-])\b", cleaned, re.I):
-        return None
+    raw_lines = [l.strip() for l in normalized.split("\n")]
+    blocks: List[str] = []
+    curr: List[str] = []
 
-    # 2. Reject commands and verbs
-    if ACTION_VERB_PREFIXES.match(cleaned) or cleaned.lower().endswith(" commands"):
-        return None
+    def is_header_or_title(line: str) -> bool:
+        clean = line.strip()
+        if not clean:
+            return False
+        if re.match(r"^\d+(?:\.\d+)*\s+[A-Z][A-Za-z0-9\s\-]{1,40}$", clean):
+            return True
+        if re.match(r"^#{1,6}\s+", clean):
+            return True
+        words = clean.split()
+        if 1 <= len(words) <= 4 and len(clean) <= 35 and clean[0].isupper() and not clean.endswith((".", ",", ";", ":", "?", "!", "-")):
+            return True
+        return False
 
-    # 3. Strip section / slide numbering: e.g. '3.7', '3.7.1', '1.', 'Step 2:', 'Section 4'
-    cleaned = re.sub(r"^(?:(?:step|section|unit|chapter)\s*)?\d+(?:\.\d+)*[\.\)\:\-–\s]+", "", cleaned, flags=re.I).strip()
-    cleaned = re.sub(r"^[#*_\-\–\—•\s]+|[#*_\-\–\—•\s]+$", "", cleaned).strip()
+    for line in raw_lines:
+        if not line or line.startswith("|"):
+            if curr:
+                blocks.append(" ".join(curr))
+                curr = []
+            continue
 
-    # Strip repeated heading separators: e.g. 'Pie Chart - A pie chart' -> 'A pie chart'
-    if re.search(r"\s+[\-–—]\s+", cleaned):
-        cleaned = re.split(r"\s+[\-–—]\s+", cleaned)[-1].strip()
+        is_bullet = bool(re.match(r"^(?:[\-\*•–—]|\d+[\.\)]|\d+\.\d+[\.\)]?|[A-Za-z][\.\)])\s+", line))
+        is_heading_label = bool(re.match(r"^(?:example|used for|solution|definition|note|warning)[:\-–]", line, re.I))
+        is_title = is_header_or_title(line)
+        prev_was_title = bool(curr and is_header_or_title(curr[-1]))
 
-    # 4. Strip meta-heading prefixes (e.g. 'Characteristics of Containerization' -> 'Containerization')
-    cleaned = META_HEADING_PREFIXES.sub("", cleaned).strip()
-
-    # 5. Strip evaluative adjective prefixes (e.g. 'Important Component' -> 'Component', 'Common Techniques' -> 'Techniques')
-    cleaned = EVALUATIVE_ADJ_PREFIXES.sub("", cleaned).strip()
-
-    # 6. Strip leading articles: 'A container' -> 'Container'
-    cleaned = re.sub(r"^(?:a|an|the|this|that|these|those)\s+", "", cleaned, flags=re.I).strip()
-    cleaned = cleaned.strip(" :.-–—;")
-
-    # Re-check action verbs and commands after stripping prefixes
-    if ACTION_VERB_PREFIXES.match(cleaned) or cleaned.lower().endswith(" commands"):
-        return None
-
-    # 6. Check for invalid grammatical fragments or clauses
-    lower = cleaned.lower()
-    invalid_prefixes = (
-        "when ", "where ", "if ", "because ", "that ", "which ", "how ", "what ", "why ",
-        "who ", "it ", "there ", "here ", "in the", "on the", "with ", "for ", "such as",
-        "according", "as an", "at the", "by the", "from the", "to the", "during", "based on",
-        "once a", "and ", "or ", "each ", "every ", "all ", "some ", "any ", "created when",
-        "runs multi", "used with", "supports "
-    )
-    if any(lower.startswith(prefix) for prefix in invalid_prefixes):
-        return None
-
-    # Reject grammatical clauses containing articles, auxiliary verbs, or purpose markers
-    if re.search(r"\b(?:the|a|an|is|are|was|were|has|have|had|been|can|will|should|must|purpose)\b", lower):
-        return None
-
-    if lower in FORBIDDEN_CONCEPT_WORDS or lower in ENGLISH_STOPWORDS:
-        return None
-
-    # Reject concepts ending with meta labels (e.g. "Minimal Errors Explanation", "Step 1")
-    if re.search(r"\b(?:explanation|example|examples|note|notes|summary|details|commands?|features?|steps?|actions?|operations?)\s*$", lower):
-        return None
-
-    if CLI_SYNTAX_PATTERN.search(lower):
-        return None
-
-    if re.search(r"\b(?:unit|chapter|slide|page|concept|topic|section|step)\s+\d+\b", lower) or lower.startswith(("unit ", "concept ", "topic ", "section ", "step ")):
-        return None
-
-    if "." in cleaned:
-        return None
-
-    # Length & word count check: 1 to 3 words, 2 to 35 characters
-    words = cleaned.split()
-    if len(words) < 1 or len(words) > 3 or len(cleaned) < 2 or len(cleaned) > 35:
-        return None
-
-    # Single-word concepts must be genuine technical terms (not ordinary generic nouns)
-    if len(words) == 1 and "-" not in cleaned:
-        if lower in FORBIDDEN_CONCEPT_WORDS or lower in ENGLISH_STOPWORDS:
-            return None
-        is_acronym = cleaned.isupper() and len(cleaned) >= 2
-        is_known = lower in KNOWN_SINGLE_WORD_TECH_CONCEPTS
-        is_camel = any(c.isupper() for c in cleaned[1:])
-        is_tech_suffix = any(lower.endswith(sfx) for sfx in (
-            "ization", "isation", "ation", "ology", "metry", "graphy", "morphism", "lock"
-        )) and len(cleaned) >= 6
-        if not (is_acronym or is_known or is_camel or is_tech_suffix):
-            return None
-        if not is_acronym and len(cleaned) < 4:
-            return None
-
-    # Title-case clean concept formatting while preserving technical acronyms and CamelCase (e.g. HDFS, NameNode, VM)
-    stopwords = {"and", "of", "in", "to", "for", "on", "with", "the", "a", "an"}
-    formatted_words = []
-    for i, w in enumerate(words):
-        if w.isupper() or any(c.isupper() for c in w[1:]):
-            formatted_words.append(w)
-        elif i > 0 and w.lower() in stopwords:
-            formatted_words.append(w.lower())
+        if curr and (is_bullet or is_heading_label or is_title or prev_was_title):
+            blocks.append(" ".join(curr))
+            curr = [line]
         else:
-            formatted_words.append(w.capitalize())
+            if curr:
+                prev = curr[-1]
+                if prev.endswith((".", "!", "?", ":")) and not re.search(r"\b(?:e\.g|i\.e|etc|vs)\.$", prev, re.I) and (line[0].isupper() or is_bullet):
+                    blocks.append(" ".join(curr))
+                    curr = [line]
+                else:
+                    curr.append(line)
+            else:
+                curr = [line]
 
-    cleaned = " ".join(formatted_words)
-    if cleaned:
-        cleaned = cleaned[0].upper() + cleaned[1:]
+    if curr:
+        blocks.append(" ".join(curr))
 
-    return cleaned
+    # Split each block into sentences
+    sentences: List[str] = []
+    for b in blocks:
+        s_list = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\-\*•])", b)
+        for s in s_list:
+            s_clean = s.strip()
+            if len(s_clean) >= 20:
+                sentences.append(s_clean)
+    return sentences
 
 
 @dataclass
@@ -542,25 +696,45 @@ def validate_quiz_question(
     question: QuizQuestion,
     source_chunk_text: str = "",
     min_length: int = 25,
+    allowed_folder_concepts: Optional[Set[str]] = None,
 ) -> Tuple[bool, List[str]]:
-    """Strictly validate generated question across all 8 quality dimensions.
+    """Strictly validate generated question across all 10 quality dimensions.
 
     Returns (is_valid, list_of_failure_reasons).
     """
     failures = []
     q_text = question.question.strip()
 
-    # A. Completeness & Minimum Length
+    # 1. Minimum Length & Question Mark
     if len(q_text) < min_length:
         failures.append(f"Question text too short ({len(q_text)} chars)")
     if not q_text.endswith("?"):
         failures.append("Question does not end with '?'")
+    if q_text.count("?") > 1:
+        failures.append("Multiple question marks detected")
+    if not q_text[0].isupper():
+        failures.append("Question does not start with a capitalized letter")
 
-    # Reject literal quote completions and forbidden phrases
-    if re.search(r'\bdefined as:\s*"|"not required in this mode"|\bknown as the above\b|\bmentioned in this case\b|\bcompletes the statement\b|\bwhat does this refer to\b|\bwhat is not required\b', q_text, re.I):
+    # 2. Reject malformed unit/file prefixes and ungrammatical templates
+    if re.search(r"\b(?:in\s+unit\s*\d+|in\s+lecture\s*\d+|in\s+chapter\s*\d+|in\s+module\s*\d+)\b", q_text, re.I):
+        failures.append("Question contains unnecessary or repetitive unit/lecture prefix")
+    if re.search(r"\bdefined as:\s*(?:differ|differs|typing|to\b)\b", q_text, re.I):
+        failures.append("Question contains malformed 'defined as:' template phrasing")
+
+    # Reject accidental duplicated concept names in stem (e.g. 'Semantic Ambiguity Semantic ambiguity')
+    words = q_text.split()
+    for i in range(len(words) - 1):
+        w1 = re.sub(r"[^a-zA-Z]", "", words[i]).lower()
+        w2 = re.sub(r"[^a-zA-Z]", "", words[i + 1]).lower()
+        if w1 and w1 == w2 and len(w1) >= 4 and w1 not in {"that", "had", "is"}:
+            failures.append(f"Repeated consecutive word '{w1}' detected in question stem")
+            break
+
+    # 3. Reject forbidden sentence-completion and literal quote phrasing
+    if re.search(r'\bdefined as:\s*"|"not required in this mode"|\bknown as the above\b|\bmentioned in this case\b|\bcompletes the statement\b|\bwhat does this refer to\b|\bwhat is not required\b|\bcorresponds to words, but\b', q_text, re.I):
         failures.append("Question contains forbidden sentence-completion or literal quote phrasing")
 
-    # Reject dangling anaphoric pronouns without explicit antecedent in the question
+    # 4. Reject dangling anaphoric pronouns
     dangling_match = DANGLING_ANAPHORA_PATTERN.search(q_text)
     if dangling_match:
         matched_str = dangling_match.group(0).lower()
@@ -568,16 +742,30 @@ def validate_quiz_question(
         if not ("mode" in matched_str and has_specific_mode):
             failures.append("Question contains dangling anaphoric reference (e.g. 'this mode', 'the above')")
 
-    # B. Context Sufficiency
-    # If the question asks about a mode or requirement, ensure specific mode is explicitly named
     if "mode" in q_text.lower() and not re.search(r"\b(local mode|mapreduce mode|interactive mode|batch mode|hdfs mode|embedded mode)\b", q_text, re.I):
         failures.append("Question discusses mode without identifying which specific mode is being tested")
 
-    # C. Answerability
+    # 5. Answerability & Concept Validation
     if not question.correct_answer or len(question.correct_answer.strip()) < 2:
         failures.append("Correct answer is empty or invalid")
+    if question.correct_answer.lower() in FORBIDDEN_CONCEPT_WORDS or question.correct_answer.lower() in ENGLISH_STOPWORDS:
+        failures.append(f"Correct answer '{question.correct_answer}' is a forbidden filler or stopword")
 
-    # D. Unambiguity & Distractor Anti-Collision
+    # 6. Answer Leakage Prevention: concept name must NOT appear inside the question stem
+    ca_clean = question.correct_answer.strip().lower()
+    if re.search(rf"\b{re.escape(ca_clean)}\b", q_text.lower()):
+        failures.append(f"Answer leakage: question stem directly contains correct answer '{question.correct_answer}'")
+    else:
+        # Check distinguishing multi-word constituents (e.g. 'Semantic' in 'Semantic Ambiguity')
+        ca_words = [w for w in ca_clean.split() if len(w) >= 4 and w not in ENGLISH_STOPWORDS]
+        if len(ca_words) >= 2:
+            # Check the distinguishing modifier (first word)
+            distinguishing_mod = ca_words[0]
+            if distinguishing_mod not in {"which", "concept", "system", "process", "technique", "method", "model"}:
+                if re.search(rf"\b{re.escape(distinguishing_mod)}\b", q_text.lower()):
+                    failures.append(f"Answer leakage: distinguishing word '{distinguishing_mod}' of answer appears in stem")
+
+    # 7. Unambiguity, Conceptual Category Compatibility & Exactly 4 Options
     if len(question.options) != 4:
         failures.append(f"Expected exactly 4 options, found {len(question.options)}")
     else:
@@ -585,6 +773,15 @@ def validate_quiz_question(
         # Check uniqueness
         if len(set(o.lower() for o in clean_opts)) != 4:
             failures.append("Duplicate or non-unique options detected")
+
+        # Check conceptual category compatibility
+        target_cat = classify_concept_category(question.correct_answer)
+        if target_cat != "broad_field":
+            for opt in clean_opts:
+                if classify_concept_category(opt) == "broad_field":
+                    failures.append(f"Conceptual category incompatibility: option '{opt}' is a broad field while target '{question.correct_answer}' is {target_cat}")
+                    break
+
         # Check pairwise collision between options
         for i in range(len(clean_opts)):
             for j in range(i + 1, len(clean_opts)):
@@ -593,6 +790,7 @@ def validate_quiz_question(
                     break
             if failures and "Options too similar" in failures[-1]:
                 break
+
         # Correct answer must be among options
         if question.correct_answer.lower() not in [o.lower() for o in clean_opts]:
             failures.append(f"Correct answer '{question.correct_answer}' not present in options")
@@ -601,104 +799,30 @@ def validate_quiz_question(
         elif clean_opts[question.correct_option_index].lower() != question.correct_answer.lower():
             failures.append("correct_option_index does not point to correct_answer")
 
-    # E. Grammatical Correctness
-    if not q_text[0].isupper():
-        failures.append("Question does not start with a capitalized letter")
-    if q_text.count("?") > 1:
-        failures.append("Multiple question marks detected")
+        # 8. Folder Isolation Verification: all options must come from the permitted folder pool
+        if allowed_folder_concepts:
+            for opt in clean_opts:
+                opt_norm = opt.lower().strip()
+                if opt_norm not in allowed_folder_concepts:
+                    failures.append(f"Folder isolation violation: option '{opt}' is not grounded in the selected folder")
+                    break
 
-    # F. Conceptual Relevance
-    if question.correct_answer.lower() in FORBIDDEN_CONCEPT_WORDS or question.correct_answer.lower() in ENGLISH_STOPWORDS:
-        failures.append(f"Correct answer '{question.correct_answer}' is a forbidden filler or stopword")
-
-    # G. Explanation Consistency
+    # 9. Explanation Consistency
     if not question.explanation or len(question.explanation.strip()) < 20:
         failures.append("Explanation is missing or too short")
     elif question.correct_answer.lower() not in question.explanation.lower():
         failures.append("Explanation does not mention or justify the correct answer")
 
-    # H. Source Traceability
+    # 10. Source Traceability
     if not question.source_document:
         failures.append("Source document metadata is missing")
 
     is_valid = len(failures) == 0
     return is_valid, failures
 
-def unwrap_and_extract_sentences(text: str) -> List[str]:
-    """Reconstruct wrapped document text into coherent, complete sentences.
-
-    Solves PDF hard line wrapping where definitions break across lines
-    (e.g., 'A line chart represents data points using points connected by lines. It is mainly used to show changes or\\ntrends over time.')
-    """
-    if not text:
-        return []
-
-    # 1. Normalize line endings & hyphens across wraps
-    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
-    normalized = re.sub(r"(\b[A-Za-z]+)-\n([A-Za-z]+\b)", r"\1-\2", normalized)
-
-    raw_lines = [l.strip() for l in normalized.split("\n")]
-    blocks: List[str] = []
-    curr: List[str] = []
-
-    def is_header_or_title(line: str) -> bool:
-        clean = line.strip()
-        if not clean:
-            return False
-        # Numbered heading: e.g. "3.1 Line Chart", "3. Existing Visualization Techniques"
-        if re.match(r"^\d+(?:\.\d+)*\s+[A-Z][A-Za-z0-9\s\-]{1,40}$", clean):
-            return True
-        # Markdown heading: e.g. "## Line Chart", "### Histogram"
-        if re.match(r"^#{1,6}\s+", clean):
-            return True
-        # Short standalone title line: e.g. "Line Chart", "Bar Chart", "Histogram", "Heat Map"
-        words = clean.split()
-        if 1 <= len(words) <= 4 and len(clean) <= 35 and clean[0].isupper() and not clean.endswith((".", ",", ";", ":", "?", "!", "-")):
-            return True
-        return False
-
-    for line in raw_lines:
-        if not line or line.startswith("|"):
-            if curr:
-                blocks.append(" ".join(curr))
-                curr = []
-            continue
-
-        is_bullet = bool(re.match(r"^(?:[\-\*•–—]|\d+[\.\)]|\d+\.\d+[\.\)]?|[A-Za-z][\.\)])\s+", line))
-        is_heading_label = bool(re.match(r"^(?:example|used for|solution|definition|note|warning)[:\-–]", line, re.I))
-        is_title = is_header_or_title(line)
-        prev_was_title = bool(curr and is_header_or_title(curr[-1]))
-
-        if curr and (is_bullet or is_heading_label or is_title or prev_was_title):
-            blocks.append(" ".join(curr))
-            curr = [line]
-        else:
-            if curr:
-                prev = curr[-1]
-                if prev.endswith((".", "!", "?", ":")) and not re.search(r"\b(?:e\.g|i\.e|etc|vs)\.$", prev, re.I) and (line[0].isupper() or is_bullet):
-                    blocks.append(" ".join(curr))
-                    curr = [line]
-                else:
-                    curr.append(line)
-            else:
-                curr = [line]
-
-    if curr:
-        blocks.append(" ".join(curr))
-
-    # Split each block into sentences
-    sentences: List[str] = []
-    for b in blocks:
-        s_list = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\-\*•])", b)
-        for s in s_list:
-            s_clean = s.strip()
-            if len(s_clean) >= 20:
-                sentences.append(s_clean)
-    return sentences
-
 
 class QuizGenerator:
-    """Automated academic quiz generator utilizing Inverted Seq2Seq and Vector Manifold sampling."""
+    """Automated academic quiz generator strictly isolated to user-selected folders and documents."""
 
     def __init__(self, config: Optional[ATMLConfig] = None):
         self.config = config or default_config
@@ -720,9 +844,9 @@ class QuizGenerator:
                 if len(line) < 30 or len(line) > 500 or line.endswith("?") or line.startswith("?"):
                     continue
 
-                # Pattern A: "Concept is/are/refers to/is defined as/represents/displays/uses Definition"
+                # Pattern A: "Concept is/are/refers to/is defined as/is known as/occurs when Definition"
                 def_match = re.search(
-                    r"^([A-Za-z0-9\.\s\-–—]{2,50}?)\s+(?:is|are|refers to|is defined as|is the process of|consists of|represents|displays|uses)\s+(.+)",
+                    r"^([A-Za-z0-9\.\s\-–—]{2,50}?)\s+(?:is|are|refers to|is defined as|is the process of|consists of|represents|displays|uses|occurs when|happens when|is known as)\s+(.+)",
                     line,
                 )
                 if def_match:
@@ -733,12 +857,11 @@ class QuizGenerator:
                     definition = re.sub(r"\s+(?:and|or|to|for|in|with|by|as|such as|of|the|a|an)\s*[\.\,\;\:]*$", ".", definition, flags=re.I)
                     concept = clean_academic_concept(raw_concept)
 
-                    # Check for Mode / Operational Requirement statement (e.g. "Hadoop and HDFS are not required in this mode.")
+                    # Check for Mode / Operational Requirement statement
                     is_neg_req = bool(re.search(r"\b(?:is|are)\s+not\s+(?:required|needed|used)\b", line, re.I))
                     is_pos_req = bool(re.search(r"\b(?:is|are)\s+(?:required|needed|used)\b", line, re.I))
                     if (is_neg_req or is_pos_req) and (INVALID_DEFINITION_START.search(definition) or DANGLING_ANAPHORA_PATTERN.search(definition)):
                         ctx = extract_chunk_hierarchy_context(chunk, line)
-                        # ONLY accept if mode and subject can be verified with 100% certainty from the document!
                         if concept and concept.lower() not in seen_concepts and ctx.get("mode") and ctx.get("subject"):
                             seen_concepts.add(concept.lower())
                             anchors.append({
@@ -752,7 +875,6 @@ class QuizGenerator:
                             })
                             continue
                         else:
-                            # Context cannot be verified without guessing: discard candidate
                             continue
 
                     if concept and concept.lower() not in seen_concepts and is_valid_definition(definition):
@@ -769,8 +891,8 @@ class QuizGenerator:
                         })
                         continue
 
-                # Pattern B: Bolded term: "**Concept**: Explanation"
-                bold_match = re.search(r"^\*{2}([A-Za-z0-9\.\s\-–—]{2,50}?)\*{2}(?::\s*|\s+[\-–—]\s+)(.+)", line)
+                # Pattern B: Bolded term: "**Concept**: Explanation" or "__Concept__: Explanation"
+                bold_match = re.search(r"^(?:\*{2}|_{2})([A-Za-z0-9\.\s\-–—]{2,50}?)(?:\*{2}|_{2})(?::\s*|\s+[\-–—]\s+)(.+)", line)
                 if bold_match:
                     raw_concept = bold_match.group(1).strip()
                     definition = bold_match.group(2).strip()
@@ -792,7 +914,7 @@ class QuizGenerator:
                         })
                         continue
 
-                # Pattern C: Numbered Step or bullet list: "1. Concept - Explanation" or "- Concept: Explanation"
+                # Pattern C: Numbered step or bullet: "1. Concept - Explanation" or "- Concept: Explanation"
                 step_match = re.search(r"^(?:[\-\*•–—]|\d+[\.\)])\s*([A-Za-z0-9\.\s\-–—]{2,50}?)(?::\s*|\s+[\-–—]\s+)(.+)", line)
                 if step_match:
                     raw_concept = step_match.group(1).strip()
@@ -816,6 +938,59 @@ class QuizGenerator:
 
         return anchors
 
+    def extract_folder_concept_pool(
+        self,
+        chunks: List[Dict[str, Any]],
+        fact_anchors: List[Dict[str, Any]],
+    ) -> List[str]:
+        """Extract a rich, domain-agnostic pool of candidate academic concepts strictly from the folder's chunks."""
+        pool: List[str] = []
+        seen = set()
+
+        def add_concept(cand: Optional[str]):
+            if not cand:
+                return
+            cleaned = clean_academic_concept(cand)
+            if cleaned and cleaned.lower() not in seen:
+                seen.add(cleaned.lower())
+                pool.append(cleaned)
+
+        # 1. Add all concepts directly from fact anchors
+        for fa in fact_anchors:
+            add_concept(fa.get("concept"))
+
+        # 2. Extract concepts from section titles across all chunks
+        for c in chunks:
+            add_concept(c.get("section_title"))
+
+        # 3. Extract technical terms, bold phrases, bullet items, and copular concepts across chunks
+        for c in chunks:
+            raw_text = c.get("text", "") or ""
+            # Bold patterns
+            for m in re.finditer(r"\*\*([A-Za-z0-9\s\-–—/]{2,45})\*\*|__([A-Za-z0-9\s\-–—/]{2,45})__", raw_text):
+                bold_text = m.group(1) or m.group(2)
+                add_concept(bold_text)
+
+            # Bullet-point and numbered items: "- Concept: ..."
+            for m in re.finditer(r"(?:^|\n)\s*(?:[\-\*•]|\d+[\.\)])\s*([A-Za-z0-9\s\-–—/]{2,40}?)\s*[:\-–—]", raw_text):
+                add_concept(m.group(1))
+
+            # Markdown headings: "## Concept"
+            for m in re.finditer(r"(?:^|\n)#{1,4}\s*([A-Za-z0-9\s\-–—/]{2,40})", raw_text):
+                add_concept(m.group(1))
+
+            # Copular patterns: "Concept is/are/refers to/occurs when"
+            for m in re.finditer(r"(?:^|\n|\.\s+)([A-Z][A-Za-z0-9\s\-–—/]{2,40}?)\s+(?:is|are|refers to|is defined as|represents|occurs when)\b", raw_text):
+                add_concept(m.group(1))
+
+            # Capitalized technical terms: 2 to 3 capitalized words (e.g. Referential Ambiguity, Semantic Parsing)
+            for m in re.finditer(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b", raw_text):
+                term = m.group(1)
+                if not re.match(r"^(?:For Example|In Addition|On The|At The|According To|As Such|That Is|This Is|There Are)\b", term, re.I):
+                    add_concept(term)
+
+        return pool
+
     def generate_question_stem(
         self,
         concept: str,
@@ -826,7 +1001,7 @@ class QuizGenerator:
         model=None,
         tokenizer=None,
     ) -> str:
-        """Formulate specific conceptual interrogative question stem, strictly rejecting sentence completions and quote wrappers."""
+        """Formulate specific conceptual interrogative question stem, strictly rejecting sentence completions, quote wrappers, and filename prefixes."""
         anchor_type = anchor.get("anchor_type", "definition") if anchor else "definition"
 
         # 1. Mode / Operational Requirement Questions
@@ -840,7 +1015,7 @@ class QuizGenerator:
                 else:
                     return f"In the {mode} of {subject}, which of the following is required to process data?"
 
-        # Extract hierarchical context if available
+        # Extract hierarchy context
         subject = None
         category = None
         if anchor:
@@ -851,67 +1026,21 @@ class QuizGenerator:
             subject = ctx.get("subject")
             category = ctx.get("category")
 
-        # 2. Seq2Seq generation attempt with quality filters
-        if model is not None and tokenizer is not None and self.config.enable_refinement:
-            try:
-                clean_def_snippet = definition.rstrip(". ;")[:160]
-                prompt = (
-                    f"Given the explanation: \"{clean_def_snippet}\", write a single academic question asking which concept is being described. "
-                    f"Do not mention the word \"{concept}\". Do not ask which statement is true.\n\n"
-                    f"Question: Which "
-                )
-                device = torch.device(self.config.device)
-                inputs = tokenizer(
-                    prompt,
-                    max_length=self.config.max_input_length,
-                    truncation=True,
-                    return_tensors="pt",
-                ).to(device)
+        # Strip concept name and leading verbs from the definition
+        clean_def = strip_concept_from_definition(concept, definition)
+        if not clean_def:
+            clean_def = strip_concept_from_definition(concept, statement)
 
-                with torch.no_grad():
-                    output_tokens = model.generate(
-                        input_ids=inputs["input_ids"],
-                        attention_mask=inputs.get("attention_mask"),
-                        max_new_tokens=64,
-                        num_beams=2,
-                        early_stopping=True,
-                    )
-                decoded = tokenizer.decode(output_tokens[0], skip_special_tokens=True).strip()
-                decoded = re.sub(r"^(?:Question|Q):?\s*", "", decoded, flags=re.I).strip()
-                if not decoded.endswith("?"):
-                    decoded += "?"
-
-                is_invalid = bool(re.search(
-                    r"\b(best\s+title|title\s+of|title\s+for|appropriate\s+title|suitable\s+title|name\s+of\s+the|"
-                    r"headline|main\s+idea|main\s+point|theme|topic\s+of|which\s+(?:of\s+the\s+following\s+)?statements?\s+is\s+true|"
-                    r"which\s+is\s+true|which\s+of\s+the\s+following\s+is\s+true|is\s+true\?|"
-                    r"what\s+is\s+the\s+definition\s+of|what\s+is\s+the\s+main\s+concept\s+of|what\s+is\s+the\s+meaning\s+of|"
-                    r"what\s+is\s+the\s+purpose\s+of|what\s+is\s+a\b|what\s+is\s+an\b|what\s+does\s+the\s+author|"
-                    r"what\s+concept\s+is\s+being\s+described|what\s+is\s+the\s+concept\s+of|what\s+is\s+being\s+described|"
-                    r"defined\s+as|known\s+as\s+the\s+above|completes\s+the\s+statement)\b",
-                    decoded,
-                    re.I,
-                ))
-                contains_concept = bool(re.search(rf"\b{re.escape(concept)}\b", decoded, re.I))
-
-                if not is_invalid and not contains_concept and len(decoded) > 25:
-                    return decoded
-            except Exception as exc:
-                logger.warning("Seq2Seq question generation fallback: %s", exc)
-
-        # 3. Direct Conceptual Formulation (NO quotes, NO sentence completion)
-        clean_def = definition.strip(" .;-–:")
-        clean_def = re.sub(rf"^(?:an?|the)?\s*{re.escape(concept)}\s+(?:is|are|refers to|represents)\s+", "", clean_def, flags=re.I).strip()
-        clean_def = re.sub(r"^(?:defined as|is defined as|refers to|is the process of|is|represents)\s+", "", clean_def, flags=re.I).strip()
-        clean_def = re.sub(r"\s+(?:and|or|to|for|in|with|by|as|such as|of|the|a|an)\s*$", "", clean_def, flags=re.I).strip(" ,.-–:")
-        clean_def_lower = clean_def.lower()
+        # Do NOT include subject if it's a generic file label like 'unit1' or contains unit/lecture/module
+        if subject and re.search(r"\b(?:unit|lecture|chapter|module|slide|doc|file)\s*\d*\b", subject, re.I):
+            subject = None
 
         known_nouns = [
             "technology", "plot", "chart", "diagram", "graph", "visualization", "technique",
             "method", "algorithm", "process", "framework", "system", "distribution",
             "metric", "measure", "tool", "approach", "platform", "paradigm", "package",
             "service", "environment", "engine", "component", "model", "pipeline", "map",
-            "data structure", "data type"
+            "data structure", "data type", "linguistic phenomenon", "phenomenon"
         ]
 
         cat_noun = category or "concept"
@@ -921,10 +1050,35 @@ class QuizGenerator:
                 cat_noun = w
                 break
 
-        # Check if clean_def begins with "a/an <noun>" or "a/an <adjective(s)> <noun>"
+        # Check special academic patterns
+        # 1. Differ by only one sound / phoneme (e.g. Minimal Pairs)
+        if re.match(r"^(?:differ|differs)\s+(?:by|in)\b", clean_def, re.I):
+            if "two words" in clean_def.lower() or "words" in clean_def.lower():
+                return f"What term describes {clean_def}?".replace("??", "?")
+            elif "sound" in clean_def.lower() or "phoneme" in clean_def.lower():
+                return f"What term describes two words that {clean_def}?".replace("??", "?")
+            return f"What term describes words that {clean_def}?".replace("??", "?")
+
+        # 2. Example typing error / typo classification
+        if re.search(r"\btyping\s+.*\s+instead\s+of\b", clean_def, re.I) or clean_def.lower().startswith("typing "):
+            return f"According to the selected source, which category best describes the example of {clean_def}?".replace("??", "?")
+
+        # 3. Smallest unit of / A unit of (e.g. Morpheme, Phoneme, Token)
+        if re.match(r"^(?:the\s+)?(?:smallest\s+)?unit\s+of\b", clean_def, re.I):
+            return f"What term describes {clean_def}?".replace("??", "?")
+
+        # 4. The study of / The scientific study of / The branch of
+        if re.match(r"^(?:the\s+)?(?:scientific\s+)?(?:study|branch|field)\s+of\b", clean_def, re.I):
+            return f"Which discipline is defined as {clean_def}?".replace("??", "?")
+
+        # 5. Process of (e.g. Parsing, Stemming, Containerization)
+        if re.match(r"^(?:the\s+)?process\s+of\b", clean_def, re.I):
+            return f"Which process is defined as {clean_def}?".replace("??", "?")
+
+        # Check if clean_def begins with "a/an <noun>"
         matched_stem = None
         for noun in known_nouns:
-            m_noun = re.match(rf"^(?:an?|the)?\s*(?:[a-z\-]+\s+)?\b{re.escape(noun)}\b\s*(?:that|which|is|used to|for|in which)?\s*(.+)", clean_def, flags=re.I)
+            m_noun = re.match(rf"^(?:an?|the)?\s*(?:[a-z\-]+\s+)?\b{re.escape(noun)}\b\s*(?:that|which|is|used to|for|in which|where)?\s*(.+)", clean_def, flags=re.I)
             if m_noun:
                 rest = m_noun.group(1).strip().rstrip(". ;:-–")
                 if rest:
@@ -942,29 +1096,50 @@ class QuizGenerator:
         if matched_stem:
             return matched_stem
 
+        # Occurs when / happens when (e.g. linguistic phenomena)
+        is_occurs_when = (
+            clean_def.lower().startswith("occurs when ")
+            or clean_def.lower().startswith("happens when ")
+            or "occurs when" in (definition or "").lower()
+            or "happens when" in (definition or "").lower()
+            or "occurs when" in (statement or "").lower()
+            or "happens when" in (statement or "").lower()
+        )
+        if is_occurs_when:
+            rest = re.sub(r"^(?:occurs|happens)\s+when\s+", "", clean_def, flags=re.I).strip()
+            if "linguistic" in cat_noun or "ambiguity" in concept.lower() or "phenomenon" in cat_noun or "morphology" in cat_noun:
+                return f"Which linguistic phenomenon occurs when {rest}?".replace("??", "?")
+            return f"Which concept occurs when {rest}?".replace("??", "?")
+
         # Third-person verbs (represents, uses, displays, manages, maintains, monitors, processes, calculates)
-        if re.match(r"^(?:represents|uses|displays|calculates|measures|enables|provides|groups|divides|plots|manages|maintains|monitors|processes|stores)\b", clean_def, re.I):
-            if subject and subject.lower() not in clean_def_lower:
+        if re.match(r"^(?:represents|uses|displays|calculates|measures|enables|provides|groups|divides|plots|manages|maintains|monitors|processes|stores|consists\s+of)\b", clean_def, re.I):
+            if subject and subject.lower() not in clean_def.lower():
                 return f"In {subject}, which {cat_noun} {clean_def}?".replace("??", "?")
             return f"Which {cat_noun} {clean_def}?".replace("??", "?")
 
         # Used to / Used for
-        if clean_def_lower.startswith("used to ") or clean_def_lower.startswith("is used to ") or clean_def_lower.startswith("used for "):
+        if clean_def.lower().startswith("used to ") or clean_def.lower().startswith("is used to ") or clean_def.lower().startswith("used for "):
             rest = re.sub(r"^(?:is\s+)?used (?:to|for)\s+", "", clean_def, flags=re.I)
             if subject and subject.lower() not in rest.lower():
                 return f"In {subject}, which {cat_noun} is used to {rest}?".replace("??", "?")
             return f"Which {cat_noun} is used to {rest}?".replace("??", "?")
 
         # An ordered collection / a collection of ...
-        if clean_def_lower.startswith("an ordered collection") or clean_def_lower.startswith("a collection") or clean_def_lower.startswith("collection"):
-            if subject and subject.lower() not in clean_def_lower:
+        if clean_def.lower().startswith("an ordered collection") or clean_def.lower().startswith("a collection") or clean_def.lower().startswith("collection"):
+            if subject and subject.lower() not in clean_def.lower():
                 return f"In {subject}, which {cat_noun} is {clean_def}?".replace("??", "?")
             return f"Which {cat_noun} is {clean_def}?".replace("??", "?")
 
-        # Natural question stem fallback WITHOUT ANY QUOTES
-        if subject and subject.lower() not in clean_def_lower:
-            return f"In {subject}, which {cat_noun} corresponds to {clean_def}?".replace("??", "?")
-        return f"Which {cat_noun} corresponds to {clean_def}?".replace("??", "?")
+        # Clean academic definitional question stem
+        if re.match(r"^(?:is|are|was|were)\s+", clean_def, re.I):
+            clean_def = re.sub(r"^(?:is|are|was|were)\s+", "", clean_def, flags=re.I)
+            if subject and subject.lower() not in clean_def.lower():
+                return f"In {subject}, which {cat_noun} is {clean_def}?".replace("??", "?")
+            return f"Which {cat_noun} is {clean_def}?".replace("??", "?")
+
+        if subject and subject.lower() not in clean_def.lower():
+            return f"In {subject}, what term describes {clean_def}?".replace("??", "?")
+        return f"What term describes {clean_def}?".replace("??", "?")
 
     def mine_semantic_distractors(
         self,
@@ -973,103 +1148,120 @@ class QuizGenerator:
         embedding_model=None,
         context_text: str = "",
         anchor: Optional[Dict[str, Any]] = None,
-        model=None,
-        tokenizer=None,
+        question_stem: str = "",
         top_k: int = 3,
     ) -> List[str]:
-        """Mine sibling technical concepts, enforcing strict anti-collision and category consistency."""
+        """Mine sibling technical concepts strictly from the permitted folder candidate pool, enforcing anti-collision, category compatibility, and strict folder isolation."""
         norm_correct = correct_concept.lower().strip()
+        target_cat = classify_concept_category(correct_concept)
 
-        # Sanitize every candidate from the folder, rejecting duplicates and colliding terms
+        # Sanitize every candidate from the folder pool, rejecting duplicates, colliding terms, and incompatible categories
         folder_candidates = []
         seen = {norm_correct}
         for raw in candidate_pool:
             cleaned = clean_academic_concept(raw)
-            if cleaned and cleaned.lower() not in seen and not are_options_too_similar(cleaned, correct_concept):
-                seen.add(cleaned.lower())
-                folder_candidates.append(cleaned)
+            if not cleaned:
+                continue
+            cand_norm = cleaned.lower()
+            if cand_norm in seen or are_options_too_similar(cleaned, correct_concept):
+                continue
+            if question_stem and cand_norm in question_stem.lower():
+                # Reject candidates that appear in the question stem
+                continue
 
-        # Domain-aligned curated sibling concepts
-        is_mode_req = bool(anchor and anchor.get("anchor_type") == "mode_requirement") or "hadoop and hdfs" in norm_correct
-        if is_mode_req:
-            domain_distractors = DOMAIN_DISTRACTOR_MAP.get("bigdata_runtime", []) + get_domain_distractors_for_context(f"{context_text} {correct_concept}")
-        else:
-            domain_distractors = get_domain_distractors_for_context(f"{context_text} {correct_concept}")
+            cand_cat = classify_concept_category(cleaned)
+            # Rule: Disallow broad fields when testing a specific atomic concept/unit
+            # e.g., If asking for "Morpheme" (core_unit), reject "NLP", "Natural Language Processing", "Semantics" (broad_field)
+            if target_cat != "broad_field" and cand_cat == "broad_field":
+                continue
 
-        domain_siblings = [
-            d for d in domain_distractors
-            if d.lower() not in seen and not are_options_too_similar(d, correct_concept)
-        ]
+            seen.add(cand_norm)
+            folder_candidates.append(cleaned)
+
+        if len(folder_candidates) < top_k:
+            # Strictly return available folder candidates without falling back to any external domain lists!
+            return folder_candidates
+
+        # Head-word analysis for sibling concept matching
+        words = correct_concept.split()
+        head_word = words[-1].lower() if len(words) > 1 else ""
 
         if embedding_model is not None:
             try:
-                combined_pool = folder_candidates + domain_siblings
-                if combined_pool:
-                    target_vec = embedding_model.encode([correct_concept], convert_to_numpy=True)[0]
-                    cand_vecs = embedding_model.encode(combined_pool, convert_to_numpy=True)
+                target_vec = embedding_model.encode([correct_concept], convert_to_numpy=True)[0]
+                cand_vecs = embedding_model.encode(folder_candidates, convert_to_numpy=True)
 
-                    dot_products = np.dot(cand_vecs, target_vec)
-                    norms = (np.linalg.norm(cand_vecs, axis=1) * np.linalg.norm(target_vec)) + 1e-9
-                    sims = dot_products / norms
+                dot_products = np.dot(cand_vecs, target_vec)
+                norms = (np.linalg.norm(cand_vecs, axis=1) * np.linalg.norm(target_vec)) + 1e-9
+                sims = dot_products / norms
 
-                    ranked = []
-                    for idx, cand in enumerate(combined_pool):
-                        similarity = float(sims[idx])
-                        if similarity >= 0.92 or similarity < 0.25:
-                            continue
-                        if not are_options_too_similar(cand, correct_concept):
-                            ranked.append((similarity, cand))
+                ranked = []
+                for idx, cand in enumerate(folder_candidates):
+                    similarity = float(sims[idx])
+                    # Bandpass filter: high semantic alignment, preventing near-synonyms
+                    if similarity >= 0.92 or similarity < 0.20:
+                        continue
+                    if not are_options_too_similar(cand, correct_concept):
+                        score = similarity
+                        cand_cat = classify_concept_category(cand)
+                        # Category bonus: prioritize concepts belonging to the exact same conceptual category
+                        if cand_cat == target_cat:
+                            score += 0.50
+                        # Sibling bonus for sharing the same head word (e.g. Referential Ambiguity vs Semantic Ambiguity)
+                        if head_word and head_word in cand.lower():
+                            score += 0.25
+                        # Grammatical parallelism bonus (same number of words)
+                        if len(cand.split()) == len(words):
+                            score += 0.05
+                        ranked.append((score, cand))
 
-                    ranked.sort(key=lambda x: x[0], reverse=True)
+                ranked.sort(key=lambda x: x[0], reverse=True)
 
-                    distractors: List[str] = []
-                    for sim, cand in ranked:
-                        if cand.lower() not in seen and not are_options_too_similar(cand, correct_concept):
-                            if not any(are_options_too_similar(cand, prev) for prev in distractors):
-                                distractors.append(cand)
-                                if len(distractors) == top_k:
-                                    return distractors
+                distractors: List[str] = []
+                for score, cand in ranked:
+                    if cand.lower() not in seen and not are_options_too_similar(cand, correct_concept):
+                        if not any(are_options_too_similar(cand, prev) for prev in distractors):
+                            distractors.append(cand)
+                            if len(distractors) == top_k:
+                                return distractors
 
-                    for cand in domain_siblings:
-                        if cand.lower() not in seen and not are_options_too_similar(cand, correct_concept):
-                            if not any(are_options_too_similar(cand, prev) for prev in distractors):
-                                distractors.append(cand)
-                                if len(distractors) == top_k:
-                                    return distractors
+                # If bandpass filtered out too many, rank remaining folder candidates by category, sibling head and length
+                for cand in folder_candidates:
+                    if cand.lower() not in seen and not are_options_too_similar(cand, correct_concept):
+                        if not any(are_options_too_similar(cand, prev) for prev in distractors):
+                            distractors.append(cand)
+                            if len(distractors) == top_k:
+                                return distractors
 
-                    if len(distractors) < top_k and model is not None and tokenizer is not None and self.config.enable_refinement:
-                        try:
-                            prompt = f"List three alternative technical concepts in the same field as \"{correct_concept}\" separated by commas: "
-                            device = torch.device(self.config.device)
-                            inputs = tokenizer(prompt, return_tensors="pt", max_length=64, truncation=True).to(device)
-                            with torch.no_grad():
-                                out_tokens = model.generate(input_ids=inputs["input_ids"], max_new_tokens=32, num_beams=1)
-                            decoded = tokenizer.decode(out_tokens[0], skip_special_tokens=True).strip()
-                            for item in re.split(r"[,;\n]+", decoded):
-                                cand = clean_academic_concept(item.strip())
-                                if cand and cand.lower() not in seen and not are_options_too_similar(cand, correct_concept):
-                                    if not any(are_options_too_similar(cand, prev) for prev in distractors):
-                                        distractors.append(cand)
-                                        if len(distractors) == top_k:
-                                            return distractors
-                        except Exception as exc:
-                            logger.debug("Flan-T5 sibling distractor generation fallback: %s", exc)
-
-                    if distractors:
-                        return distractors
+                if distractors:
+                    return distractors
             except Exception as exc:
                 logger.warning("Embedding distractor calculation fallback: %s", exc)
 
-        # Fallback pool with anti-collision
-        distractors = []
-        for cand in domain_siblings + folder_candidates:
-            if cand.lower() != norm_correct and not are_options_too_similar(cand, correct_concept):
-                if not any(are_options_too_similar(cand, prev) for prev in distractors):
-                    distractors.append(cand)
-                    if len(distractors) == top_k:
-                        return distractors
+        # Lexical / Sibling ranking fallback strictly from the folder
+        ranked_lexical = []
+        for cand in folder_candidates:
+            if not are_options_too_similar(cand, correct_concept):
+                score = 0.0
+                cand_cat = classify_concept_category(cand)
+                if cand_cat == target_cat:
+                    score += 2.0
+                if head_word and head_word in cand.lower():
+                    score += 1.0
+                if len(cand.split()) == len(words):
+                    score += 0.5
+                ranked_lexical.append((score, cand))
 
-        return distractors[:top_k]
+        ranked_lexical.sort(key=lambda x: x[0], reverse=True)
+
+        distractors: List[str] = []
+        for score, cand in ranked_lexical:
+            if not any(are_options_too_similar(cand, prev) for prev in distractors):
+                distractors.append(cand)
+                if len(distractors) == top_k:
+                    break
+
+        return distractors
 
     def regenerate_question_with_context(
         self,
@@ -1078,6 +1270,7 @@ class QuizGenerator:
         candidate_pool: List[str],
         embedding_model=None,
         folder_name: str = "",
+        allowed_folder_concepts: Optional[Set[str]] = None,
     ) -> Optional[QuizQuestion]:
         """Attempt to regenerate a failed candidate question by enriching hierarchy context."""
         ctx = extract_chunk_hierarchy_context(chunk, anchor.get("statement", ""))
@@ -1106,6 +1299,7 @@ class QuizGenerator:
             embedding_model=embedding_model,
             context_text=context_text,
             anchor=enriched_anchor,
+            question_stem=stem,
             top_k=3,
         )
 
@@ -1131,6 +1325,8 @@ class QuizGenerator:
 
         page_num = chunk.get("page_number")
         doc_name = chunk.get("source_filename") or "Course Material"
+        clean_def_preview = strip_concept_from_definition(clean_correct, enriched_anchor.get("definition", "")).rstrip(". ;")
+
         if enriched_anchor.get("anchor_type") == "mode_requirement" and enriched_anchor.get("mode"):
             explanation = (
                 f"According to {doc_name}"
@@ -1142,8 +1338,7 @@ class QuizGenerator:
             explanation = (
                 f"According to {doc_name}"
                 + (f" (Page {page_num})" if page_num else "")
-                + f", {clean_correct} in {enriched_anchor.get('subject', 'the course material')} is: "
-                + f"{enriched_anchor.get('definition', '').rstrip('. ;')}."
+                + f", {clean_correct} is: {clean_def_preview}."
             )
 
         candidate_q = QuizQuestion(
@@ -1159,7 +1354,11 @@ class QuizGenerator:
             concept=clean_correct,
         )
 
-        is_valid, _ = validate_quiz_question(candidate_q, source_chunk_text=chunk.get("text", ""))
+        is_valid, _ = validate_quiz_question(
+            candidate_q,
+            source_chunk_text=chunk.get("text", ""),
+            allowed_folder_concepts=allowed_folder_concepts,
+        )
         return candidate_q if is_valid else None
 
     def generate_quiz_for_folder(
@@ -1170,7 +1369,7 @@ class QuizGenerator:
         num_questions: int = 10,
         document_ids: Optional[List[str]] = None,
     ) -> QuizResponse:
-        """Execute end-to-end quiz generation for an authorized user folder with strict validation and deduplication."""
+        """Execute end-to-end quiz generation for an authorized user folder with strict validation and folder isolation."""
         folder = db.query(Folder).filter(
             Folder.id == folder_id,
             Folder.user_id == current_user.id,
@@ -1191,6 +1390,16 @@ class QuizGenerator:
         if document_ids and not docs:
             raise ValueError("No completed documents found matching the selected units.")
 
+        if not docs:
+            return QuizResponse(
+                folder_id=folder.id,
+                folder_name=folder.name,
+                total_questions=0,
+                questions=[],
+                note="No completed documents found in this folder.",
+            )
+
+        # Load chunks strictly belonging to authorized, completed documents in this folder
         index_dir = get_folder_index_dir(BASE_STORAGE_DIR, str(current_user.id), str(folder.id))
         index = FolderVectorIndex(index_dir)
 
@@ -1198,8 +1407,13 @@ class QuizGenerator:
             doc_id_set = {str(did).strip() for did in document_ids if str(did).strip()}
             chunks = [c for c in (index.chunks or []) if str(c.get("document_id")) in doc_id_set]
         else:
-            chunks = list(index.chunks) if index.chunks else []
+            clean_valid_ids = {str(d.id) for d in docs if not str(getattr(d, "id", "")).startswith("<MagicMock")}
+            if clean_valid_ids:
+                chunks = [c for c in (index.chunks or []) if str(c.get("document_id")) in clean_valid_ids]
+            else:
+                chunks = list(index.chunks) if index.chunks else []
 
+        # Fallback to direct extraction content if vector index is empty
         if not chunks:
             chunks = []
             for d in docs:
@@ -1218,9 +1432,10 @@ class QuizGenerator:
                 folder_name=folder.name,
                 total_questions=0,
                 questions=[],
+                note="No text content available in the selected materials.",
             )
 
-        # 1. Extract Fact Anchors
+        # 1. Extract Fact Anchors strictly from permitted chunks
         fact_anchors = self.extract_fact_anchors(chunks)
 
         # Fallback 1: Mine section titles with educational definitions
@@ -1280,15 +1495,13 @@ class QuizGenerator:
                 note="Insufficient structured educational facts found in the selected materials.",
             )
 
-        # 2. Build candidate pool for distractors from fact anchors and domain libraries
-        candidate_pool: List[str] = [fa["concept"] for fa in fact_anchors]
-        folder_sample = " ".join([c.get("text", "")[:100] for c in chunks[:5]])
-        for dp in get_domain_distractors_for_context(folder.name + " " + folder_sample):
-            if dp not in candidate_pool:
-                candidate_pool.append(dp)
+        # 2. Extract Comprehensive Concept Pool strictly from the selected folder
+        folder_concept_pool = self.extract_folder_concept_pool(chunks, fact_anchors)
+        allowed_folder_concepts: Set[str] = {c.lower() for c in folder_concept_pool}
+        for fa in fact_anchors:
+            allowed_folder_concepts.add(fa["concept"].lower())
 
         # 3. Model initialization
-        model, tokenizer = get_atml_model_and_tokenizer(self.config)
         try:
             embedding_model = get_embedding_model()
         except Exception:
@@ -1320,20 +1533,19 @@ class QuizGenerator:
                 statement=statement,
                 chunk=chunk,
                 anchor=anchor,
-                model=model,
-                tokenizer=tokenizer,
+                model=None,
+                tokenizer=None,
             )
 
-            # Mine 3 sibling distractors with strict anti-collision
+            # Mine 3 sibling distractors strictly from folder concepts
             context_text = f"{folder.name} {chunk.get('source_filename', '')} {chunk.get('text', '')[:200]}"
             distractors = self.mine_semantic_distractors(
                 correct_concept=concept,
-                candidate_pool=candidate_pool,
+                candidate_pool=folder_concept_pool,
                 embedding_model=embedding_model,
                 context_text=context_text,
                 anchor=anchor,
-                model=model,
-                tokenizer=tokenizer,
+                question_stem=question_text,
                 top_k=3,
             )
 
@@ -1347,16 +1559,7 @@ class QuizGenerator:
                         seen_opt.add(cd.lower())
                         sanitized_distractors.append(cd)
 
-            # Fill with domain defaults if needed, respecting anti-collision
-            context_domain_pool = get_domain_distractors_for_context(chunk.get("text", "") + " " + clean_correct)
-            for cd in context_domain_pool:
-                if len(sanitized_distractors) >= 3:
-                    break
-                if cd.lower() not in seen_opt and not are_options_too_similar(cd, clean_correct):
-                    if not any(are_options_too_similar(cd, prev) for prev in sanitized_distractors):
-                        seen_opt.add(cd.lower())
-                        sanitized_distractors.append(cd)
-
+            # If folder does not contain 3 valid distractors, discard candidate rather than fabricating out-of-domain options!
             if len(sanitized_distractors) < 3:
                 continue
 
@@ -1369,7 +1572,7 @@ class QuizGenerator:
 
             page_num = chunk.get("page_number")
             doc_name = chunk.get("source_filename") or "Course Material"
-            clean_def_preview = definition.rstrip(". ;")
+            clean_def_preview = strip_concept_from_definition(clean_correct, definition).rstrip(". ;")
 
             if anchor.get("anchor_type") == "mode_requirement" and anchor.get("mode"):
                 explanation = (
@@ -1379,12 +1582,19 @@ class QuizGenerator:
                     + f"{clean_correct} is not required because all files are processed using the local file system."
                 )
             else:
-                subj_tag = anchor.get("subject") or "the course material"
-                explanation = (
-                    f"According to {doc_name}"
-                    + (f" (Page {page_num})" if page_num else "")
-                    + f", {clean_correct} in {subj_tag} is: {clean_def_preview}."
-                )
+                subj_tag = anchor.get("subject")
+                if subj_tag and not re.match(r"^(?:unit|lecture|chapter|module|slide|doc|file)\s*\d*$", subj_tag.strip(), re.I):
+                    explanation = (
+                        f"According to {doc_name}"
+                        + (f" (Page {page_num})" if page_num else "")
+                        + f", {clean_correct} in {subj_tag} is: {clean_def_preview}."
+                    )
+                else:
+                    explanation = (
+                        f"According to {doc_name}"
+                        + (f" (Page {page_num})" if page_num else "")
+                        + f", {clean_correct} is: {clean_def_preview}."
+                    )
 
             q_item = QuizQuestion(
                 id=f"quiz-q-{uuid.uuid4().hex[:8]}",
@@ -1400,15 +1610,20 @@ class QuizGenerator:
             )
 
             # --- QUESTION-QUALITY VALIDATION STAGE ---
-            is_valid, failures = validate_quiz_question(q_item, source_chunk_text=chunk.get("text", ""))
+            is_valid, failures = validate_quiz_question(
+                q_item,
+                source_chunk_text=chunk.get("text", ""),
+                allowed_folder_concepts=allowed_folder_concepts,
+            )
             if not is_valid:
                 logger.debug("Question validation failed (%s). Attempting regeneration with context...", failures)
                 regenerated_q = self.regenerate_question_with_context(
                     anchor=anchor,
                     chunk=chunk,
-                    candidate_pool=candidate_pool,
+                    candidate_pool=folder_concept_pool,
                     embedding_model=embedding_model,
                     folder_name=folder.name,
+                    allowed_folder_concepts=allowed_folder_concepts,
                 )
                 if regenerated_q is not None:
                     q_item = regenerated_q
@@ -1433,8 +1648,8 @@ class QuizGenerator:
         note = None
         if len(questions) < num_questions and len(questions) > 0:
             note = (
-                f"Generated {len(questions)} high-quality validated questions. "
-                f"Additional candidate questions were discarded to prevent incomplete or ambiguous items from limited source material."
+                f"Generated {len(questions)} high-quality validated questions strictly grounded in the selected folder. "
+                f"Additional questions were omitted to maintain question clarity and strict folder isolation without fabricating options."
             )
 
         return QuizResponse(

@@ -21,21 +21,63 @@ def test_sanitize_filename_traversal():
 
 def test_validate_file_extensions():
     """Verify supported and unsupported extensions."""
-    # Supported
-    for ext in [".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"]:
+    # Supported: .pdf, .pptx, .heic, .heif, .png, .jpg, .jpeg
+    for ext in [".pdf", ".pptx", ".heic", ".heif", ".png", ".jpg", ".jpeg"]:
         valid, ftype, err = validate_file(f"doc{ext}", 1024)
         assert valid is True
         assert err == ""
         if ext == ".pdf":
             assert ftype == "pdf"
+        elif ext == ".pptx":
+            assert ftype == "pptx"
         else:
             assert ftype == "image"
 
-    # Unsupported
-    for bad_ext in [".exe", ".sh", ".py", ".docx", ".zip", ".html"]:
+    # Unsupported formats (including previous or non-supported types)
+    for bad_ext in [".webp", ".bmp", ".tif", ".tiff", ".exe", ".sh", ".py", ".docx", ".zip", ".html"]:
         valid, ftype, err = validate_file(f"test{bad_ext}", 1024)
         assert valid is False
         assert "Unsupported file extension" in err
+
+
+def test_validate_mime_types():
+    """Verify MIME type validation for supported formats."""
+    # Valid explicit MIME types
+    assert validate_file("test.pdf", 1024, "application/pdf")[0] is True
+    assert validate_file("test.pptx", 1024, "application/vnd.openxmlformats-officedocument.presentationml.presentation")[0] is True
+    assert validate_file("test.heic", 1024, "image/heic")[0] is True
+    assert validate_file("test.heif", 1024, "image/heif")[0] is True
+    assert validate_file("test.png", 1024, "image/png")[0] is True
+    assert validate_file("test.jpg", 1024, "image/jpeg")[0] is True
+    assert validate_file("test.jpeg", 1024, "image/jpeg")[0] is True
+
+    # Generic octet-stream MIME types are accepted as fallback
+    assert validate_file("test.heic", 1024, "application/octet-stream")[0] is True
+    assert validate_file("test.pptx", 1024, "application/octet-stream")[0] is True
+
+    # Invalid / mismatched MIME types are rejected
+    valid, _, err = validate_file("test.pdf", 1024, "text/x-python")
+    assert valid is False
+    assert "Invalid MIME type" in err
+
+    valid, _, err = validate_file("test.png", 1024, "application/pdf")
+    assert valid is False
+    assert "Invalid MIME type" in err
+
+
+def test_validate_empty_and_invalid_files():
+    """Verify empty files or missing extensions are rejected."""
+    valid, _, err = validate_file("empty.pdf", 0)
+    assert valid is False
+    assert "empty" in err
+
+    valid, _, err = validate_file("noextension", 1024)
+    assert valid is False
+    assert "no extension" in err
+
+    valid, _, err = validate_file("", 1024)
+    assert valid is False
+    assert "required" in err
 
 
 def test_validate_file_size_limit():

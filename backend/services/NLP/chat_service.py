@@ -252,7 +252,14 @@ def post_user_message_and_respond(
             answer_text = "No relevant sources or answers were found for this query in the selected folder."
         else:
             top_res = search_res.results[0]
-            answer_text = f"Based on {top_res.source_filename} (Page {top_res.page_number or 1}), here are the relevant details:\n\n{top_res.text_snippet}"
+            from backend.services.atml.answer_structurer import AnswerStructurer
+            from backend.services.atml.nlg_reconstructor import GeneralizedNLGReconstructor
+            structured_snippet = AnswerStructurer().structure(clean_query, top_res.text_snippet)
+            lead = GeneralizedNLGReconstructor.synthesize_conversational_intro(clean_query)
+            if structured_snippet.startswith("#"):
+                answer_text = f"{structured_snippet}"
+            else:
+                answer_text = f"{lead}\n\n{structured_snippet}"
 
     # 6. Serialize multimodal assets and metadata
     fig_json = search_res.primary_figure.json() if search_res.primary_figure else None

@@ -89,16 +89,16 @@ class TestQuizGeneratorAnchorsAndStems:
         # All distractors must be unique
         assert len(set(distractors)) == 3
 
-    def test_distractor_fallback_when_pool_is_small(self):
+    def test_distractor_insufficient_pool_does_not_leak_cross_folder(self):
         generator = QuizGenerator()
         distractors = generator.mine_semantic_distractors(
             correct_concept="Hadoop",
-            candidate_pool=["Hadoop"],  # Empty other candidates
+            candidate_pool=["Hadoop"],  # Only 1 candidate in folder
             embedding_model=None,
             top_k=3,
         )
-        assert len(distractors) == 3
-        assert "Hadoop" not in distractors
+        # Strict folder isolation: must NEVER fabricate options from other domains
+        assert len(distractors) == 0
 
     def test_rejection_of_stopwords_and_fillers(self):
         from backend.services.atml.quiz_generator import clean_academic_concept, is_valid_definition
@@ -145,59 +145,64 @@ class TestQuizGeneratorAnchorsAndStems:
 
     def test_options_are_domain_related_concepts(self):
         generator = QuizGenerator()
+        pool = ["Docker Container", "Docker Image", "Hypervisor", "Virtual Machine", "Bare-Metal Server", "Kubernetes Pod"]
         distractors = generator.mine_semantic_distractors(
             correct_concept="Docker Container",
-            candidate_pool=["Docker Container"],
+            candidate_pool=pool,
             embedding_model=None,
             top_k=3,
         )
         assert len(distractors) == 3
         for d in distractors:
+            assert d in pool
             # Distractors must not be stopwords or meta fillers
             assert d.lower() not in {"command", "features", "step 1", "required action", "airlines", "manufacturing", "rack"}
-            # Must be valid length
             assert len(d) > 3
 
     def test_visualization_options_are_sibling_charts(self):
         generator = QuizGenerator()
+        pool = ["Line Chart", "Bar Chart", "Scatter Plot", "Histogram", "Box Plot", "Pie Chart"]
         distractors = generator.mine_semantic_distractors(
             correct_concept="Line Chart",
-            candidate_pool=["Line Chart"],
+            candidate_pool=pool,
             embedding_model=None,
             top_k=3,
         )
         assert len(distractors) == 3
-        # Should contain visual sibling charts like Bar Chart, Scatter Plot, Histogram, etc.
+        assert "Line Chart" not in distractors
+        # Should contain visual sibling charts from the provided folder pool
         assert all(any(w in d.lower() for w in ["chart", "plot", "histogram", "distribution", "map"]) for d in distractors)
 
     def test_os_options_are_sibling_os_concepts(self):
         generator = QuizGenerator()
+        pool = ["Virtual Memory", "CPU Scheduling", "Deadlock Prevention", "Mutual Exclusion", "Page Replacement", "Context Switching"]
         distractors = generator.mine_semantic_distractors(
             correct_concept="Virtual Memory",
-            candidate_pool=["Virtual Memory"],
+            candidate_pool=pool,
             context_text="Operating Systems Course Unit 3 Memory Management",
             embedding_model=None,
             top_k=3,
         )
         assert len(distractors) == 3
         assert "Virtual Memory" not in distractors
-        # Options must come from OS domain
+        # Options must come from the OS candidate pool
         assert any(term in distractors for term in [
             "CPU Scheduling", "Deadlock Prevention", "Mutual Exclusion", "Page Replacement", "Context Switching"
         ])
 
     def test_networks_options_are_sibling_network_concepts(self):
         generator = QuizGenerator()
+        pool = ["Packet Switching", "Circuit Switching", "Routing Protocol", "TCP/IP Protocol", "OSI Model", "Network Gateway"]
         distractors = generator.mine_semantic_distractors(
             correct_concept="Packet Switching",
-            candidate_pool=["Packet Switching"],
+            candidate_pool=pool,
             context_text="Computer Networks Lecture 4 OSI Layer Routing",
             embedding_model=None,
             top_k=3,
         )
         assert len(distractors) == 3
         assert "Packet Switching" not in distractors
-        # Options must come from Networks domain
+        # Options must come from the Networks candidate pool
         assert any(term in distractors for term in [
             "Circuit Switching", "Routing Protocol", "TCP/IP Protocol", "OSI Model", "Network Gateway"
         ])

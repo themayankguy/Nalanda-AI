@@ -67,25 +67,16 @@ class AnswerStructurer:
 
     @staticmethod
     def _coalesce_bullets_into_explanation(bullets: List[str]) -> str:
-        """Merge fragmented bullet lines into clean, cohesive explanatory sentences."""
-        filtered = [b.strip() for b in bullets if b.strip() and b.strip() not in ["CPU", "HDFS", "Data", "Traditional system"]]
+        """Merge fragmented bullet lines into clean, cohesive explanatory sentences using deterministic NLG."""
+        from .nlg_reconstructor import GeneralizedNLGReconstructor
+        filtered = [b.strip() for b in bullets if b.strip() and not re.match(r"^[\W_]+$", b.strip())]
         if not filtered:
             return ""
-        merged: List[str] = []
-        curr: List[str] = []
-        for line in filtered:
-            if curr:
-                last = curr[-1]
-                if not last.endswith((".", ":", "!", "?")) or line[0].islower() or last.endswith(","):
-                    curr.append(line)
-                else:
-                    merged.append(" ".join(curr))
-                    curr = [line]
-            else:
-                curr = [line]
-        if curr:
-            merged.append(" ".join(curr))
-        clean_text = " ".join(merged)
+        reconstructed = [
+            GeneralizedNLGReconstructor.reconstruct_fragment_to_sentence(b)
+            for b in filtered
+        ]
+        clean_text = " ".join(reconstructed)
         clean_text = re.sub(r"([.?!])([A-Z])", r"\1 \2", clean_text)
         clean_text = re.sub(r"([,;])([a-zA-Z])", r"\1 \2", clean_text)
         clean_text = re.sub(r"\s+", " ", clean_text).strip()
@@ -94,102 +85,8 @@ class AnswerStructurer:
     @staticmethod
     def _deinterleave_slide_cards(lines: List[str]) -> List[str]:
         """De-interleave horizontal multi-column OCR scans where cards have headers grouped across columns."""
-        out: List[str] = []
-        i = 0
-        while i < len(lines):
-            j = i
-            headers = []
-            while j < len(lines):
-                line_s = lines[j].strip().lstrip("#").strip()
-                m = re.match(r"^(?:(Goal|Step|Objective|Feature|Phase|Stage)\s*(\d+)[:.]?)$", line_s, re.I)
-                if m:
-                    headers.append((line_s, m.group(1), int(m.group(2))))
-                    j += 1
-                else:
-                    break
-            k = len(headers)
-            if k >= 2 and j + k <= len(lines):
-                potential_titles = [lines[j + idx].strip() for idx in range(k)]
-                all_titles = all(len(t.split()) <= 6 and not t.endswith((".", ":", "!", "?")) and not t.startswith(("#", "-", "*")) for t in potential_titles)
-                if all_titles:
-                    header_titles = [f"{headers[idx][0]}: {potential_titles[idx]}" for idx in range(k)]
-                    body_start = j + k
-                    body_end = body_start
-                    while body_end < len(lines):
-                        l_check = lines[body_end].strip().lstrip("#").strip()
-                        if re.match(r"^(?:(Goal|Step|Objective|Feature|Phase|Stage)\s*\d+)", l_check, re.I):
-                            break
-                        body_end += 1
-
-                    body_lines = lines[body_start:body_end]
-                    all_body_text = " ".join(body_lines)
-
-                    if any(s in all_body_text for s in ["GB", "TB", "PB"]) and ("supercomputer" in all_body_text.lower() or "inexpensive" in all_body_text.lower()):
-                        raw_sizes = [m.group(0) for m in re.finditer(r"\b\d+\s*(?:GB|TB|PB|MB)\b", all_body_text)]
-                        seen_s = set()
-                        unique_sizes = [s for s in raw_sizes if not (s in seen_s or seen_s.add(s))]
-                        out.append(header_titles[0])
-                        if unique_sizes:
-                            out.append("Example: " + ", ".join(unique_sizes) + ".")
-
-                        out.append(header_titles[1])
-                        out.append("If one computer crashes, data should remain available (Solution: Replication).")
-
-                        if len(header_titles) > 2:
-                            out.append(header_titles[2])
-                            out.append("Do not buy expensive supercomputers; instead use hundreds of inexpensive computers.")
-
-                        i = body_end
-                        continue
-
-                    g1_sizes = []
-                    g2_parts = []
-                    g4_parts = []
-                    for b in body_lines:
-                        bs = b.strip()
-                        if re.search(r"\b\d+\s*(?:GB|TB|PB|MB|KB)\b", bs, re.I):
-                            g1_sizes.append(bs)
-                        elif any(w in bs.lower() for w in ["crash", "available", "solution", "replication", "fault"]):
-                            g2_parts.append(bs)
-                        elif any(w in bs.lower() for w in ["supercomputer", "expensive", "inexpensive", "commodity", "buy", "instead", "use", "hundreds"]):
-                            g4_parts.append(bs)
-
-                    out.append(header_titles[0])
-                    if g1_sizes:
-                        out.append("Example: " + ", ".join(g1_sizes))
-
-                    out.append(header_titles[1])
-                    if g2_parts:
-                        g2_desc = " ".join(g2_parts)
-                        g2_desc = re.sub(r"Solution\s+Replication\.?", "(Solution: Replication)", g2_desc, flags=re.I)
-                        out.append(g2_desc)
-
-                    if len(header_titles) > 2:
-                        out.append(header_titles[2])
-                        if g4_parts:
-                            g4_desc = " ".join(g4_parts)
-                            out.append(g4_desc)
-
-                    i = body_end
-                    continue
-            out.append(lines[i])
-            i += 1
-
-        # Pair any solitary 'Goal N' with immediately following short title line
-        paired: List[str] = []
-        i = 0
-        while i < len(out):
-            line = out[i].strip()
-            header_m = re.match(r"^(?:#{1,6}\s*)?((?:Goal|Step|Objective|Feature|Phase|Stage)\s*\d+)[:.]?$", line, re.I)
-            if header_m and i + 1 < len(out):
-                next_l = out[i + 1].strip()
-                if len(next_l.split()) <= 6 and not next_l.endswith((".", ":", "!", "?")) and not next_l.startswith(("#", "-", "*")):
-                    paired.append(f"{header_m.group(1)}: {next_l}")
-                    i += 2
-                    continue
-            paired.append(line)
-            i += 1
-        return paired
+        from .nlg_reconstructor import GeneralizedNLGReconstructor
+        return GeneralizedNLGReconstructor.deinterleave_ocr_cards_generalized(lines)
 
     def structure(
         self,
@@ -301,7 +198,7 @@ class AnswerStructurer:
                         kind = "Step"
                         num = int(step_m.group(1))
                         title = step_m.group(2).strip()
-                    title = re.sub(r"\s+Traditional\s+system.*$", "", title, flags=re.I)
+                    title = title.strip()
                     curr_item = {"kind": kind, "num": num, "title": title, "bullets": []}
                     items.append(curr_item)
                 elif bullet_m and curr_item:
@@ -335,6 +232,22 @@ class AnswerStructurer:
                     items = second_group
                 elif len(first_group) <= len(second_group):
                     items = second_group
+
+            is_quiz_query = bool(re.search(r"\b(quiz|quizzes|questions?|test|practice|exercise|exercises|sample\s+questions)\b", query, re.I))
+            if not is_quiz_query:
+                # Strip quiz header lines from preamble (e.g. 'Quiz Time!')
+                preamble_lines = [
+                    p for p in preamble_lines
+                    if not re.search(r"^(?:#{0,6}\s*)?(?:quiz\s+time|pop\s+quiz|review\s+questions?|self[- ]assessment|exercises?)\b", p, re.I)
+                ]
+                # Check if items are actually quiz questions rather than informative steps
+                question_count = sum(
+                    1 for it in items
+                    if it.get("title", "").strip().endswith("?")
+                    or re.match(r"^(?:what|why|how|which|explain|describe|define|is|are|can|name|where|when)\b", it.get("title", ""), re.I)
+                )
+                if len(items) >= 2 and (question_count / len(items)) >= 0.4:
+                    items = []
 
             blocks: List[str] = []
             if preamble_lines:
@@ -371,23 +284,26 @@ class AnswerStructurer:
         elif intent == "bullets":
             bullet_items: List[str] = []
             intro_lines: List[str] = []
+            from .nlg_reconstructor import GeneralizedNLGReconstructor
 
             for idx, line in enumerate(unwrapped_lines):
                 bullet_m = re.match(r"^(?:[-•+]|\*(?!\*))\s*(.+)$", line)
                 step_m = re.match(r"^(?:step\s*)?\d+[\.\)]\s*(.+)$", line, re.I)
 
-                if bullet_m:
-                    bullet_items.append(f"- {bullet_m.group(1).strip()}")
-                elif step_m:
-                    bullet_items.append(f"- {step_m.group(1).strip()}")
+                raw_item = bullet_m.group(1).strip() if bullet_m else (step_m.group(1).strip() if step_m else None)
+
+                if raw_item is not None:
+                    recon = GeneralizedNLGReconstructor.reconstruct_fragment_to_sentence(raw_item)
+                    bullet_items.append(f"- {recon}")
                 elif " → " in line:
                     bullet_items.append(f"\n{line}\n")
                 elif line.endswith("Flow") or line.endswith("Architecture") or line.endswith("Working") or (len(line.split()) <= 4 and line.endswith(":")):
                     bullet_items.append(f"\n**{line.rstrip(':')}:**")
-                elif idx == 0 and len(unwrapped_lines) > 1:
+                elif idx == 0 and len(unwrapped_lines) > 1 and not line.startswith(("-", "*", "•")):
                     intro_lines.append(line)
                 else:
-                    bullet_items.append(f"- {line.lstrip('-•*+ ')}")
+                    recon = GeneralizedNLGReconstructor.reconstruct_fragment_to_sentence(line.lstrip("-•*+ "))
+                    bullet_items.append(f"- {recon}")
 
             blocks = []
             if intro_lines:
@@ -401,15 +317,18 @@ class AnswerStructurer:
             # Paragraphs intent
             curr_para: List[str] = []
             formatted_blocks: List[str] = []
+            from .nlg_reconstructor import GeneralizedNLGReconstructor
 
             for line in unwrapped_lines:
                 if line.startswith(("-", "*", "•")) or re.match(r"^\d+[\.\)]", line):
                     if curr_para:
                         formatted_blocks.append(" ".join(curr_para))
                         curr_para = []
-                    formatted_blocks.append(line)
+                    recon = GeneralizedNLGReconstructor.reconstruct_fragment_to_sentence(line.lstrip("-•*+ "))
+                    formatted_blocks.append(f"- {recon}")
                 else:
-                    curr_para.append(line)
+                    recon = GeneralizedNLGReconstructor.reconstruct_fragment_to_sentence(line)
+                    curr_para.append(recon)
                     if len(curr_para) >= 2 or sum(len(c) for c in curr_para) > 240:
                         formatted_blocks.append(" ".join(curr_para))
                         curr_para = []
@@ -420,14 +339,16 @@ class AnswerStructurer:
             final_output = "\n\n".join(formatted_blocks).strip()
 
         # Add sensible heading if not already present and query warrants it
-        if not final_output.startswith("#") and (has_numbered_items or len(unwrapped_lines) >= 4):
-            clean_q = query.strip().rstrip("?")
-            if len(clean_q.split()) <= 8 and not re.match(r"^(?:why|how)\b", clean_q, flags=re.I):
-                heading_title = clean_q.title()
-                first_line = final_output.splitlines()[0].lstrip("# ").strip().lower()
-                heading_tokens = set(re.findall(r"\b\w{4,}\b", heading_title.lower()))
-                first_tokens = set(re.findall(r"\b\w{4,}\b", first_line))
-                if not (heading_tokens and heading_tokens.issubset(first_tokens)):
+        if not final_output.startswith("#") and (has_numbered_items or len(unwrapped_lines) >= 2):
+            from .nlg_reconstructor import GeneralizedNLGReconstructor
+            core_subj = GeneralizedNLGReconstructor.extract_core_subject(query)
+            if core_subj and len(core_subj.split()) <= 6:
+                heading_title = core_subj.title()
+                final_output = f"### {heading_title}\n\n{final_output}"
+            else:
+                clean_q = query.strip().rstrip("?")
+                if len(clean_q.split()) <= 8 and not re.match(r"^(?:why|how)\b", clean_q, flags=re.I):
+                    heading_title = clean_q.title()
                     final_output = f"### {heading_title}\n\n{final_output}"
 
         return final_output

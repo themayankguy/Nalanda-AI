@@ -138,3 +138,111 @@ def test_document_upload_and_metadata_isolation(client):
     assert status_data["id"] == doc_id
     assert status_data["status"] in ["pending", "processing", "completed", "failed"]
     assert "full_text" not in status_data
+
+
+def test_document_upload_supported_formats_and_validations(client):
+    """Test uploads for .pptx, .heic, .heif, .png, .jpg, .jpeg and error validations."""
+    uid = uuid.uuid4().hex[:8]
+    res_user = client.post(
+        "/api/auth/register",
+        json={"email": f"formats_{uid}@nalanda.ai", "username": f"user_{uid}", "password": "password123"},
+    )
+    assert res_user.status_code == 201
+    token = res_user.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res_folder = client.post("/api/folders", json={"name": "Formats Folder"}, headers=headers)
+    assert res_folder.status_code == 201
+    folder_id = res_folder.json()["id"]
+
+    # 1. PPTX upload
+    pptx_bytes = b"PK\x03\x04mock_pptx_data"
+    res_pptx = client.post(
+        f"/api/folders/{folder_id}/documents/upload",
+        files={"file": ("slides.pptx", pptx_bytes, "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
+        headers=headers,
+    )
+    assert res_pptx.status_code == 202
+    pptx_id = res_pptx.json()["id"]
+
+    # 2. HEIC and HEIF uploads (accepted inputs without decoding/OCR yet)
+    heic_bytes = b"\x00\x00\x00\x18ftypheicmock"
+    res_heic = client.post(
+        f"/api/folders/{folder_id}/documents/upload",
+        files={"file": ("photo.heic", heic_bytes, "image/heic")},
+        headers=headers,
+    )
+    assert res_heic.status_code == 202
+
+    heif_bytes = b"\x00\x00\x00\x18ftypmif1mock"
+    res_heif = client.post(
+        f"/api/folders/{folder_id}/documents/upload",
+        files={"file": ("photo.heif", heif_bytes, "image/heif")},
+        headers=headers,
+    )
+    assert res_heif.status_code == 202
+
+    # 3. PNG, JPG, JPEG uploads
+    png_bytes = b"\x89PNG\r\n\x1a\nmock_png_data"
+    res_png = client.post(
+        f"/api/folders/{folder_id}/documents/upload",
+        files={"file": ("chart.png", png_bytes, "image/png")},
+        headers=headers,
+    )
+    assert res_png.status_code == 202
+
+    jpg_bytes = b"\xff\xd8\xffmock_jpg_data"
+    res_jpg = client.post(
+        f"/api/folders/{folder_id}/documents/upload",
+        files={"file": ("diagram.jpg", jpg_bytes, "image/jpeg")},
+        headers=headers,
+    )
+    assert res_jpg.status_code == 202
+
+    jpeg_bytes = b"\xff\xd8\xffmock_jpeg_data"
+    res_jpeg = client.post(
+        f"/api/folders/{folder_id}/documents/upload",
+        files={"file": ("figure.jpeg", jpeg_bytes, "image/jpeg")},
+        headers=headers,
+    )
+    assert res_jpeg.status_code == 202
+
+    # Verify all uploaded documents exist with correct file_type and file_size
+    res_docs = client.get(f"/api/folders/{folder_id}/documents", headers=headers)
+    assert res_docs.status_code == 200
+    docs = {d["original_filename"]: d for d in res_docs.json()}
+    assert docs["slides.pptx"]["file_type"] == "pptx"
+    assert docs["slides.pptx"]["file_size_bytes"] == len(pptx_bytes)
+    assert docs["photo.heic"]["file_type"] == "image"
+    assert docs["photo.heif"]["file_type"] == "image"
+    assert docs["chart.png"]["file_type"] == "image"
+    assert docs["diagram.jpg"]["file_type"] == "image"
+    assert docs["figure.jpeg"]["file_type"] == "image"
+
+    # 4. Error validation: Empty file (0 bytes)
+    res_empty = client.post(
+        f"/api/folders/{folder_id}/documents/upload",
+        files={"file": ("empty.png", b"", "image/png")},
+        headers=headers,
+    )
+    assert res_empty.status_code == 400
+    assert "empty" in res_empty.json()["detail"].lower()
+
+    # 5. Error validation: Invalid / mismatched MIME type
+    res_bad_mime = client.post(
+        f"/api/folders/{folder_id}/documents/upload",
+        files={"file": ("notes.pdf", b"%PDF-1.4 mock", "text/x-python")},
+        headers=headers,
+    )
+    assert res_bad_mime.status_code == 400
+    assert "Invalid MIME type" in res_bad_mime.json()["detail"]
+
+    # 6. Error validation: Unsupported format (e.g. .webp, .docx)
+    res_unsupported = client.post(
+        f"/api/folders/{folder_id}/documents/upload",
+        files={"file": ("notes.docx", b"mock docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        headers=headers,
+    )
+    assert res_unsupported.status_code == 400
+    assert "Unsupported file extension" in res_unsupported.json()["detail"]
+

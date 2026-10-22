@@ -25,6 +25,7 @@ from .autoencoder_models import (
 from .autoencoder_service import AutoencoderOutlierDetector
 from .pca_benchmark import compare_pca_vs_autoencoder, format_comparison_table
 from .ocr_denoiser import OCREmbeddingDenoiser, get_ocr_denoiser
+from .nlg_reconstructor import GeneralizedNLGReconstructor
 
 __all__ = [
     "ATMLConfig",
@@ -33,6 +34,7 @@ __all__ = [
     "ValidationResult",
     "sanitize_text",
     "AnswerStructurer",
+    "GeneralizedNLGReconstructor",
     "AnswerRefinementEngine",
     "RefinedAnswerResult",
     "get_atml_model_and_tokenizer",

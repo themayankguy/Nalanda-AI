@@ -79,7 +79,7 @@ async def upload_document(
     file_content = await file.read()
     file_size = len(file_content)
 
-    is_valid, file_type, err_msg = validate_file(filename, file_size)
+    is_valid, file_type, err_msg = validate_file(filename, file_size, file.content_type)
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -121,15 +121,21 @@ async def upload_document(
     db.commit()
     db.refresh(document)
 
-    # 6. Schedule extraction in background task
-    background_tasks.add_task(process_document_extraction, document.id)
+    # 6. Schedule extraction in background task only for formats with extraction support
+    # HEIC/HEIF and PPTX are accepted inputs without implementing decoding/OCR yet.
+    ext = Path(paths["safe_filename"]).suffix.lower()
+    if ext in {".pdf", ".jpg", ".jpeg", ".png"}:
+        background_tasks.add_task(process_document_extraction, document.id)
+        msg = "Document uploaded successfully. Extraction started in background."
+    else:
+        msg = "Document uploaded successfully."
 
     return DocumentUploadResponse(
         id=document.id,
         folder_id=folder.id,
         original_filename=document.original_filename,
         status="pending",
-        message="Document uploaded successfully. Extraction started in background.",
+        message=msg,
     )
 
 
@@ -322,13 +328,18 @@ def get_document_file(
         )
 
     file_path = Path(document.storage_path)
+    ext = file_path.suffix.lower()
     media_type = "application/pdf"
-    if file_path.suffix.lower() in [".jpg", ".jpeg"]:
+    if ext in [".jpg", ".jpeg"]:
         media_type = "image/jpeg"
-    elif file_path.suffix.lower() == ".png":
+    elif ext == ".png":
         media_type = "image/png"
-    elif file_path.suffix.lower() == ".webp":
-        media_type = "image/webp"
+    elif ext == ".pptx":
+        media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    elif ext == ".heic":
+        media_type = "image/heic"
+    elif ext == ".heif":
+        media_type = "image/heif"
 
     return FileResponse(
         str(file_path),

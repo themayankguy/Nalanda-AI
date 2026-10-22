@@ -61,22 +61,23 @@ class AutoencoderOutlierDetector:
         if weights_path and weights_path.exists() and not force_retrain:
             try:
                 checkpoint = torch.load(weights_path, map_location=_DEVICE)
-                model = UndercompleteAutoencoder(input_dim=D, hidden_dim=128, latent_dim=k).to(_DEVICE)
-                model.load_state_dict(checkpoint["model_state_dict"])
-                model.eval()
-                mean_e = checkpoint["mean_error"]
-                std_e = checkpoint["std_error"]
-                # 3-sigma statistical control threshold
-                thresh = float(mean_e + 3.0 * max(std_e, 0.0005))
-                entry = {
-                    "model": model,
-                    "threshold": thresh,
-                    "mean_error": mean_e,
-                    "std_error": std_e,
-                    "latent_dim": k,
-                }
-                _AUTOENCODER_CACHE[cache_key] = entry
-                return entry
+                if checkpoint.get("latent_dim") == k:
+                    model = UndercompleteAutoencoder(input_dim=D, hidden_dim=128, latent_dim=k).to(_DEVICE)
+                    model.load_state_dict(checkpoint["model_state_dict"])
+                    model.eval()
+                    mean_e = checkpoint["mean_error"]
+                    std_e = checkpoint["std_error"]
+                    # 3-sigma statistical control threshold
+                    thresh = float(mean_e + 3.0 * max(std_e, 0.0005))
+                    entry = {
+                        "model": model,
+                        "threshold": thresh,
+                        "mean_error": mean_e,
+                        "std_error": std_e,
+                        "latent_dim": k,
+                    }
+                    _AUTOENCODER_CACHE[cache_key] = entry
+                    return entry
             except Exception as exc:
                 logger.warning("Could not load cached autoencoder from %s: %s", weights_path, exc)
 

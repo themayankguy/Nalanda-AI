@@ -8,16 +8,64 @@ from typing import Tuple
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 BASE_STORAGE_DIR = PROJECT_ROOT / "storage"
 
-# Supported formats matching nalanda_extractor.py
+# Supported formats: .pptx, .heic, .heif, .png, .jpg, .jpeg, and preserved .pdf
 SUPPORTED_EXTENSIONS = {
     ".pdf",
+    ".pptx",
+    ".heic",
+    ".heif",
+    ".png",
     ".jpg",
     ".jpeg",
-    ".png",
-    ".webp",
-    ".bmp",
-    ".tif",
-    ".tiff",
+}
+
+# Supported MIME types per extension
+SUPPORTED_MIME_TYPES = {
+    ".pdf": {
+        "application/pdf",
+        "application/x-pdf",
+        "application/acrobat",
+        "applications/vnd.pdf",
+        "text/pdf",
+        "text/x-pdf",
+    },
+    ".pptx": {
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/x-pptx",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml",
+        "application/zip",
+        "application/x-zip-compressed",
+    },
+    ".heic": {
+        "image/heic",
+        "image/heif",
+        "image/heic-sequence",
+    },
+    ".heif": {
+        "image/heif",
+        "image/heic",
+        "image/heif-sequence",
+    },
+    ".png": {
+        "image/png",
+        "image/x-png",
+    },
+    ".jpg": {
+        "image/jpeg",
+        "image/pjpeg",
+        "image/jpg",
+    },
+    ".jpeg": {
+        "image/jpeg",
+        "image/pjpeg",
+        "image/jpg",
+    },
+}
+
+GENERIC_MIME_TYPES = {
+    "application/octet-stream",
+    "binary/octet-stream",
 }
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB limit
@@ -40,23 +88,53 @@ def sanitize_filename(filename: str) -> str:
     return clean[:255]
 
 
-def validate_file(filename: str, file_size: int) -> Tuple[bool, str, str]:
-    """Validate file extension and size.
+def validate_file(
+    filename: str,
+    file_size: int,
+    content_type: str | None = None,
+) -> Tuple[bool, str, str]:
+    """Validate file extension, size, and MIME content type.
     
     Returns (is_valid, file_type, error_message).
     """
+    if not filename or not filename.strip():
+        return False, "", "Filename is required."
+
     safe_name = sanitize_filename(filename)
     ext = Path(safe_name).suffix.lower()
 
-    if not ext or ext not in SUPPORTED_EXTENSIONS:
+    if not ext:
+        return False, "", "File has no extension or is invalid."
+
+    if ext not in SUPPORTED_EXTENSIONS:
         supported_list = ", ".join(sorted(SUPPORTED_EXTENSIONS))
         return False, "", f"Unsupported file extension '{ext}'. Supported types: {supported_list}"
+
+    if file_size <= 0:
+        return False, "", "File is empty (0 bytes)."
 
     if file_size > MAX_FILE_SIZE_BYTES:
         max_mb = MAX_FILE_SIZE_BYTES // (1024 * 1024)
         return False, "", f"File size exceeds the {max_mb} MB limit."
 
-    file_type = "pdf" if ext == ".pdf" else "image"
+    if content_type:
+        clean_mime = content_type.split(";")[0].strip().lower()
+        if clean_mime:
+            valid_mimes = SUPPORTED_MIME_TYPES.get(ext, set())
+            if clean_mime not in valid_mimes and clean_mime not in GENERIC_MIME_TYPES:
+                return (
+                    False,
+                    "",
+                    f"Invalid MIME type '{clean_mime}' for file extension '{ext}'.",
+                )
+
+    if ext == ".pdf":
+        file_type = "pdf"
+    elif ext == ".pptx":
+        file_type = "pptx"
+    else:
+        file_type = "image"
+
     return True, file_type, ""
 
 

@@ -33,6 +33,7 @@ from backend.services.atml.quiz_generator import (
     is_valid_definition,
     unwrap_and_extract_sentences,
 )
+from backend.services.atml.content_normalizer import ContentNormalizer
 
 logger = logging.getLogger("nalanda.notes_generator")
 
@@ -86,11 +87,10 @@ PROCEDURE_STEP_STARTS = (
 
 
 def clean_ocr_text(text: str) -> str:
-    """Corrects common OCR scanning errors in technical lecture materials."""
-    cleaned = text
-    for pattern, replacement in OCR_FIXES.items():
-        cleaned = re.sub(pattern, replacement, cleaned, flags=re.I)
-    return cleaned
+    """Corrects common OCR scanning errors in lecture materials using ContentNormalizer."""
+    from backend.services.atml.content_normalizer import ContentNormalizer
+    return ContentNormalizer.clean_ocr_artifacts(text)
+
 
 
 def unwrap_soft_newlines(text: str) -> str:
@@ -370,7 +370,9 @@ class NotesGenerator:
                     with open(j_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
                         if isinstance(data, dict) and "pages" in data and isinstance(data["pages"], list):
-                            return sorted(data["pages"], key=lambda p: p.get("page", 0))
+                            from backend.services.atml.content_normalizer import ContentNormalizer
+                            sorted_pages = sorted(data["pages"], key=lambda p: p.get("page", 0))
+                            return ContentNormalizer.remove_running_headers_and_footers(sorted_pages)
                 except Exception as exc:
                     logger.debug("Failed loading json_storage_path for %s: %s", getattr(doc, "id", ""), exc)
 
@@ -390,17 +392,23 @@ class NotesGenerator:
                         "figures": []
                     })
                 if pages:
-                    return pages
+                    from backend.services.atml.content_normalizer import ContentNormalizer
+                    return ContentNormalizer.remove_running_headers_and_footers(pages)
 
+        raw_pages = []
         # 3. Fallback: single synthetic page from full_text
         full_text = getattr(extraction, "full_text", None) if extraction else None
         if full_text:
-            return [{
+            raw_pages = [{
                 "page": 1,
                 "text": full_text,
                 "tables": [],
                 "figures": []
             }]
+
+        if raw_pages:
+            from backend.services.atml.content_normalizer import ContentNormalizer
+            return ContentNormalizer.remove_running_headers_and_footers(raw_pages)
 
         return []
 
@@ -440,21 +448,24 @@ class NotesGenerator:
         SLIDE_LABELS = {
             "features", "working", "relation", "explanation", "example", "examples",
             "advantages", "disadvantages", "components", "architecture", "commands",
-            "syntax", "lifecycle", "definition", "overview", "note", "notes", "concept"
+            "syntax", "lifecycle", "definition", "overview", "note", "notes", "concept",
+            "summary", "conclusion", "table of contents", "syllabus", "course outline",
+            "agenda", "references", "case study", "case studies", "prerequisites"
         }
 
         def is_major_subtopic_heading(line: str) -> Tuple[bool, str]:
             l = line.strip()
             if not l or len(l) < 3:
                 return False, ""
-            if l in ("APDD", "UNIT 5", "BDA") or re.match(r"^(?:UNIT|MODULE|CHAPTER|PART)\s+\d+", l, re.I):
+            if re.match(r"^(?:UNIT|MODULE|CHAPTER|PART|LECTURE|SESSION)\s+\d+\b", l, re.I):
                 return False, ""
-            # Check 1: Pattern '1. Docker Engine - Definition...' (contains definition so may end with period)
+
+            # Check 1: Pattern '1. Title - Definition...' (contains definition so may end with period)
             for sep in [" - ", " – ", " — "]:
                 if sep in l:
                     parts = l.split(sep, 1)
-                    cand_raw = re.sub(r"^\d+[\.\)]\s*", "", parts[0]).strip()
-                    cand_raw = re.sub(r"\s+(?:Definition|Concept)$", "", cand_raw, flags=re.I)
+                    cand_raw = re.sub(r"^(?:\d+[\.\)]|\d+(?:\.\d+)*)\s*", "", parts[0]).strip()
+                    cand_raw = re.sub(r"\s+(?:Definition|Concept|Overview)$", "", cand_raw, flags=re.I)
                     cand = clean_concept_phrase(cand_raw)
                     if cand and len(cand.split()) <= 6:
                         return True, cand
@@ -465,35 +476,37 @@ class NotesGenerator:
                 return False, ""
             if l.lower().rstrip(":") in SLIDE_LABELS:
                 return False, ""
-            if re.match(r"^(?:Explanation|Command:|Example:|Commands:|Syntax:|Note:)\b", l, re.I):
-                return False, ""
-            if re.match(r"^(?:docker |apt |FROM |RUN |COPY |CMD |nginx )\b", l):
+            if re.match(r"^(?:Explanation|Command:|Example:|Commands:|Syntax:|Note:|Code:)\b", l, re.I):
                 return False, ""
 
-            # Filter out procedural action steps
-            l_lower = l.lower()
-            for step_start in PROCEDURE_STEP_STARTS:
-                if step_start in l_lower and re.match(r"^(?:\d+[\.\)]|step\s*\d+|stage\s*\d+)\b", l, re.I):
-                    return False, ""
-
-            # Check 2: Major uppercase (must not have terminal punctuation and <= 6 words)
+            # Check 2: Major uppercase line without terminal punctuation (<= 6 words)
             if l.isupper() and any(c.isalpha() for c in l) and 1 <= len(l.split()) <= 6:
                 return True, clean_concept_phrase(l)
 
-            # Check 3: Standard structural prefixes
-            if re.match(r"^(?:What is\s+|Need for\s+|Solution Provided by\s+|Characteristics of\s+|Working of\s+|Role of\s+|Advantages of\s+|Disadvantages of\s+|Advantages and\s+|Concept of Running\s+|Concept of Reusing\s+|Components of [Dd]ocker|Components of Docker Engine|Docker Image Concept|Create a Docker Image|Share Docker Image|Docker Architecture|Docker Workflow|Docker CLI Commands|Types of Docker CLI Commands|Docker Container Lifecycle|Main States of Container Lifecycle|Docker Signals|Port Binding in Docker|Detached vs Foreground Mode|Registry vs Repository|Types of Port Binding)\b", l, re.I):
+            # Check 3: Markdown headings (# Title, ## Title, ### Title)
+            if re.match(r"^#{1,4}\s+([A-Za-z0-9][\w\s\-–—/]{2,50})$", l):
+                clean_h = re.sub(r"^#{1,4}\s+", "", l).strip()
+                if len(clean_h.split()) <= 6:
+                    return True, clean_concept_phrase(clean_h)
+
+            # Check 4: Standard structural academic prefixes
+            if re.match(r"^(?:What\s+(?:is|are)|Need\s+for|Solution\s+Provided\s+by|Characteristics\s+of|Working\s+of|Role\s+of|Advantages\s+of|Disadvantages\s+of|Advantages\s+and|Concept\s+of|Components\s+of|Types\s+of|Overview\s+of|Introduction\s+to|Principles\s+of|Mechanism\s+of)\s+", l, re.I):
                 if len(l.split()) <= 7:
                     return True, clean_concept_phrase(l)
 
-            # Check 4: Major named components
-            if l.strip() in ("Docker", "Containerization", "Container", "Docker Overview", "Docker Engine", "Docker Image", "Docker Container", "Dockerfile", "Docker Registry", "Docker Hub", "Docker Daemon (dockerd)", "Docker Client (CLI)", "REST API", "Docker Volumes", "Docker Networking"):
-                return True, clean_concept_phrase(l.strip())
+            # Check 5: Standalone short noun-phrase line (e.g. "Docker", "Containerization", "Photosynthesis", "Opportunity Cost")
+            words = l.split()
+            if 1 <= len(words) <= 5 and not re.match(r"^\d+[\.\)]", l):
+                # Verify first word is capitalized and not a stop/connective word
+                first_w_low = words[0].lower()
+                if l[0].isupper() and first_w_low not in ("is", "are", "was", "were", "the", "this", "these", "that", "and", "or", "for", "with", "from", "into"):
+                    return True, clean_concept_phrase(l)
 
-            # Check 5: X vs Y
+            # Check 6: Comparative Headings (X vs Y)
             if (" vs " in l.lower() or " versus " in l.lower()) and len(l.split()) <= 7:
                 return True, clean_concept_phrase(l)
 
-            # Check 6: PYQs
+            # Check 7: Examination Questions
             if re.match(r"^(?:PYQ|Q\d+[\(\[])", l):
                 return True, "Examination Model Questions"
 
@@ -681,13 +694,22 @@ class NotesGenerator:
                 for b in blocks:
                     t_clean = re.escape(clean_concept_phrase(title))
                     def_match = re.search(
-                        rf"(?:^|\n)\s*(?:[-•*]\s*)?(?:{t_clean}|{t_clean.lower()})\s+(?:is|are|is defined as|refers to|acts as|serves as|consists of)\s+([^\n]+)",
+                        rf"(?:^|\n)\s*(?:[-•*]\s*)?(?:(?:the|a|an)\s+)?(?:{t_clean}|{t_clean.lower()})\s+(?:is|are|is defined as|refers to|acts as|serves as|consists of)\s+([^\n]+)",
                         b,
                         re.I
                     )
                     if def_match:
                         definition = def_match.group(0).strip().lstrip("-•* ")
                         break
+
+            if not definition:
+                # First check non-bullet prose lines for definition statements
+                for b in blocks:
+                    if not b.startswith(("-", "•", "*")) and len(b) > 25:
+                        cand_def = b.strip()
+                        if re.search(r"\b(is|are|refers to|serves as|acts as|consists of|involves)\b", cand_def, re.I):
+                            definition = cand_def
+                            break
 
             if not definition:
                 for b in blocks:
@@ -698,31 +720,23 @@ class NotesGenerator:
                             break
 
             if not definition or len(definition.split()) < 4:
-                t_lower = title.lower()
-                if "docker engine" in t_lower:
-                    definition = "Docker Engine is the core client–server container runtime technology used to build, manage, and execute Docker containers."
-                elif "docker container" in t_lower:
-                    definition = "A Docker Container is a lightweight, standalone, executable package that includes everything needed to run an application in isolated environments."
-                elif "docker image" in t_lower:
-                    definition = "A Docker Image is an immutable, read-only template containing application code, runtime libraries, and environment configurations used to instantiate containers."
-                elif "dockerfile" in t_lower:
-                    definition = "A Dockerfile is a text document containing sequential instructions and arguments used by the Docker daemon to automatically build container images."
-                elif "docker registry" in t_lower:
-                    definition = "A Docker Registry is a centralized storage and distribution system for managing, uploading (pushing), and downloading (pulling) Docker images."
-                elif "docker hub" in t_lower:
-                    definition = "Docker Hub is a cloud-hosted public registry service provided by Docker for finding, storing, and sharing container images globally."
-                elif "port binding" in t_lower:
-                    definition = "Port binding is the network mapping mechanism that routes a host machine port to a container internal port to enable external application access."
-                elif "detached" in t_lower or "foreground" in t_lower:
-                    definition = "Detached and Foreground modes define the process attachment and terminal output behavior when running Docker containers."
-                elif "lifecycle" in t_lower:
-                    definition = "Docker Container Lifecycle defines the operational state transitions of a container from creation and active execution to stoppage and removal."
-                elif "signal" in t_lower:
-                    definition = "Docker Signals are operating-system level process control interrupts used to manage container runtime behavior and graceful termination."
-                elif "examination" in t_lower or "pyq" in t_lower:
-                    definition = f"High-yield examination model questions and comprehensive answer frameworks covering {doc_name}."
-                else:
-                    definition = f"{title} is a core operational mechanism and architectural principle documented in {doc_name}."
+                # 1. Search blocks for any copular sentence or definition statement
+                for b in blocks:
+                    clean_b = b.strip().lstrip("-•* ")
+                    if len(clean_b) > 25 and re.search(r"\b(is|are|refers to|serves as|acts as|consists of|involves|functions by)\b", clean_b, re.I):
+                        definition = clean_b
+                        break
+
+                # 2. Reconstruct from first substantive fragment if needed
+                if (not definition or len(definition.split()) < 4) and blocks:
+                    first_b = blocks[0].strip().lstrip("-•* ")
+                    if len(first_b) > 15:
+                        from backend.services.atml.nlg_reconstructor import GeneralizedNLGReconstructor
+                        definition = GeneralizedNLGReconstructor.reconstruct_fragment_to_sentence(first_b, context_subject=title)
+
+                # 3. Grounded fallback without hallucination
+                if not definition or len(definition.split()) < 4:
+                    definition = f"{title} is a foundational technical principle and operational mechanism documented in {doc_name}."
 
             definition = clean_sentence_boundary(definition)
 
@@ -736,28 +750,26 @@ class NotesGenerator:
 
             if not explanation:
                 for b in blocks:
-                    if len(b) > 25 and b.strip() != definition.strip():
-                        cand = b.strip().lstrip("-•* ")
-                        if not any(cand.lower().startswith(p) for p in ["features", "working", "commands"]):
+                    cand = b.strip().lstrip("-•* ")
+                    if len(cand) > 25 and cand.strip() != definition.strip():
+                        if not any(cand.lower().startswith(p) for p in ["features", "working", "commands", "syntax", "examples"]):
                             explanation = cand
                             break
 
             if not explanation or explanation == definition:
-                t_lower = title.lower()
-                if "docker engine" in t_lower:
-                    explanation = "Docker Engine coordinates between the client CLI, the REST API interface, and the background dockerd daemon to control container lifecycles."
-                elif "docker container" in t_lower:
-                    explanation = "Containers share the host operating system kernel directly, eliminating the guest OS overhead associated with traditional virtual machines."
-                elif "docker image" in t_lower:
-                    explanation = "Docker images use layered filesystems (UnionFS) where each instruction creates a cached layer, improving build speed and storage efficiency."
-                elif "dockerfile" in t_lower:
-                    explanation = "The Docker daemon executes each Dockerfile instruction in order, creating intermediate image layers to ensure deterministic and reproducible container environments."
-                elif "port binding" in t_lower:
-                    explanation = "Because containers operate in isolated network namespaces by default, port binding is necessary to expose services (such as web servers) to outside traffic."
-                elif "detached" in t_lower:
-                    explanation = "Foreground mode attaches container input/output directly to the active terminal, whereas detached mode (`-d`) runs the container silently in the background."
-                else:
-                    explanation = f"It provides the standardized boundaries and operational contracts necessary to execute reliably in {doc_name}."
+                # Find any remaining non-trivial sentence across blocks
+                for b in blocks:
+                    sentences = re.split(r"(?<=[.!?])\s+", b.strip())
+                    for s_cand in sentences:
+                        s_clean = s_cand.strip().lstrip("-•* ")
+                        if len(s_clean) > 25 and s_clean != definition and not s_clean.startswith(("#", "-", "*")):
+                            explanation = s_clean
+                            break
+                    if explanation and explanation != definition:
+                        break
+
+            if not explanation or explanation == definition:
+                explanation = f"It establishes the operational framework and analytical properties governing {title} as documented in {doc_name}."
 
             explanation = clean_sentence_boundary(explanation)
 
@@ -815,28 +827,34 @@ class NotesGenerator:
             if disadv_block:
                 limitations = [l.strip("-•* \r\n") for l in disadv_block.group(1).splitlines() if l.strip("-•* \r\n")]
 
-            # 7. Topic-Specific Exam Points (Genuinely useful, NO generic traps)
+            # 7. Source-Grounded Revision & Exam Points (Domain-agnostic, extractive)
             exam_points = []
             t_lower = title.lower()
-            if "docker container" in t_lower:
-                exam_points.append("Distinguish clearly between a **Docker Image** (the static read-only blueprint) and a **Docker Container** (the dynamic running instance).")
-                exam_points.append("Remember that containers share the host operating system kernel, making them significantly more lightweight than virtual machines.")
-            elif "docker engine" in t_lower:
-                exam_points.append("In 5-mark and 10-mark questions, draw the client–server topology: Docker Client (CLI) <-> REST API <-> Docker Daemon (dockerd).")
-                exam_points.append("Remember that dockerd runs as a persistent background daemon executing all build and run instructions.")
-            elif "dockerfile" in t_lower:
-                exam_points.append("Memorize the sequential build instructions: `FROM` (base image), `RUN` (build-time command), `COPY` (local file transfer), and `CMD` (container startup command).")
-            elif "lifecycle" in t_lower:
-                exam_points.append("Memorize the complete state lifecycle: Created -> Running -> Paused -> Stopped (Exited) -> Dead.")
-                exam_points.append("Differentiate `docker pause` (sends SIGSTOP, keeps memory) from `docker stop` (sends SIGTERM, releases active CPU).")
-            elif "signals" in t_lower:
-                exam_points.append("Remember the difference between `docker stop` (graceful shutdown via `SIGTERM`) and `docker kill` (immediate process termination via `SIGKILL`).")
-            elif "port binding" in t_lower:
-                exam_points.append("Port binding format is strictly `<host-port>:<container-port>` (e.g. `8080:80`). Never reverse them.")
-            elif "vs" in t_lower:
-                exam_points.append(f"When comparing {title}, always structure your examination answer into a side-by-side feature table.")
-            else:
-                exam_points.append(f"Master the core operational role and components of {title} for short-answer exam questions.")
+
+            if " vs " in t_lower or " versus " in t_lower or "difference" in t_lower or "comparison" in t_lower:
+                exam_points.append(f"When comparing **{title}**, structure your examination answer into a side-by-side comparative table contrasting architecture, operational trade-offs, and use cases.")
+
+            # Extract salient source statements containing importance markers
+            for cand_sent in re.split(r"(?<=[.!?])\s+", full_text):
+                cs_clean = cand_sent.strip()
+                cs_lower = cs_clean.lower()
+                if any(k in cs_lower for k in ("important", "crucial", "essential", "primary", "distinction", "note that", "key principle", "remember", "differentiate")):
+                    if 15 <= len(cs_clean) <= 180 and "buzzword" not in cs_lower and "neural computation" not in cs_lower:
+                        clean_ep = clean_sentence_boundary(cs_clean)
+                        if clean_ep not in exam_points:
+                            exam_points.append(clean_ep)
+                            if len(exam_points) >= 2:
+                                break
+
+            if unique_pts and len(exam_points) < 2:
+                # Use key technical point from source
+                first_pt = unique_pts[0].rstrip(".")
+                exam_points.append(f"Emphasize that {first_pt.lower()} when explaining the operational mechanics of **{title}**.")
+
+            if advantages and limitations and len(exam_points) < 3:
+                exam_points.append(f"Be prepared to evaluate both advantages ({advantages[0]}) and practical constraints ({limitations[0]}) in analytical questions.")
+            elif len(exam_points) == 0:
+                exam_points.append(f"Master the core operational role, definitions, and components of **{title}** for descriptive exam questions.")
 
             subtopics.append(
                 SubtopicUnit(
@@ -866,46 +884,51 @@ class NotesGenerator:
     ) -> List[SubtopicUnit]:
         """Validates factual uniqueness, bounds page numbers, merges duplicate subtopics, and removes generic artifacts."""
         validated: List[SubtopicUnit] = []
-        seen: Dict[str, SubtopicUnit] = {}
         seen_definitions: Set[str] = set()
 
         for s in subtopics:
             t_key = s.title.strip().lower()
 
-            # Canonicalize common title variants to prevent splintering
-            if "examination model questions" in t_key or "pyq" in t_key:
-                t_key = "examination model questions"
+            # Normalize generic exam question headings across subjects
+            if "examination model questions" in t_key or "pyq" in t_key or "model questions" in t_key:
                 s.title = "Examination Model Questions"
-            elif t_key in ("docker engine", "components of docker engine"):
-                t_key = "docker engine"
-                s.title = "Docker Engine"
-            elif t_key in ("docker cli commands", "types of docker cli commands"):
-                t_key = "docker cli commands"
-                s.title = "Docker CLI Commands"
-            elif t_key in ("docker container lifecycle", "container lifecycle", "main states of container lifecycle"):
-                t_key = "docker container lifecycle"
-                s.title = "Docker Container Lifecycle"
-            elif t_key in ("port binding", "port binding in docker", "types of port binding"):
-                t_key = "port binding in docker"
-                s.title = "Port Binding in Docker"
-            elif "docker signals" in t_key or "sigterm" in t_key:
-                t_key = "docker signals"
-                s.title = "Docker Signals"
 
-            # Merge identical subtopics across slides
-            if t_key in seen:
-                prev = seen[t_key]
-                prev.page_end = max(prev.page_end, s.page_end)
-                for kp in s.key_points:
-                    if kp not in prev.key_points and len(prev.key_points) < 6:
-                        prev.key_points.append(kp)
-                for cs in s.components_or_steps:
-                    if cs not in prev.components_or_steps and len(prev.components_or_steps) < 6:
-                        prev.components_or_steps.append(cs)
-                if not prev.example_code and s.example_code:
-                    prev.example_code = s.example_code
-                if not prev.table_markdown and s.table_markdown:
-                    prev.table_markdown = s.table_markdown
+            # Check if this subtopic should merge into an existing validated subtopic
+            merged = False
+            for prev in validated:
+                page_dist = abs(s.page_start - prev.page_end)
+                should_merge, canonical_title = ContentNormalizer.should_merge_headings(
+                    prev.title, s.title, page_distance=page_dist
+                )
+                if should_merge:
+                    prev.title = canonical_title
+                    prev.page_end = max(prev.page_end, s.page_end)
+                    for kp in s.key_points:
+                        if kp not in prev.key_points and len(prev.key_points) < 8:
+                            prev.key_points.append(kp)
+                    for cs in s.components_or_steps:
+                        if cs not in prev.components_or_steps and len(prev.components_or_steps) < 6:
+                            prev.components_or_steps.append(cs)
+                    if not prev.example_code and s.example_code:
+                        prev.example_code = s.example_code
+                    if not prev.table_markdown and s.table_markdown:
+                        prev.table_markdown = s.table_markdown
+                    if s.advantages:
+                        for adv in s.advantages:
+                            if adv not in prev.advantages:
+                                prev.advantages.append(adv)
+                    if s.limitations:
+                        for lim in s.limitations:
+                            if lim not in prev.limitations:
+                                prev.limitations.append(lim)
+                    if s.exam_points:
+                        for ep in s.exam_points:
+                            if ep not in prev.exam_points and len(prev.exam_points) < 4:
+                                prev.exam_points.append(ep)
+                    merged = True
+                    break
+
+            if merged:
                 continue
 
             # Bound page references to actual source document limits
@@ -938,7 +961,6 @@ class NotesGenerator:
                 filtered_exam_pts.append(f"Master the core operational role and definition of {s.title} for direct examination questions.")
             s.exam_points = filtered_exam_pts[:3]
 
-            seen[t_key] = s
             validated.append(s)
 
         # Enforce strict table uniqueness across all subtopics
@@ -971,7 +993,8 @@ class NotesGenerator:
         if sub.key_points:
             lines.append("## Key Points")
             for pt in sub.key_points:
-                lines.append(f"- {pt}")
+                formatted_pt = ContentNormalizer.format_fragment_to_bullet(pt, context_concept=sub.title)
+                lines.append(f"- {formatted_pt or pt}")
             lines.append("")
 
         # D. Components or Working Steps
@@ -1001,12 +1024,15 @@ class NotesGenerator:
                 lines.append(f"- **Limitations:** {', '.join(sub.limitations)}")
             lines.append("")
 
-        # H. Exam-Relevant Points
+        # H. Exam-Relevant Points & Revision Takeaways
         if sub.exam_points:
             lines.append("## Exam-Relevant Points")
             for ep in sub.exam_points:
                 lines.append(f"- {ep}")
             lines.append("")
+
+            # Grounded Revision Takeaway
+            lines.append(f"> 💡 **Revision Takeaway:** {sub.exam_points[0]}\n")
 
         # I. Source Reference
         if sub.page_start == sub.page_end:

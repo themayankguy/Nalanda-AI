@@ -68,34 +68,9 @@ class RefinedAnswerResult:
 
 def formulate_conversational_intro(query: str) -> str:
     """Generate a natural, helpful ChatGPT-style introductory lead-in matching query intent."""
-    q_clean = query.strip().rstrip("?").strip()
-    q_lower = q_clean.lower()
+    from .nlg_reconstructor import GeneralizedNLGReconstructor
+    return GeneralizedNLGReconstructor.synthesize_conversational_intro(query)
 
-    if re.search(r"\b(steps?|how to|process|procedure|phases?|stages?|lifecycle)\b", q_lower):
-        topic = re.sub(r"^(what are the|what are|explain the|explain|steps for|steps to|how to|give the|list the)\s*", "", q_clean, flags=re.I).strip()
-        return f"Based on your course materials, here is the complete step-by-step process for **{topic}**:"
-
-    if re.search(r"\b(purposes?|goals?|objectives?|aims?)\b", q_lower):
-        topic = re.sub(r"^(what are the|what are|explain the|explain|purposes of|main purposes of)\s*", "", q_clean, flags=re.I).strip()
-        return f"According to the uploaded documents, here are the primary purposes of **{topic}**:"
-
-    if re.search(r"\b(examples?|case stud(?:y|ies))\b", q_lower):
-        topic = re.sub(r"^(give|provide|show|what are|examples of)\s*", "", q_clean, flags=re.I).strip()
-        return f"Based on the uploaded documents, here are the detailed examples and applications for **{topic}**:"
-
-    if re.search(r"\b(types?|categories|kinds?|classifications?)\b", q_lower):
-        topic = re.sub(r"^(what are the|what are|explain the|explain|types of)\s*", "", q_clean, flags=re.I).strip()
-        return f"Based on your course materials, here are the different types of **{topic}**:"
-
-    if re.search(r"\b(challenges?|problems?|issues?|disadvantages?)\b", q_lower):
-        topic = re.sub(r"^(what are the|what are|explain the|explain|challenges in|challenges of)\s*", "", q_clean, flags=re.I).strip()
-        return f"According to the course notes, here are the key challenges associated with **{topic}**:"
-
-    if re.search(r"\b(what is|what are|define|meaning of)\b", q_lower):
-        topic = re.sub(r"^(what is the|what is|what are|define the|define|meaning of)\s*", "", q_clean, flags=re.I).strip()
-        return f"Based on the provided documents, here is an explanation of **{topic}**:"
-
-    return f"Based on the course materials in your workspace, here is the breakdown for **{q_clean}**:"
 
 
 class AnswerRefinementEngine:
@@ -106,16 +81,24 @@ class AnswerRefinementEngine:
         self.structurer = AnswerStructurer()
         self.validator = OutputValidator(self.config)
 
-    def consolidate_evidence(self, chunks: List[Dict[str, Any]]) -> Tuple[str, List[Dict[str, Any]]]:
+    def consolidate_evidence(self, chunks: List[Dict[str, Any]], query: str = "") -> Tuple[str, List[Dict[str, Any]]]:
         """Aggregate and sanitize top retrieved passages into clean evidence context."""
         cleaned_passages: List[str] = []
         citations: List[Dict[str, Any]] = []
         seen_texts = set()
 
+        is_quiz_query = bool(re.search(r"\b(quiz|quizzes|questions?|test|practice|exercise|exercises|sample\s+questions)\b", query, re.I))
+
         for chunk in chunks[: self.config.max_context_chunks]:
             raw_text = chunk.get("text", "") or chunk.get("formatted_context", "")
             if not raw_text:
                 continue
+
+            sec_title = chunk.get("section_title") or ""
+            if not is_quiz_query:
+                from .content_normalizer import ContentNormalizer
+                if ContentNormalizer.is_assessment_or_quiz_content(sec_title, raw_text):
+                    continue
 
             # Strip raw Markdown table formatting from text stream (tables are rendered separately)
             clean_lines = [l for l in raw_text.splitlines() if not l.strip().startswith("|")]
@@ -206,7 +189,7 @@ class AnswerRefinementEngine:
                 grounded=False,
             )
 
-        evidence, citations = self.consolidate_evidence(retrieved_chunks)
+        evidence, citations = self.consolidate_evidence(retrieved_chunks, query=query)
         if not evidence:
             val_res = ValidationResult(
                 is_valid=False,
@@ -228,7 +211,13 @@ class AnswerRefinementEngine:
         model, tokenizer = get_atml_model_and_tokenizer(self.config)
 
         # Build comprehensive structured fallback from retrieved evidence
+        is_quiz_query = bool(re.search(r"\b(quiz|quizzes|questions?|test|practice|exercise|exercises|sample\s+questions)\b", query, re.I))
         fallback_source = fallback_direct_answer or evidence
+        if fallback_direct_answer and not is_quiz_query:
+            from .content_normalizer import ContentNormalizer
+            if ContentNormalizer.is_assessment_or_quiz_content("", fallback_direct_answer):
+                fallback_source = evidence
+
         structured_fallback = self.structurer.structure(query, fallback_source, source_metadata=citations)
 
         # If model is unavailable or refinement disabled, fall back safely to structured text

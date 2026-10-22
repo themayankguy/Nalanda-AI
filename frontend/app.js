@@ -312,11 +312,16 @@ function renderFolders() {
             const activeBg = isDocActive ? "bg-surface-container-high text-primary font-medium" : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high";
             return `
               <div class="folder-doc-link flex items-center justify-between py-1 px-2 rounded ${activeBg} text-body-sm truncate transition-colors cursor-pointer" onclick="selectDocument('${doc.id}', event)">
-                <div class="flex items-center gap-2 truncate">
-                  <span class="material-symbols-outlined text-[16px] ${iconColor}">${docIcon}</span>
+                <div class="flex items-center gap-2 truncate flex-1 min-w-0 mr-1">
+                  <span class="material-symbols-outlined text-[16px] ${iconColor} shrink-0">${docIcon}</span>
                   <span class="truncate" title="${escapeHtml(doc.original_filename)}">${escapeHtml(doc.original_filename)}</span>
                 </div>
-                ${isDocActive ? '<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim" title="Currently active in context scope"></span>' : ''}
+                <div class="flex items-center gap-1 shrink-0">
+                  ${isDocActive ? '<span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim" title="Currently active in context scope"></span>' : ''}
+                  <button type="button" class="doc-delete-btn text-outline hover:text-error" title="Delete file" onclick="event.stopPropagation(); handleDeleteDocument('${doc.id}', '${escapeHtml(doc.original_filename).replace(/'/g, "\\'")}')">
+                    <span class="material-symbols-outlined text-[14px]">delete</span>
+                  </button>
+                </div>
               </div>
             `;
           }).join('')}
@@ -988,8 +993,15 @@ function formatInlineMarkdown(str) {
 
 function formatDirectAnswerHtml(text) {
   if (!text) return "";
+  // Strip raw HTML image or layout tags produced by OCR engines
+  let cleanText = text
+    .replace(/(?:<div[^>]*>\s*)?<img[^>]*src=["\'](?:imgs\/)?img_in_image_box_[^"\']+["\'][^>]*>(?:\s*<\/div>)?/gi, "")
+    .replace(/<div[^>]*style=["\'][^"\']*text-align:\s*center[^"\']*["\'][^>]*>[^<]*<\/div>/gi, "")
+    .replace(/<div[^>]*>|<\/div>/gi, "")
+    .replace(/<img[^>]*>/gi, "");
+
   // Ensure any accidentally joined inline headers or goals are broken into separate lines, but do not break '1. Goal' or '### Header'
-  const normalizedText = text
+  const normalizedText = cleanText
     .replace(/(?<!^)(?<!\n)(?<!#)\s{2,}(#{1,4}\s+)/g, "\n$1")
     .replace(/(?<!^)(?<!\n)(?<!\d\.)(?<!\d\))\s{2,}(\*{0,2}(?:Goal|Step|Objective|Feature|Phase|Stage)\s+\d+[:.]?\*{0,2})/gi, "\n$1");
 
@@ -1295,8 +1307,14 @@ async function handleSemanticSearch(event) {
       body: chatBody,
       signal: controller.signal,
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Search failed.");
+    let data;
+    const responseText = await response.text();
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = { detail: responseText || "Search failed." };
+    }
+    if (!response.ok) throw new Error(data.detail || `Server error (${response.status})`);
     if (folderId !== activeFolderId) return;
 
     // Refresh conversation dropdown in background
@@ -1535,6 +1553,33 @@ function renderActiveView() {
   renderSourceDrawerList();
 }
 
+function getDocFileInfo(doc) {
+  const filename = (doc && (doc.original_filename || doc.name)) || "document";
+  const extMatch = filename.match(/\.([a-zA-Z0-9]+)$/);
+  const ext = extMatch ? extMatch[1].toUpperCase() : (doc && doc.file_type ? doc.file_type.toUpperCase() : "FILE");
+  const extLower = ext.toLowerCase();
+
+  let icon = "description";
+  let iconColor = "text-primary";
+  let badgeClass = "bg-primary-container text-on-primary-container border-primary/20";
+
+  if (extLower === "pdf" || (doc && doc.file_type && doc.file_type.toLowerCase() === "pdf")) {
+    icon = "picture_as_pdf";
+    iconColor = "text-error";
+    badgeClass = "bg-red-500/10 text-red-500 border-red-500/30";
+  } else if (extLower === "pptx" || (doc && doc.file_type && doc.file_type.toLowerCase() === "pptx")) {
+    icon = "slideshow";
+    iconColor = "text-amber-500";
+    badgeClass = "bg-amber-500/10 text-amber-500 border-amber-500/30";
+  } else if (["png", "jpg", "jpeg", "heic", "heif"].includes(extLower) || (doc && doc.file_type && doc.file_type.toLowerCase() === "image")) {
+    icon = "image";
+    iconColor = "text-emerald-500";
+    badgeClass = "bg-emerald-500/10 text-emerald-500 border-emerald-500/30";
+  }
+
+  return { ext, extLower, icon, iconColor, badgeClass };
+}
+
 function renderRecentDocuments() {
   const container = document.getElementById("home-recent-docs-list");
   if (!container) return;
@@ -1552,9 +1597,7 @@ function renderRecentDocuments() {
   const folderName = activeFolder ? activeFolder.name : "Workspace";
 
   container.innerHTML = documents.map(doc => {
-    const isPdf = doc.file_type.toLowerCase() === "pdf";
-    const icon = isPdf ? "picture_as_pdf" : "description";
-    const iconColor = isPdf ? "text-error" : "text-primary";
+    const { ext, extLower, icon, iconColor, badgeClass } = getDocFileInfo(doc);
     const isDocActive = doc.id === activeDocumentId;
 
     let statusPill = "";
@@ -1568,6 +1611,14 @@ function renderRecentDocuments() {
       statusPill = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-label-sm text-outline bg-surface-container font-medium">Pending</span>`;
     }
 
+    let viewButtonLabel = "View File";
+    let viewButtonIcon = "visibility";
+    if (extLower === "pdf") {
+      viewButtonLabel = "View PDF";
+    } else if (["png", "jpg", "jpeg"].includes(extLower)) {
+      viewButtonLabel = "View Image";
+    }
+
     return `
       <div class="flex items-center justify-between p-3.5 hover:bg-surface-container-low transition-colors cursor-pointer" onclick="selectDocument('${doc.id}', event)">
         <div class="flex items-center gap-3 truncate">
@@ -1575,15 +1626,22 @@ function renderRecentDocuments() {
             <span class="material-symbols-outlined">${icon}</span>
           </div>
           <div class="flex flex-col truncate">
-            <span class="text-body-md font-medium text-on-surface truncate ${isDocActive ? 'text-primary' : ''}">${escapeHtml(doc.original_filename)}</span>
+            <div class="flex items-center gap-2 truncate">
+              <span class="text-body-md font-medium text-on-surface truncate ${isDocActive ? 'text-primary' : ''}">${escapeHtml(doc.original_filename)}</span>
+              <span class="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase ${badgeClass} border shrink-0">${ext}</span>
+            </div>
             <span class="text-label-sm text-outline">${folderName} • ${formatBytes(doc.file_size_bytes)} • ${formatDate(doc.created_at)}</span>
           </div>
         </div>
         <div class="flex items-center gap-2.5 shrink-0">
           ${statusPill}
-          <button class="px-2.5 py-1 rounded-lg border border-outline-variant text-label-sm font-medium text-on-surface hover:text-primary hover:border-primary/50 flex items-center gap-1 transition-colors" title="View Document PDF" onclick="event.stopPropagation(); openPdfModal('${doc.id}', '${escapeHtml(doc.original_filename)}')">
-            <span class="material-symbols-outlined text-[15px]">visibility</span>
-            <span>View PDF</span>
+          <button class="px-2.5 py-1 rounded-lg border border-outline-variant text-label-sm font-medium text-on-surface hover:text-primary hover:border-primary/50 flex items-center gap-1 transition-colors" title="View Document" onclick="event.stopPropagation(); openPdfModal('${doc.id}', '${escapeHtml(doc.original_filename)}')">
+            <span class="material-symbols-outlined text-[15px]">${viewButtonIcon}</span>
+            <span>${viewButtonLabel}</span>
+          </button>
+          <button class="px-2.5 py-1 rounded-lg border border-outline-variant text-label-sm font-medium text-outline hover:text-error hover:border-error/50 hover:bg-error-container/20 flex items-center gap-1 transition-colors" title="Delete Document" onclick="event.stopPropagation(); handleDeleteDocument('${doc.id}', '${escapeHtml(doc.original_filename).replace(/'/g, "\\'")}')">
+            <span class="material-symbols-outlined text-[15px]">delete</span>
+            <span>Delete</span>
           </button>
           <button class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container transition-colors" title="Select in context" onclick="selectDocument('${doc.id}', event)">
             <span class="material-symbols-outlined">chevron_right</span>
@@ -1613,9 +1671,7 @@ function renderSourceDrawerList() {
   }
 
   container.innerHTML = documents.map(doc => {
-    const isPdf = doc.file_type.toLowerCase() === "pdf";
-    const icon = isPdf ? "picture_as_pdf" : "description";
-    const iconColor = isPdf ? "text-error" : "text-primary";
+    const { ext, extLower, icon, iconColor, badgeClass } = getDocFileInfo(doc);
     const isDocActive = doc.id === activeDocumentId;
 
     let statusPill = "";
@@ -1638,16 +1694,19 @@ function renderSourceDrawerList() {
     return `
       <div class="p-2.5 rounded-xl border border-outline-variant bg-surface-container-low hover:border-primary/40 transition-all flex items-center justify-between gap-2">
         <div class="flex items-center gap-2.5 truncate cursor-pointer" onclick="selectDocument('${doc.id}', event)">
-          <span class="material-symbols-outlined text-[18px] ${iconColor}">${icon}</span>
+          <span class="material-symbols-outlined text-[18px] ${iconColor} shrink-0">${icon}</span>
           <div class="flex flex-col truncate">
-            <span class="text-body-sm font-medium text-on-surface truncate ${isDocActive ? 'text-primary' : ''}">${escapeHtml(doc.original_filename)}</span>
+            <div class="flex items-center gap-1.5 truncate">
+              <span class="text-body-sm font-medium text-on-surface truncate ${isDocActive ? 'text-primary' : ''}">${escapeHtml(doc.original_filename)}</span>
+              <span class="px-1 py-0.2 rounded text-[9px] font-bold uppercase ${badgeClass} border shrink-0">${ext}</span>
+            </div>
             <span class="text-label-sm text-outline">${formatBytes(doc.file_size_bytes)}</span>
           </div>
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
           ${statusPill}
           ${summaryBtn}
-          <button class="p-1 rounded-lg text-outline hover:text-primary hover:bg-surface-container transition-colors" title="View PDF" onclick="event.stopPropagation(); openPdfModal('${doc.id}', '${escapeHtml(doc.original_filename)}')">
+          <button class="p-1 rounded-lg text-outline hover:text-primary hover:bg-surface-container transition-colors" title="View Document" onclick="event.stopPropagation(); openPdfModal('${doc.id}', '${escapeHtml(doc.original_filename)}')">
             <span class="material-symbols-outlined text-[17px]">visibility</span>
           </button>
           <button class="p-1 rounded-lg text-outline hover:text-error hover:bg-surface-container transition-colors" title="Delete Document" onclick="event.stopPropagation(); handleDeleteDocument('${doc.id}', '${escapeHtml(doc.original_filename)}')">
@@ -1758,7 +1817,7 @@ function closeIngestionSummaryModal() {
 }
 
 async function handleDeleteDocument(documentId, filename) {
-  if (!confirm(`Are you sure you want to delete "${filename}"? Any knowledge concepts independently supported by other materials will be preserved.`)) {
+  if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
     return;
   }
   try {
@@ -1768,14 +1827,134 @@ async function handleDeleteDocument(documentId, filename) {
     });
     if (res.ok) {
       showToast(`Document "${filename}" deleted successfully.`);
+      if (activeDocumentId === documentId) {
+        activeDocumentId = null;
+      }
       await loadDocuments(activeFolderId);
       await loadFolders();
+      renderFolders();
+      renderActiveView();
     } else {
-      const err = await res.json();
+      let err;
+      try {
+        err = await res.json();
+      } catch {
+        err = { detail: await res.text() };
+      }
       showToast(err.detail || "Failed to delete document", "error");
     }
   } catch (err) {
     showToast("Error deleting document", "error");
+  }
+}
+
+// Supported upload formats
+const SUPPORTED_UPLOAD_EXTENSIONS = [".pdf", ".pptx", ".heic", ".heif", ".png", ".jpg", ".jpeg"];
+const MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+
+// State for tracked uploads (Requirements 4, 5, 6)
+let uploadQueue = [];
+let uploadWidgetCollapsed = false;
+
+function toggleUploadWidgetCollapse() {
+  uploadWidgetCollapsed = !uploadWidgetCollapsed;
+  const list = document.getElementById("upload-widget-file-list");
+  const icon = document.getElementById("upload-widget-collapse-icon");
+  if (list) {
+    list.style.display = uploadWidgetCollapsed ? "none" : "flex";
+  }
+  if (icon) {
+    icon.textContent = uploadWidgetCollapsed ? "expand_less" : "expand_more";
+  }
+}
+
+function closeUploadWidget() {
+  const widget = document.getElementById("upload-status-widget");
+  if (widget) widget.style.display = "none";
+}
+
+function renderUploadQueueUI() {
+  const widget = document.getElementById("upload-status-widget");
+  const widgetList = document.getElementById("upload-widget-file-list");
+  const widgetTitle = document.getElementById("upload-widget-title");
+  const drawerQueue = document.getElementById("drawer-upload-queue");
+
+  if (!uploadQueue || uploadQueue.length === 0) {
+    if (widget) widget.style.display = "none";
+    if (drawerQueue) drawerQueue.style.display = "none";
+    return;
+  }
+
+  const total = uploadQueue.length;
+  const inProgress = uploadQueue.filter(u => u.status === "uploading").length;
+  const failed = uploadQueue.filter(u => u.status === "failed").length;
+  const completed = uploadQueue.filter(u => u.status === "uploaded").length;
+
+  if (widgetTitle) {
+    if (inProgress > 0) {
+      widgetTitle.textContent = `Uploading ${inProgress} of ${total} file${total === 1 ? '' : 's'}...`;
+    } else if (failed > 0 && completed === 0) {
+      widgetTitle.textContent = `Upload failed (${failed} file${failed === 1 ? '' : 's'})`;
+    } else if (failed > 0) {
+      widgetTitle.textContent = `Upload finished (${completed} ok, ${failed} failed)`;
+    } else {
+      widgetTitle.textContent = `Uploaded ${completed} file${completed === 1 ? '' : 's'}`;
+    }
+  }
+
+  const itemsHtml = uploadQueue.slice().reverse().map(item => {
+    const { ext, icon, iconColor, badgeClass } = getDocFileInfo({ original_filename: item.name });
+    
+    let statusBadge = "";
+    if (item.status === "uploading") {
+      statusBadge = `<span class="inline-flex items-center gap-1 text-[11px] font-medium text-primary"><span class="material-symbols-outlined text-[14px] animate-spin">refresh</span> Uploading</span>`;
+    } else if (item.status === "uploaded") {
+      statusBadge = `<span class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-500"><span class="material-symbols-outlined text-[14px]">check_circle</span> Uploaded</span>`;
+    } else {
+      statusBadge = `<span class="inline-flex items-center gap-1 text-[11px] font-medium text-error"><span class="material-symbols-outlined text-[14px]">error</span> Failed</span>`;
+    }
+
+    const errorBlock = item.error ? `
+      <div class="mt-1 text-[11px] text-error bg-error-container/20 border border-error/20 rounded px-2 py-1 leading-tight break-words">
+        ${escapeHtml(item.error)}
+      </div>
+    ` : "";
+
+    return `
+      <div class="p-2.5 rounded-xl border border-outline-variant bg-surface-container-low flex flex-col gap-1 transition-all">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 truncate min-w-0">
+            <span class="material-symbols-outlined text-[18px] ${iconColor} shrink-0">${icon}</span>
+            <div class="flex flex-col truncate">
+              <span class="text-body-sm font-medium text-on-surface truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+              <div class="flex items-center gap-1.5 text-label-xs text-outline">
+                <span class="px-1 py-0.2 rounded text-[9px] font-bold uppercase ${badgeClass} border">${ext}</span>
+                <span>${item.formattedSize}</span>
+              </div>
+            </div>
+          </div>
+          <div class="shrink-0">
+            ${statusBadge}
+          </div>
+        </div>
+        ${errorBlock}
+      </div>
+    `;
+  }).join("");
+
+  if (widgetList) {
+    widgetList.innerHTML = itemsHtml;
+  }
+  if (widget) {
+    widget.style.display = "flex";
+  }
+
+  if (drawerQueue) {
+    drawerQueue.innerHTML = `
+      <div class="text-label-xs text-outline font-semibold uppercase tracking-wider mb-1">Recent Uploads</div>
+      ${itemsHtml}
+    `;
+    drawerQueue.style.display = "flex";
   }
 }
 
@@ -1785,38 +1964,177 @@ function triggerFileInput() {
     showToast("Please select a folder first", "error");
     return;
   }
-  document.getElementById("file-input").click();
+  const input = document.getElementById("file-input");
+  if (input) {
+    input.value = "";
+    input.click();
+  }
+}
+
+async function handleMultipleFilesUpload(fileList) {
+  if (!fileList || fileList.length === 0) return;
+
+  if (!activeFolderId) {
+    showToast("Please select a knowledge folder first", "error");
+    return;
+  }
+
+  const files = Array.from(fileList);
+
+  for (const file of files) {
+    const extMatch = file.name.match(/\.([a-zA-Z0-9]+)$/);
+    const ext = extMatch ? `.${extMatch[1].toLowerCase()}` : "";
+    const formattedSize = formatBytes(file.size);
+
+    const queueItem = {
+      id: "upl_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+      file: file,
+      name: file.name,
+      ext: ext,
+      size: file.size,
+      formattedSize: formattedSize,
+      status: "uploading",
+      error: null,
+      timestamp: Date.now(),
+    };
+
+    // Client-side format validation
+    if (!ext || !SUPPORTED_UPLOAD_EXTENSIONS.includes(ext)) {
+      const allowedStr = SUPPORTED_UPLOAD_EXTENSIONS.join(", ");
+      queueItem.status = "failed";
+      queueItem.error = `Unsupported format "${ext || 'none'}". Supported formats: ${allowedStr}`;
+      uploadQueue.push(queueItem);
+      renderUploadQueueUI();
+      showToast(queueItem.error, "error");
+      continue;
+    }
+
+    // Client-side empty file validation
+    if (file.size <= 0) {
+      queueItem.status = "failed";
+      queueItem.error = "File is empty (0 bytes).";
+      uploadQueue.push(queueItem);
+      renderUploadQueueUI();
+      showToast(`"${file.name}" is empty (0 bytes)`, "error");
+      continue;
+    }
+
+    // Client-side file size validation
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      queueItem.status = "failed";
+      queueItem.error = `File size exceeds the 50 MB limit (${formattedSize}).`;
+      uploadQueue.push(queueItem);
+      renderUploadQueueUI();
+      showToast(`"${file.name}" exceeds 50 MB limit`, "error");
+      continue;
+    }
+
+    uploadQueue.push(queueItem);
+    renderUploadQueueUI();
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await apiFetch(`/api/folders/${activeFolderId}/documents/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        queueItem.status = "uploaded";
+        queueItem.error = null;
+        showToast(`Uploaded "${file.name}".`);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        queueItem.status = "failed";
+        queueItem.error = err.detail || `Upload failed with status ${res.status}`;
+        showToast(queueItem.error, "error");
+      }
+    } catch (err) {
+      queueItem.status = "failed";
+      queueItem.error = err.message || "Network error during file upload.";
+      showToast(`Error uploading "${file.name}"`, "error");
+    }
+
+    renderUploadQueueUI();
+  }
+
+  if (activeFolderId) {
+    await loadDocuments(activeFolderId);
+    await loadFolders();
+  }
 }
 
 async function handleFileUpload(file) {
-  if (!activeFolderId) {
-    showToast("Please select a folder first", "error");
-    return;
+  if (file) {
+    await handleMultipleFilesUpload([file]);
   }
-  if (!file) return;
+}
 
-  const formData = new FormData();
-  formData.append("file", file);
+function setupUploadDropzones() {
+  const dropzone = document.getElementById("upload-dropzone");
+  const recentDocsContainer = document.getElementById("home-recent-docs-list");
 
-  showToast(`Uploading "${file.name}"...`);
+  function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
 
-  try {
-    const res = await apiFetch(`/api/folders/${activeFolderId}/documents/upload`, {
-      method: "POST",
-      body: formData,
+  ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => {
+    window.addEventListener(eventName, preventDefaults, false);
+  });
+
+  if (dropzone) {
+    ["dragenter", "dragover"].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        preventDefaults(e);
+        dropzone.classList.add("dropzone-dragover");
+        const subtitle = document.getElementById("upload-dropzone-subtitle");
+        if (subtitle) subtitle.textContent = "Drop files here to upload";
+      }, false);
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      showToast(`Uploaded "${file.name}". Ingestion started.`);
-      await loadDocuments(activeFolderId);
-      await loadFolders();
-    } else {
-      const err = await res.json();
-      showToast(err.detail || "Upload failed", "error");
-    }
-  } catch (err) {
-    showToast("An error occurred during file upload", "error");
+    ["dragleave", "drop"].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        preventDefaults(e);
+        dropzone.classList.remove("dropzone-dragover");
+        const subtitle = document.getElementById("upload-dropzone-subtitle");
+        if (subtitle) subtitle.textContent = "PDF, PPTX, HEIC, HEIF, PNG, JPG (up to 50MB)";
+      }, false);
+    });
+
+    dropzone.addEventListener("drop", (e) => {
+      preventDefaults(e);
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length > 0) {
+        handleMultipleFilesUpload(dt.files);
+      }
+    }, false);
+  }
+
+  if (recentDocsContainer) {
+    ["dragenter", "dragover"].forEach(eventName => {
+      recentDocsContainer.addEventListener(eventName, (e) => {
+        preventDefaults(e);
+        recentDocsContainer.classList.add("dropzone-dragover");
+      }, false);
+    });
+
+    ["dragleave", "drop"].forEach(eventName => {
+      recentDocsContainer.addEventListener(eventName, (e) => {
+        preventDefaults(e);
+        recentDocsContainer.classList.remove("dropzone-dragover");
+      }, false);
+    });
+
+    recentDocsContainer.addEventListener("drop", (e) => {
+      preventDefaults(e);
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length > 0) {
+        handleMultipleFilesUpload(dt.files);
+      }
+    }, false);
   }
 }
 
@@ -1843,6 +2161,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const ragForm = document.getElementById("rag-form");
   if (ragForm) ragForm.addEventListener("submit", handleSemanticSearch);
+
+  setupUploadDropzones();
 
   // Restore exact page and route based on current URL to preserve page on reload
   const currentRoute = getCurrentRoute();
@@ -2140,12 +2460,36 @@ function renderQuizQuestions() {
 function handleSelectQuizOption(questionId, selectedIdx, correctIdx) {
   if (quizAnswersState[questionId] !== undefined) return; // Already answered
 
-  const isCorrect = selectedIdx === correctIdx;
+  const q = currentQuizQuestions.find(item => item.id === questionId);
+  const cleanOption = (text) => (text || "").replace(/^[A-D]\)\s*/i, "").trim().toLowerCase();
+
+  const selectedText = q && q.options && q.options[selectedIdx] ? cleanOption(q.options[selectedIdx]) : "";
+  const correctAnswerText = q ? cleanOption(q.correct_answer) : "";
+
+  // Resolve true correct index from both question metadata and option text matching
+  let resolvedCorrectIdx = Number(correctIdx);
+  if (q && q.options && correctAnswerText) {
+    const textMatchedIdx = q.options.findIndex(opt => cleanOption(opt) === correctAnswerText);
+    if (textMatchedIdx !== -1) {
+      resolvedCorrectIdx = textMatchedIdx;
+    }
+  }
+
+  // Evaluate correctness: index match, exact text match, or singular/plural equivalence
+  const isIndexMatch = Number(selectedIdx) === resolvedCorrectIdx;
+  const isTextMatch = Boolean(selectedText && correctAnswerText && (
+    selectedText === correctAnswerText ||
+    selectedText === correctAnswerText + "s" ||
+    selectedText + "s" === correctAnswerText ||
+    selectedText === correctAnswerText + "es" ||
+    selectedText + "es" === correctAnswerText
+  ));
+  const isCorrect = isIndexMatch || isTextMatch;
+
   quizAnswersState[questionId] = isCorrect;
 
-  const q = currentQuizQuestions.find(item => item.id === questionId);
   const selectedBtn = document.getElementById(`btn-${questionId}-${selectedIdx}`);
-  const correctBtn = document.getElementById(`btn-${questionId}-${correctIdx}`);
+  const correctBtn = document.getElementById(`btn-${questionId}-${resolvedCorrectIdx}`);
   const expBox = document.getElementById(`explanation-${questionId}`);
 
   // Highlight selected button
@@ -2918,9 +3262,7 @@ document.addEventListener("keydown", (e) => {
 function handleFileSelect(event) {
   const files = event.target.files;
   if (files && files.length > 0) {
-    for (let i = 0; i < files.length; i++) {
-      handleFileUpload(files[i]);
-    }
+    handleMultipleFilesUpload(files);
     event.target.value = "";
   }
 }

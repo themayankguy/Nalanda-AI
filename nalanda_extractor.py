@@ -109,6 +109,10 @@ def reconstruct_bullets(text: str) -> str:
 def clean_text(text: str) -> str:
     if not text:
         return ""
+    # Strip raw HTML image or layout tags produced by OCR engines
+    text = re.sub(r"""(?:<div[^>]*>\s*)?<img[^>]*src=["\'](?:imgs/)?img_in_image_box_[^"\']+["\'][^>]*>(?:\s*</div>)?""", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"""<div[^>]*style=["\'][^"\']*text-align:\s*center[^"\']*["\'][^>]*>[^<]*</div>""", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"""<div[^>]*>\s*</div>""", "", text, flags=re.IGNORECASE)
     text = reconstruct_bullets(text)
     text = re.sub(r"\n{4,}", "\n\n\n", text)
     return "\n".join(line.rstrip() for line in text.splitlines()).strip()
@@ -258,6 +262,66 @@ def run_ppstructure(pipeline, image_path: Path, page_number: int | None = None) 
     }
 
 
+def extract_and_crop_ppstructure_figures(
+    image_path: Path,
+    raw_text: str,
+    dirs: dict[str, Path] | None,
+    page_number: int,
+    stem: str,
+) -> tuple[list[dict], str]:
+    """Detects PP-Structure image/diagram boxes, crops them from the source image, and cleans raw HTML tags from text."""
+    if not raw_text:
+        return [], raw_text
+
+    box_pattern = re.compile(
+        r"""(?:<div[^>]*>\s*)?<img[^>]*src=["\'](?:imgs/)?img_in_image_box_(\d+)_(\d+)_(\d+)_(\d+)\.[^"\']+["\'][^>]*>(?:\s*</div>)?(?:\s*<div[^>]*>([^<]+)</div>)?""",
+        re.IGNORECASE,
+    )
+
+    figures = []
+    matches = list(box_pattern.finditer(raw_text))
+
+    if matches and dirs and "figures" in dirs and image_path.exists():
+        try:
+            from PIL import Image
+            with Image.open(image_path) as img:
+                orig_w, orig_h = img.size
+                for idx, match in enumerate(matches, start=1):
+                    x1, y1, x2, y2 = map(int, match.groups()[:4])
+                    raw_caption = match.group(5)
+                    caption = raw_caption.strip() if raw_caption else ""
+
+                    x1 = max(0, min(x1, orig_w - 1))
+                    y1 = max(0, min(y1, orig_h - 1))
+                    x2 = max(x1 + 10, min(x2, orig_w))
+                    y2 = max(y1 + 10, min(y2, orig_h))
+                    box_w = x2 - x1
+                    box_h = y2 - y1
+
+                    if box_w < 40 or box_h < 40:
+                        continue
+
+                    cropped_img = img.crop((x1, y1, x2, y2))
+                    fig_filename = f"{stem}_p{page_number}_fig_{idx}.png"
+                    fig_dest = dirs["figures"] / fig_filename
+                    cropped_img.save(fig_dest, "PNG")
+
+                    figures.append({
+                        "figure_index": idx,
+                        "page": page_number,
+                        "filename": fig_filename,
+                        "caption": caption or f"Figure on page {page_number}",
+                        "source": "PP-StructureV3",
+                        "width": box_w,
+                        "height": box_h,
+                    })
+        except Exception as exc:
+            print(f"  Cropping PP-Structure figures failed: {exc}")
+
+    cleaned_text = clean_text(box_pattern.sub("", raw_text))
+    return figures, cleaned_text
+
+
 def render_pdf_page(page, output_path: Path) -> None:
     pixmap = page.get_pixmap(matrix=fitz.Matrix(PDF_RENDER_SCALE, PDF_RENDER_SCALE), alpha=False)
     pixmap.save(str(output_path))
@@ -277,6 +341,7 @@ def process_pdf(pdf_path: Path, pipeline, dirs: dict[str, Path]) -> dict:
             page_started = time.perf_counter()
             text = (page.get_text("text") or "").strip()
             direct_time = time.perf_counter() - page_started
+            pp_figs = []
 
             if len(text) >= MIN_TEXT_CHARS:
                 text = clean_text(text)
@@ -289,11 +354,21 @@ def process_pdf(pdf_path: Path, pipeline, dirs: dict[str, Path]) -> dict:
                 image_path = dirs["pages"] / f"{pdf_path.stem}_page_{page_number}.png"
                 render_pdf_page(page, image_path)
                 ocr = run_ppstructure(pipeline, image_path, page_number)
-                text, tables = ocr["text"], ocr["tables"]
+                pp_figs, text = extract_and_crop_ppstructure_figures(
+                    image_path=image_path,
+                    raw_text=ocr["text"],
+                    dirs=dirs,
+                    page_number=page_number,
+                    stem=pdf_path.stem,
+                )
+                tables = ocr["tables"]
                 ocr_time_total += ocr["processing_time"]
                 method, used_ocr, elapsed = "PP-StructureV3", True, ocr["processing_time"]
 
             figures = extract_native_pdf_figures(document, page, page_number, dirs, pdf_path.stem, text)
+            if pp_figs:
+                figures.extend(pp_figs)
+
             print(f"  Page {page_number}/{total_pages}: {method}; {len(text)} chars; {len(tables)} tables; {len(figures)} figures; {elapsed:.2f}s")
             pages.append({
                 "page": page_number,
@@ -323,8 +398,17 @@ def process_image(image_path: Path, pipeline, dirs: dict[str, Path] | None = Non
     started = time.perf_counter()
     print(f"\nProcessing image: {image_path.name}")
     result = run_ppstructure(pipeline, image_path, page_number=1)
-    figures = []
-    if dirs and "figures" in dirs:
+    
+    figures, text = extract_and_crop_ppstructure_figures(
+        image_path=image_path,
+        raw_text=result["text"],
+        dirs=dirs,
+        page_number=1,
+        stem=image_path.stem,
+    )
+
+    # If no specific diagram sub-regions were detected, fall back to registering the original image as a figure
+    if not figures and dirs and "figures" in dirs:
         try:
             dest_fig = dirs["figures"] / f"{image_path.stem}_p1_fig_1{image_path.suffix}"
             shutil.copy2(image_path, dest_fig)
@@ -340,7 +424,7 @@ def process_image(image_path: Path, pipeline, dirs: dict[str, Path] | None = Non
         except Exception as exc:
             print(f"  Image figure registration skipped: {exc}")
 
-    print(f"  OCR: {len(result['text'])} chars; {len(result['tables'])} tables; {len(figures)} figures; {result['processing_time']:.2f}s")
+    print(f"  OCR: {len(text)} chars; {len(result['tables'])} tables; {len(figures)} figures; {result['processing_time']:.2f}s")
     return {
         "filename": image_path.name,
         "file_type": "image",
@@ -350,9 +434,9 @@ def process_image(image_path: Path, pipeline, dirs: dict[str, Path] | None = Non
             "page": 1,
             "method": "PP-StructureV3",
             "ocr": True,
-            "characters": len(result["text"]),
+            "characters": len(text),
             "processing_time": result["processing_time"],
-            "text": result["text"],
+            "text": text,
             "tables": result["tables"],
             "figures": figures,
         }],

@@ -477,6 +477,8 @@ def execute_semantic_search(
         arch_synonyms = {"flow", "flows", "architecture", "architectures", "component", "components", "working", "mechanism", "process"}
 
 
+        is_quiz_query = bool(re.search(r"\b(quiz|quizzes|questions?|test|practice|exercise|exercises|sample\s+questions)\b", clean_query, re.I))
+
         boosted_matches = []
         for c, rel in stitched_matches:
             sec_clean = re.sub(r"^\d+(?:\.\d+)+\s*", "", c.get("section_title") or "").lower()
@@ -521,6 +523,11 @@ def execute_semantic_search(
             if is_feature_query and re.search(r"\b(architecture|workflow|limitations?)\b", sec_clean) and "architecture" not in clean_query.lower():
                 boost -= 0.35
 
+            # Penalize quiz/assessment chunks for factual/conceptual queries
+            from backend.services.atml.content_normalizer import ContentNormalizer
+            if not is_quiz_query and ContentNormalizer.is_assessment_or_quiz_content(c.get("section_title") or "", c.get("text") or ""):
+                boost -= 0.65
+
             boosted_matches.append((c, rel + boost))
 
         boosted_matches.sort(key=lambda x: x[1], reverse=True)
@@ -536,6 +543,7 @@ def execute_semantic_search(
     primary_figure: Optional[FigureItem] = None
     primary_table: Optional[TableItem] = None
     overall_direct_answer: Optional[str] = None
+    refinement_metadata: Optional[Dict[str, Any]] = None
     candidate_figures: List[Tuple[float, FigureItem]] = []
     candidate_tables: List[Tuple[float, TableItem]] = []
 
@@ -555,7 +563,9 @@ def execute_semantic_search(
         # Extract direct answer from chunk text
         direct_ans = extract_direct_answer(clean_query, chunk_text, model=model)
         is_title_match = bool(query_words and any(w in sec_title for w in query_words) and len(chunk_text) > 200)
-        if overall_direct_answer is None:
+        from backend.services.atml.content_normalizer import ContentNormalizer
+        is_curr_quiz = not is_quiz_query and ContentNormalizer.is_assessment_or_quiz_content(sec_title, chunk_text)
+        if overall_direct_answer is None and not is_curr_quiz:
             if is_title_match:
                 overall_direct_answer = chunk_text
             elif direct_ans:
@@ -714,8 +724,8 @@ def execute_semantic_search(
                     score += 0.5 * min(len(overlap), 5)
 
                 # Penalize syllabus/outline banner on Page 1 unless query specifically asks for syllabus
-                if f_page == 1 and any(syl in fig_ocr for syl in ["syllabus", "eco system", "course outline", "introduction to pig, execution"]):
-                    if not any(token_matches_text(st, "syllabus outline eco system") for st in subj_tokens):
+                if f_page == 1 and any(syl in fig_ocr for syl in ["syllabus", "course outline", "table of contents", "curriculum", "lecture outline"]):
+                    if not any(token_matches_text(st, "syllabus outline curriculum contents") for st in subj_tokens):
                         score -= 4.0
 
                 # Extreme aspect ratio penalty (e.g. thin horizontal syllabus slivers)
@@ -800,7 +810,8 @@ def execute_semantic_search(
                 if p1 is not None and p2 is not None and abs(p2 - p1) <= 1:
                     top_text = top_text + "\n\n" + second_chunk.get("text", "").strip()
 
-        if is_list_query or is_asking_for_examples or has_multi_points or not overall_direct_answer or len(top_text) > len(overall_direct_answer):
+        is_top_quiz = not is_quiz_query and ContentNormalizer.is_assessment_or_quiz_content(top_chunk.get("section_title") or "", top_text)
+        if not is_top_quiz and (is_list_query or is_asking_for_examples or has_multi_points or not overall_direct_answer or len(top_text) > len(overall_direct_answer)):
             overall_direct_answer = top_text
 
     # ATML Answer Refinement Integration:
@@ -817,6 +828,8 @@ def execute_semantic_search(
                 seen_chunk_ids = set()
                 for m in raw_matches[:default_config.max_context_chunks]:
                     c = m[0]
+                    if not is_quiz_query and ContentNormalizer.is_assessment_or_quiz_content(c.get("section_title") or "", c.get("text") or ""):
+                        continue
                     cid = c.get("chunk_id")
                     c_doc = c.get("document_id")
                     c_page = c.get("page_number")
@@ -827,6 +840,8 @@ def execute_semantic_search(
                         ]
                         if len(page_siblings) > 1:
                             for s in page_siblings:
+                                if not is_quiz_query and ContentNormalizer.is_assessment_or_quiz_content(s.get("section_title") or "", s.get("text") or ""):
+                                    continue
                                 sid = s.get("chunk_id")
                                 if sid not in seen_chunk_ids:
                                     seen_chunk_ids.add(sid)

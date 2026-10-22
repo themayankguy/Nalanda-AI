@@ -211,6 +211,29 @@
   cursor: pointer;
 }
 
+.doc-delete-btn {
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.folder-doc-link:hover .doc-delete-btn {
+  opacity: 0.7;
+}
+
+.doc-delete-btn:hover {
+  opacity: 1 !important;
+  color: #ba1a1a !important;
+  background-color: rgba(186, 26, 26, 0.12) !important;
+}
+
 .folder-doc-link:hover {
   background-color: #e4e7f9;
   color: #171b27;
@@ -911,6 +934,14 @@
   font-size: 0.85rem;
   color: #474554;
   line-height: 1.5;
+}
+
+/* Upload Dropzone Drag & Drop State */
+.dropzone-dragover {
+  border-color: #4c3cce !important;
+  background-color: rgba(76, 60, 206, 0.08) !important;
+  transform: scale(1.01);
+  box-shadow: 0 0 0 3px rgba(76, 60, 206, 0.2);
 }
 
 /* Print Overrides for Study Guide PDF Generation */

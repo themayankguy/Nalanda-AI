@@ -83,11 +83,17 @@ def sanitize_text(text: str) -> str:
     cleaned = re.sub(r"\.{4,}", "...", cleaned)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
 
-    # 7. Strip lines that consist solely of a lone punctuation symbol (e.g. '.' or '_')
+    # 7. Strip raw HTML image and layout tags
+    cleaned = re.sub(r"""(?:<div[^>]*>\s*)?<img[^>]*src=["\'](?:imgs/)?img_in_image_box_[^"\']+["\'][^>]*>(?:\s*</div>)?""", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"""<div[^>]*style=["\'][^"\']*text-align:\s*center[^"\']*["\'][^>]*>[^<]*</div>""", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"""<div[^>]*>|</div>""", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"""<img[^>]*>""", "", cleaned, flags=re.IGNORECASE)
+
+    # 8. Strip lines that consist solely of a lone punctuation symbol (e.g. '.' or '_')
     cleaned_lines = [l for l in cleaned.splitlines() if not re.match(r"^\s*[\.\,\;\:\-\_\*\•]\s*$", l)]
     cleaned = "\n".join(cleaned_lines)
 
-    # 8. Normalize newline spacing
+    # 9. Normalize newline spacing
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
 
     return cleaned.strip()

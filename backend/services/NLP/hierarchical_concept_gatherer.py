@@ -15,27 +15,7 @@ IGNORE_SUBHEADINGS = {
     "introduction", "overview", "conclusion", "summary", "references", "case study",
     "case studies", "example", "examples", "prerequisites", "notes", "questions",
     "step 1", "step 2", "step 3", "step 4", "step 5",
-    "need for visualization", "creating visualization", "select an appropriate visualization technique",
-    "create the visualization", "prepare and process the data", "big data visualization challenges",
-    "custom visualization solutions", "tools used for creating visualizations", "existing visualization techniques",
-    "meaning of visual analysis", "principles of visual analysis", "steps for creating a visualization",
-    "advanced graphing techniques", "advanced chart types", "geographic and spatial visualization",
-    "techniques for visualizing big data", "hierarchical visualization", "symmetrical distribution",
-    "custom visualizations", "data visualization types used in visual analysis",
-    "heat maps and geographic maps", "relationships between variables",
-}
-
-# Domain mapping for parent concepts to typical category keywords
-PARENT_CONCEPT_MAP = {
-    "chart": ["chart", "plot", "histogram", "map", "graph", "diagram", "scatterplot", "boxplot", "treemap", "heatmap", "bubble"],
-    "charts": ["chart", "plot", "histogram", "map", "graph", "diagram", "scatterplot", "boxplot", "treemap", "heatmap", "bubble"],
-    "visualization": ["chart", "plot", "histogram", "visualization", "map", "graph", "diagram", "treemap", "heatmap"],
-    "machine learning": ["supervised", "unsupervised", "reinforcement", "semi-supervised"],
-    "learning": ["supervised", "unsupervised", "reinforcement", "semi-supervised"],
-    "hadoop": ["hdfs", "mapreduce", "yarn", "namenode", "datanode", "resource manager", "node manager"],
-    "pig": ["grunt", "local mode", "mapreduce mode", "tez mode", "bag", "tuple", "field"],
-    "hive": ["metastore", "driver", "compiler", "executor", "hql", "beeline", "managed table", "external table"],
-    "docker": ["dockerfile", "image", "container", "volume", "network", "compose", "registry", "hub"],
+    "table of contents", "index", "syllabus", "course outline", "agenda", "appendix",
 }
 
 
@@ -50,11 +30,13 @@ class HierarchicalConceptGatherer:
             r"\b(?:all\s+)?types\s+of\b",
             r"\b(?:all\s+)?kinds\s+of\b",
             r"\b(?:all\s+)?categories\s+of\b",
-            r"\blist\s+(?:all\s+)?(?:the\s+)?(?:types|categories|charts|methods|techniques|components|modes|tools)\b",
-            r"\bexplain\s+(?:all\s+)?(?:the\s+)?(?:types|categories|charts|methods|techniques|components|modes)\b",
-            r"\bwhat\s+are\s+(?:all\s+)?(?:the\s+)?(?:types|categories|charts|plots|techniques|methods|components|modes)\b",
-            r"\bwhat\s+(?:chart|plot|visualization|learning)\s+types\b",
-            r"\bwhich\s+(?:types|categories|methods|techniques|components)\b",
+            r"\b(?:all\s+)?forms\s+of\b",
+            r"\b(?:all\s+)?classes\s+of\b",
+            r"\blist\s+(?:all\s+)?(?:the\s+)?(?:types|categories|charts|methods|techniques|components|modes|tools|classes|stages)\b",
+            r"\bexplain\s+(?:all\s+)?(?:the\s+)?(?:types|categories|charts|methods|techniques|components|modes|classes|stages)\b",
+            r"\bwhat\s+are\s+(?:all\s+)?(?:the\s+)?(?:types|categories|charts|plots|techniques|methods|components|modes|classes|stages)\b",
+            r"\bwhat\s+(?:\w+)\s+(?:types|categories|forms|classes)\b",
+            r"\bwhich\s+(?:types|categories|methods|techniques|components|classes)\b",
         ]
         return any(re.search(pat, q) for pat in patterns)
 
@@ -68,12 +50,12 @@ class HierarchicalConceptGatherer:
             q
         )
         clean = re.sub(
-            r"^(?:types|kinds|categories|methods|techniques|approaches|components|modes|tools|features)\s+(?:of\s+)?",
+            r"^(?:types|kinds|categories|forms|classes|methods|techniques|approaches|components|modes|tools|features)\s+(?:of\s+)?",
             "",
             clean
         )
         clean = clean.replace("?", "").replace(".", "").strip()
-        # Remove trailing words like 'mentioned in notes', 'in big data', 'available'
+        # Remove trailing words like 'mentioned in notes', 'in my notes', 'available'
         clean = re.sub(r"\s+(?:mentioned\s+in\s+.*|in\s+my\s+notes|in\s+the\s+pdf|available|covered)\s*$", "", clean)
         return clean.strip() or q
 
@@ -86,14 +68,14 @@ class HierarchicalConceptGatherer:
     ) -> List[Dict[str, Any]]:
         """Scan all chunks in the folder and collect all sibling subtopics under the parent concept."""
         parent_clean = parent_topic.lower().strip()
+        # Extract meaningful root keywords (>= 3 chars)
         keywords = set(re.findall(r"\b\w{3,}\b", parent_clean))
-        is_chart_query = bool(re.search(r"\b(chart|charts|plot|plots|graphs?)\b", parent_clean))
-
-        # Expand domain-related keywords if known
-        expanded_keywords = set(keywords)
-        for domain, domain_kws in PARENT_CONCEPT_MAP.items():
-            if domain in parent_clean or any(k in domain for k in keywords):
-                expanded_keywords.update(domain_kws)
+        # Add singular/plural forms to keywords
+        for k in list(keywords):
+            if k.endswith("s"):
+                keywords.add(k[:-1])
+            else:
+                keywords.add(k + "s")
 
         items_by_name: Dict[str, Dict[str, Any]] = {}
 
@@ -101,17 +83,18 @@ class HierarchicalConceptGatherer:
             nl = name.lower().strip()
             if not nl or nl in IGNORE_SUBHEADINGS:
                 return False
-            if any(p in nl for p in ["steps for", "steps in", "need for", "importance of", "challenges", "creating visualization", "select an appropriate", "advanced", "meaning of", "techniques for", "hierarchical visualization"]):
+            # Filter generic procedural and rhetorical meta-phrases
+            if any(p in nl for p in [
+                "steps for", "steps in", "need for", "importance of", "challenges",
+                "meaning of", "principles of", "techniques for", "overview of",
+                "select an appropriate", "prepare and process"
+            ]):
                 return False
-            if "mapreduce" in nl or "vs" in nl.split():
+            # Filter explicit comparison headers
+            if " vs " in f" {nl} " or " versus " in f" {nl} ":
                 return False
-            if is_chart_query:
-                # Must be a recognized chart/plot/map/graph concept (not domain applications like Airlines or IoT)
-                chart_terms = ["chart", "plot", "histogram", "treemap", "radar", "heatmap", "dendrogram"]
-                if any(k in nl for k in chart_terms):
-                    return True
-                if re.search(r"\b(heat\s*maps?|geographic\s*maps?|spatial\s*maps?|maps?)\b", nl):
-                    return True
+            # Valid candidates should be short descriptive entities (typically <= 6 words)
+            if len(nl.split()) > 6:
                 return False
             return True
 
@@ -122,22 +105,26 @@ class HierarchicalConceptGatherer:
             source_file = chunk.get("source_filename") or ""
             text = chunk.get("text", "")
 
-            # Check for numbered or dedicated sub-headings (e.g. '3.1 Line Chart', '3.2 Histogram', 'Heat Map')
+            # Check for numbered or dedicated sub-headings (e.g. '3.1 Line Chart', '3.2 Histogram')
             subhead_match = re.match(r"^(?:\d+[\.\)]|\d+(?:\.\d+)+)\s+([A-Za-z][\w\s\-/:,\?]{2,60})$", sec_title)
             if subhead_match:
                 candidate_name = subhead_match.group(1).strip()
                 if is_valid_sibling_candidate(candidate_name):
-                    # Extract definition / explanation from first sentence of chunk
-                    first_para = text.split("\n\n")[0].strip() if "\n\n" in text else text.strip()
-                    first_sent = re.split(r"(?<=[.!?])\s+", first_para)[0].strip() if first_para else ""
-                    # Clean section numbers and repeated candidate name
-                    desc = re.sub(r"^\d+(?:\.\d+)*\s*", "", first_sent).strip()
-                    desc = re.sub(r"^(?:" + re.escape(candidate_name) + r")\s*[-–—:]*\s*", "", desc, flags=re.IGNORECASE).strip()
-                    if len(desc) < 15:
-                        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", first_para) if len(s.strip()) > 15]
-                        if len(sentences) > 1:
-                            desc = re.sub(r"^\d+(?:\.\d+)*\s*", "", sentences[1]).strip()
-                            desc = re.sub(r"^(?:" + re.escape(candidate_name) + r")\s*[-–—:]*\s*", "", desc, flags=re.IGNORECASE).strip()
+                    # Check relevance to parent topic: section title or text mentions keywords,
+                    # or parent topic is general in folder
+                    sec_lower = sec_title.lower()
+                    text_lower = text.lower()
+                    is_relevant = any(k in sec_lower or k in text_lower for k in keywords) or not keywords
+                    if is_relevant:
+                        first_para = text.split("\n\n")[0].strip() if "\n\n" in text else text.strip()
+                        first_sent = re.split(r"(?<=[.!?])\s+", first_para)[0].strip() if first_para else ""
+                        desc = re.sub(r"^\d+(?:\.\d+)*\s*", "", first_sent).strip()
+                        desc = re.sub(r"^(?:" + re.escape(candidate_name) + r")\s*[-–—:]*\s*", "", desc, flags=re.IGNORECASE).strip()
+                        if len(desc) < 15:
+                            sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", first_para) if len(s.strip()) > 15]
+                            if len(sentences) > 1:
+                                desc = re.sub(r"^\d+(?:\.\d+)*\s*", "", sentences[1]).strip()
+                                desc = re.sub(r"^(?:" + re.escape(candidate_name) + r")\s*[-–—:]*\s*", "", desc, flags=re.IGNORECASE).strip()
 
                     clean_key = candidate_name.lower()
                     if clean_key not in items_by_name:
