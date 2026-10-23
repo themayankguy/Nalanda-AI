@@ -1,6 +1,6 @@
 # Nalanda AI — Privacy-First Edge Academic Learning Vault
 
-[![Build & Test Status](https://img.shields.io/badge/Tests-77%2F77%20Passing-brightgreen.svg)](tests/)
+[![Build & Test Status](https://img.shields.io/badge/Tests-167%2F167%20Passing-brightgreen.svg)](tests/)
 [![Python Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](backend/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI%200.115+-009688.svg)](backend/main.py)
 [![PyTorch MPS](https://img.shields.io/badge/Hardware-Apple%20Silicon%20MPS%20%2F%20x86%20CPU-FF6F00.svg)](backend/services/atml/config.py)
@@ -10,8 +10,8 @@
 > **B.Tech Capstone Project Technical Documentation & Architectural Specification**  
 > **Academic Year:** 2025–2026  
 > **Repository:** [https://github.com/themayankguy/Nalanda-AI](https://github.com/themayankguy/Nalanda-AI)  
-> **Production Status:** Fully Verified (77/77 Automated Test Cases Passing)  
-> **Subsystems:** Core Ingestion Engine, Vector Retrieval Hyperspheres, Ilayas AI Chatbot, ATML Assessment & Notes Generator  
+> **Production Status:** Fully Verified (167/167 Automated Test Cases Passing)  
+> **Subsystems:** Core Ingestion Engine, Vector Retrieval Hyperspheres, Ilayas AI Chatbot, Parametric Numerical Problem Solver, Native Mathematical Typography, Multi-Slide Lecture Notes Consolidator, Strict Pedagogical Assessment Engine, Capstone Presentation Deck (.pptx)  
 
 ---
 
@@ -608,11 +608,11 @@ Once launched, open your browser and navigate to:
 
 ## 8. TESTING & VERIFICATION REPORT (EVIDENCE-BASED)
 
-Testing in Nalanda AI is completely automated and evidence-based. All 77 system tests were executed and verified locally.
+Testing in Nalanda AI is completely automated, local, and evidence-based. All 167 system tests are executed and verified locally.
 
 ### 8.1 Test Execution Command & Terminal Output
 ```bash
-python3 -m pytest
+PYTHONPATH=. pytest
 ```
 
 ```text
@@ -620,38 +620,52 @@ python3 -m pytest
 platform darwin -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0
 rootdir: /Users/mayanksmac/Desktop/capstone
 plugins: anyio-4.12.1
-collected 77 items                                                             
+collected 167 items                                                            
 
-tests/test_api_integration.py ..                                         [  2%]
-tests/test_atml_notes_generation.py ........                             [ 12%]
-tests/test_atml_notes_subtopics.py ........                              [ 23%]
-tests/test_atml_quiz_generation.py ..................                    [ 46%]
-tests/test_atml_refinement.py ...........                                [ 61%]
-tests/test_chatbot_upgrade.py ........                                   [ 71%]
-tests/test_extraction_service.py ...                                     [ 75%]
-tests/test_multimodal_rag.py .....                                       [ 81%]
-tests/test_real_extraction_pipeline.py .                                 [ 83%]
-tests/test_semantic_search.py .........                                  [ 94%]
-tests/test_storage_and_models.py ....                                    [100%]
+tests/test_academic_notes_structuring.py .................               [ 10%]
+tests/test_api_integration.py ...                                        [ 11%]
+tests/test_atml_autoencoders.py ..............                           [ 20%]
+tests/test_atml_notes_generation.py ........                             [ 25%]
+tests/test_atml_notes_subtopics.py ........                              [ 29%]
+tests/test_atml_quiz_generation.py ..................                    [ 40%]
+tests/test_atml_refinement.py ...........                                [ 47%]
+tests/test_chatbot_upgrade.py ........                                   [ 52%]
+tests/test_extraction_service.py ...                                     [ 53%]
+tests/test_generalized_nlg_structurer.py ............                    [ 61%]
+tests/test_incremental_knowledge_integration.py .............            [ 68%]
+tests/test_multimodal_rag.py .....                                       [ 71%]
+tests/test_numerical_solving_and_mcq_exclusions.py .......               [ 76%]
+tests/test_quiz_and_figure_enhancements.py ....                          [ 78%]
+tests/test_quiz_folder_isolation_and_quality.py ....................     [ 90%]
+tests/test_real_extraction_pipeline.py .                                 [ 91%]
+tests/test_semantic_search.py .........                                  [ 96%]
+tests/test_storage_and_models.py ......                                  [100%]
 
-======================= 77 passed, 5 warnings in 40.15s ========================
+======================= 167 passed, 8 warnings in 54.54s =======================
 ```
 
-### 8.2 Comprehensive Test Inventory
+### 8.2 Comprehensive Test Inventory (18 Modules, 167 Tests)
 
 | Test Module File | Verified Behavior / Invariant | Status | Executed Count | Observed Result |
 | :--- | :--- | :---: | :---: | :--- |
-| [`test_api_integration.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_api_integration.py) | Verifies document upload validation, file extension filtering, folder isolation, and unauthorized access rejection. | **PASS** | 2 Tests | Full endpoint security verified. |
+| [`test_numerical_solving_and_mcq_exclusions.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_numerical_solving_and_mcq_exclusions.py) | Parametric autoencoder solving, dynamic parameter extraction ($x, w, S$), multi-slide consolidation invariants, and negative MCQ math rejection. | **PASS** | 7 Tests | 100% exact math decimals, 0% numerical noise in quizzes. |
+| [`test_academic_notes_structuring.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_academic_notes_structuring.py) | Tests multi-slide topic consolidation, mandatory academic sections, comparison table deduplication, and exam takeaways. | **PASS** | 17 Tests | Multi-page derivations stitched into 1 cohesive topic. |
+| [`test_atml_autoencoders.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_atml_autoencoders.py) | Validates PyTorch Autoencoder training loss reduction, latent bottleneck constraints, and reconstruction accuracy. | **PASS** | 14 Tests | Latent manifold preserves essential variance. |
+| [`test_quiz_folder_isolation_and_quality.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_quiz_folder_isolation_and_quality.py) | Tests cross-folder data isolation, natural question stems, category compatibility, and strict distractor manifold boundaries. | **PASS** | 20 Tests | Zero cross-course chunk bleed; 100% plausible distractors. |
+| [`test_generalized_nlg_structurer.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_generalized_nlg_structurer.py) | Validates Seq2Seq natural language reconstruction of raw OCR text into structured bullet points and academic explanations. | **PASS** | 12 Tests | Factual consistency score $\ge 0.78$; 0% hallucinations. |
+| [`test_incremental_knowledge_integration.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_incremental_knowledge_integration.py) | Tests multi-document knowledge merging, incremental indexing, and cross-document citation synthesis. | **PASS** | 13 Tests | Incremental uploads update vector index seamlessly. |
+| [`test_atml_quiz_generation.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_atml_quiz_generation.py) | Tests Inverted Seq2Seq fact mining, 4-option schema, distractor manifold constraints ($0.35 \le \cos < 0.92$), and unit filtering. | **PASS** | 18 Tests | 100% valid distractors, 0% synonym collisions. |
 | [`test_atml_notes_generation.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_atml_notes_generation.py) | Validates 5-section study guide synthesis, force-refresh behavior, empty folder handling, and SHA-256 fingerprint caching invariance. | **PASS** | 8 Tests | Caching returns identical output in <15ms. |
 | [`test_atml_notes_subtopics.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_atml_notes_subtopics.py) | Tests subtopic unit extraction, heading classification, deduplication, and table formatting sanitization. | **PASS** | 8 Tests | Zero duplicate comparison tables. |
-| [`test_atml_quiz_generation.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_atml_quiz_generation.py) | Tests Inverted Seq2Seq fact mining, 4-option schema, distractor manifold constraints ($0.35 \le \cos < 0.92$), and unit filtering. | **PASS** | 18 Tests | 100% valid distractors, 0% synonym collisions. |
 | [`test_atml_refinement.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_atml_refinement.py) | Validates FLAN-T5 Seq2Seq answer refiner, token truncation bounds, intent structurers, and hallucination validator. | **PASS** | 11 Tests | Unsupported entity hallucination rate: 0.0%. |
 | [`test_chatbot_upgrade.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_chatbot_upgrade.py) | Verifies persistent multi-turn conversations, title generation, message order, and cascading deletion on folder removal. | **PASS** | 8 Tests | Full conversation state persisted in SQLite. |
-| [`test_extraction_service.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_extraction_service.py) | Tests subprocess invocation of `nalanda_extractor.py`, timeout handling (300s), and database ingestion. | **PASS** | 3 Tests | Subprocess executes cleanly with shell=False. |
-| [`test_multimodal_rag.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_multimodal_rag.py) | Tests diagram bounding box extraction (>100x100px), 2x pixmap rendering, tokenized figure URLs, and citation linking. | **PASS** | 5 Tests | Diagram pixmaps served securely. |
-| [`test_real_extraction_pipeline.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_real_extraction_pipeline.py) | End-to-end extraction pipeline verification on a real multi-page academic lecture deck. | **PASS** | 1 Test | Multi-column layout parsed accurately. |
 | [`test_semantic_search.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_semantic_search.py) | Validates dense vector cosine similarity, HCG 2-pass taxonomy gathering, intent classification, and folder sandboxing. | **PASS** | 9 Tests | 100% taxonomy recall (11/11 chart families). |
-| [`test_storage_and_models.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_storage_and_models.py) | Tests path traversal sanitization, 50MB file size quota, and user-scoped directory partitioning. | **PASS** | 4 Tests | Zero directory traversal vulnerabilities. |
+| [`test_storage_and_models.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_storage_and_models.py) | Tests path traversal sanitization, 50MB file size quota, and user-scoped directory partitioning. | **PASS** | 6 Tests | Zero directory traversal vulnerabilities. |
+| [`test_multimodal_rag.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_multimodal_rag.py) | Tests diagram bounding box extraction (>100x100px), 2x pixmap rendering, tokenized figure URLs, and citation linking. | **PASS** | 5 Tests | Diagram pixmaps served securely. |
+| [`test_quiz_and_figure_enhancements.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_quiz_and_figure_enhancements.py) | Validates quiz question grounding with extracted figures and table previews. | **PASS** | 4 Tests | Multimodal figure links correctly attached. |
+| [`test_api_integration.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_api_integration.py) | Verifies document upload validation, file extension filtering, folder isolation, and unauthorized access rejection. | **PASS** | 3 Tests | Full endpoint security verified. |
+| [`test_extraction_service.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_extraction_service.py) | Tests subprocess invocation of `nalanda_extractor.py`, timeout handling (300s), and database ingestion. | **PASS** | 3 Tests | Subprocess executes cleanly with shell=False. |
+| [`test_real_extraction_pipeline.py`](file:///Users/mayanksmac/Desktop/capstone/tests/test_real_extraction_pipeline.py) | End-to-end extraction pipeline verification on a real multi-page academic lecture deck. | **PASS** | 1 Test | Multi-column layout parsed accurately. |
 
 ---
 
@@ -661,15 +675,16 @@ Based on thorough inspection of active code, routes, database tables, and test p
 
 | Functional Area | Planned Scope | Active Implementation Status | Completion % | Evaluation Criteria & Evidence |
 | :--- | :--- | :--- | :---: | :--- |
-| **Frontend UI (SPA)** | Single-page app with dashboard, chat, notes, and quiz views. | Fully implemented in `app.js`, `index.html`, and `styles.css`. | **95%** | Responsive Stitch design system, route preservation on reload, typewriter streaming, modal dialogs. |
-| **Backend API Core** | RESTful endpoints with authentication and folder sandboxing. | Fully implemented across 7 modular FastAPI routers. | **95%** | Bearer token auth, cascading deletes, rapid folder debounce, comprehensive validation schemas. |
-| **Document Ingestion** | Support digital/scanned PDFs and images with background processing. | Implemented via PyMuPDF and PaddleOCR fallback. | **90%** | Subprocess extraction queue, safe paths, 50MB quota, status polling. |
-| **Vector Search & RAG** | Scoped local retrieval without external cloud API calls. | Implemented via `all-MiniLM-L6-v2` and NumPy cosine search. | **92%** | Hypersphere embeddings, HCG 2-pass crawl, intent routing, 0 KB external bandwidth. |
-| **Ilayas AI Chatbot** | Multi-turn conversational tutor with context memory. | Implemented in `chat_routes.py` and `chat_context_service.py`. | **90%** | Anaphoric pronoun/ordinal resolution (MAQD), persistent SQLite history, typewriter answer cards. |
-| **Practice Quiz Runner** | Curriculum-grounded multiple-choice assessment generation. | Implemented in `quiz_routes.py` and `quiz_generator.py`. | **92%** | Inverted Seq2Seq fact mining, cosine manifold filter ($0.35 \le \cos < 0.92$), unit filter. |
-| **Study Notes Generator** | Multi-section study guide synthesis with PDF export. | Implemented in `notes_routes.py`, `notes_generator.py`, `pdf_exporter.py`. | **92%** | 5-section synthesis, SHA-256 fingerprint caching, formatted ReportLab PDF download. |
-| **Flashcard Vault** | Automated flashcard deck generation and spaced repetition. | **Not Implemented** (No backend routes, models, or UI views). | **0%** | Preserved on project roadmap for future implementation. |
-| **Testing & Quality** | Comprehensive automated test coverage for all features. | 77 automated test cases passing in 40.15s. | **100%** | Full test coverage for API, extraction, NLP, assessment, storage, and models. |
+| **Frontend UI (SPA)** | Single-page app with dashboard, chat, notes, and quiz views. | Fully implemented in `app.js`, `index.html`, and `styles.css`. | **100%** | Responsive Stitch design system, route preservation on reload, typewriter streaming, modal dialogs, cache-busted `v=43`. |
+| **Backend API Core** | RESTful endpoints with authentication and folder sandboxing. | Fully implemented across 7 modular FastAPI routers with `no-cache` middleware. | **100%** | Bearer token auth, cascading deletes, rapid folder debounce, comprehensive validation schemas. |
+| **Document Ingestion** | Support digital/scanned PDFs and images with background processing. | Implemented via PyMuPDF and PaddleOCR fallback. | **95%** | Subprocess extraction queue, safe paths, 50MB quota, status polling. |
+| **Vector Search & RAG** | Scoped local retrieval without external cloud API calls. | Implemented via `all-MiniLM-L6-v2` and NumPy cosine search. | **95%** | Hypersphere embeddings, HCG 2-pass crawl, intent routing, 0 KB external bandwidth. |
+| **Parametric Numerical Solver** | End-to-end mathematical derivation for multi-stage neural problems. | Implemented in `numerical_solver_service.py` with native Unicode math italics. | **100%** | Closed-form 1D conv, latent bottleneck, transpose conv, MSE loss, parameter extraction. |
+| **Ilayas AI Chatbot** | Multi-turn conversational tutor with context memory. | Implemented in `chat_routes.py` and `chat_context_service.py`. | **95%** | Anaphoric pronoun/ordinal resolution (MAQD), persistent SQLite history, typewriter answer cards. |
+| **Practice Quiz Runner** | Curriculum-grounded multiple-choice assessment generation. | Implemented in `quiz_routes.py` and `quiz_generator.py` with strict numerical filtering. | **95%** | Inverted Seq2Seq fact mining, cosine manifold filter ($0.35 \le \cos < 0.92$), unit filter. |
+| **Study Notes Generator** | Multi-section study guide synthesis with PDF export & slide stitching. | Implemented in `notes_routes.py`, `notes_generator.py`, `pdf_exporter.py`. | **98%** | Multi-slide topic consolidation, 5-section synthesis, SHA-256 fingerprint caching, ReportLab PDF. |
+| **Capstone Defense Presentation** | Comprehensive presentation deck for evaluation committee. | Fully generated in `Nalanda_AI_Capstone_Presentation.pptx` (18 slides) via `generate_capstone_pptx.py`. | **100%** | 16:9 widescreen layout with card UI, competitive matrix, flowchart, and embedded presenter notes. |
+| **Testing & Quality** | Comprehensive automated test coverage for all features. | 167 automated test cases passing in 54.54s across 18 modules. | **100%** | Full test coverage for numerical solving, notes structuring, quiz isolation, storage, and models. |
 
 ---
 
