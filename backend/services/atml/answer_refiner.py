@@ -269,6 +269,14 @@ class AnswerRefinementEngine:
                 intro_lead = formulate_conversational_intro(query)
                 structured_answer = f"{intro_lead}\n\n{structured_fallback}"
 
+        # Attach pedagogical synthesis conclusion if not already present
+        from .nlg_reconstructor import GeneralizedNLGReconstructor
+        core_subj = GeneralizedNLGReconstructor.extract_core_subject(query)
+        intent = GeneralizedNLGReconstructor.detect_academic_intent(query, evidence)
+        conclusion = GeneralizedNLGReconstructor.synthesize_conversational_conclusion(intent, core_subj)
+        if conclusion and not structured_answer.endswith("*") and conclusion not in structured_answer:
+            structured_answer = f"{structured_answer}\n\n*{conclusion}*"
+
         # Validate factual fidelity and hallucination guard
         validation = self.validator.validate(
             query=query,

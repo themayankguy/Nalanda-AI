@@ -118,6 +118,9 @@ class AnswerStructurer:
                 or re.match(r"^(?:(Goal|Step|Objective|Feature|Phase|Stage)\s*\d+)", ls, re.I)
                 or re.match(r"^(?:[-•+]|\*(?!\*))", ls)
                 or re.match(r"^(?:Example|Main purpose|Note|Key point|Definition):", ls, re.I)
+                or re.match(r"^[A-Za-z0-9_\(\)]+\s*=\s*.+$", ls)
+                or re.match(r"^[A-Z][\w\s\-]{1,30}[:–—\-]\s*.+$", ls)
+                or re.match(r"^(?:no\s+padding|1\s+filter|no\s+activation)\b", ls, re.I)
                 or ls.startswith("#")
                 or " → " in ls
             )

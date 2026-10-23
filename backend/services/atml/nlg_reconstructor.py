@@ -83,7 +83,7 @@ class GeneralizedNLGReconstructor:
         context_subject: Optional[str] = None,
         bullet_prefix: bool = True,
     ) -> str:
-        """Reconstruct a terse note fragment or key-value pair into a full, declarative sentence.
+        """Reconstruct a terse note fragment, math formula, or key-value pair into a full, declarative sentence.
         
         Strict Evidence Fidelity: No outside facts are added. Deterministic linking verbs
         and linguistic transformations bridge phrases naturally.
@@ -92,8 +92,14 @@ class GeneralizedNLGReconstructor:
         if not raw:
             return ""
 
-        # Normalize multiple spaces
+        # Normalize multiple spaces and arrows
+        raw = re.sub(r"\s*(?:->|=>)\s*", " leading to ", raw).strip()
+        raw = raw.rstrip(":").strip()
         raw = re.sub(r"\s+", " ", raw)
+
+        # Check for standalone count configurations (e.g. 1 convolutional layer)
+        if re.match(r"^\d+\s+[a-zA-Z\s]+$", raw):
+            return f"It is configured with {raw}."
 
         # Check if it already represents a complete, grammatically sound sentence
         has_finite_verb = any(re.search(rf"\b{re.escape(v)}\b", raw, re.I) for v in cls.LINKING_VERBS)
@@ -102,6 +108,39 @@ class GeneralizedNLGReconstructor:
             # Ensure first letter capitalized
             return raw[0].upper() + raw[1:]
 
+        # Check for standalone mathematical equations or assignments: e.g. x = [...], W_conv = [...], MSE = 7.2586
+        eq_match = re.match(r"^([A-Za-z0-9_\(\)]+(?:\s+[A-Za-z0-9_\(\)]+)*)\s*=\s*(.+)$", raw)
+        if eq_match:
+            lhs = eq_match.group(1).strip()
+            rhs = eq_match.group(2).strip()
+            lhs_lower = lhs.lower()
+            if any(k in lhs_lower for k in ["mse", "loss", "error", "rmse", "mae"]):
+                sentence = f"The **{lhs}** evaluates to {rhs}"
+            elif any(k in lhs_lower for k in ["kernel", "weight", "w_conv", "w_fc", "w"]):
+                sentence = f"The kernel weight vector **{lhs}** is defined as {rhs}"
+            elif any(k in lhs_lower for k in ["latent", "z"]):
+                sentence = f"The latent representation **{lhs}** evaluates to {rhs}"
+            elif any(k in lhs_lower for k in ["output", "conv output", "decoded"]):
+                sentence = f"The computed **{lhs}** produces {rhs}"
+            elif any(k in lhs_lower for k in ["input", "x"]):
+                sentence = f"The input representation **{lhs}** is configured as {rhs}"
+            elif any(k in lhs_lower for k in ["bias", "b"]):
+                sentence = f"The bias parameter **{lhs}** is set to {rhs}"
+            else:
+                sentence = f"The value of **{lhs}** is calculated as {rhs}"
+
+            if not sentence.endswith(cls.SENTENCE_ENDINGS):
+                sentence += "."
+            return sentence
+
+        # Check for standalone architectural flags & negative constraints
+        if re.match(r"^(?:no\s+padding|without\s+padding)\b", raw, re.I):
+            return "No padding is applied, ensuring valid boundary convolution."
+        if re.match(r"^(?:1\s+filter\s+only|single\s+filter(?:\s+only)?)\b", raw, re.I):
+            return "Only a single filter channel is utilized."
+        if re.match(r"^(?:no\s+activation|without\s+activation)\b", raw, re.I):
+            return "No activation function is applied, maintaining linear transformation."
+
         # Pattern 1: Delimited Key Term & Body (e.g. 'Term: Description' or 'Term - Description')
         kv_match = re.match(r"^(\*{0,2})([A-Z0-9][\w\s\-\/\(\)]{1,45})\1\s*[:–—\-]\s*(.+)$", raw)
         if kv_match:
@@ -109,21 +148,32 @@ class GeneralizedNLGReconstructor:
             body = kv_match.group(3).strip()
 
             # Ensure term capitalization
-            term_clean = term.strip()
+            term_clean = term.strip().rstrip(":–—- ")
             body_clean = body[0].lower() + body[1:] if len(body) > 1 and not body[:2].isupper() else body
 
-            # Clean any trailing punctuation from term
-            term_clean = term_clean.rstrip(":–—- ")
-
+            term_lower = term_clean.lower()
+            # Check for technical parameters / metrics / settings
+            if re.search(r"\b(?:filter|filter\s+size|stride|kernel|weights?|bias|padding|activation|dimension|output\s+dimension|output\s+shape|input\s+shape|shape|loss|error|rate|capacity|latency|threshold)\b", term_lower):
+                if re.search(r"\b(?:none|none\s*\(for\s+simplicity\)|null)\b", body_clean, re.I):
+                    sentence = f"The **{term_clean}** is set to {body_clean}"
+                elif re.search(r"\b(?:shape|dimension|size)\b", term_lower):
+                    sentence = f"The **{term_clean}** evaluates to {body_clean}"
+                elif re.search(r"\b(?:loss|error|mse|accuracy)\b", term_lower):
+                    sentence = f"The **{term_clean}** yields {body_clean}"
+                else:
+                    sentence = f"The **{term_clean}** is configured to {body_clean}"
             # Select linking verb based on linguistic features of the body
-            if re.match(r"^(?:an?|the)\s+", body_clean, re.I):
-                # e.g. "a specialized organelle..." -> "Term is a specialized organelle..."
+            elif re.search(r"\bpowerhouse\b", body_clean, re.I):
+                sentence = f"**{term_clean}** serves as {body_clean}"
+            elif re.search(r"\bmental\s+state\b", body_clean, re.I):
+                sentence = f"**{term_clean}** represents {body_clean}"
+            elif re.search(r"\bvalue\s+of\b", body_clean, re.I):
+                sentence = f"**{term_clean}** is defined as {body_clean}"
+            elif re.match(r"^(?:an?|the)\s+", body_clean, re.I):
                 sentence = f"**{term_clean}** is {body_clean}"
             elif re.match(r"^[a-z]+ing\b", body_clean):
-                # Gerund e.g. "storing genetic information..." -> "Term involves storing genetic information..."
                 sentence = f"**{term_clean}** involves {body_clean}"
             elif any(body_clean.startswith(v) for v in ["is ", "are ", "was ", "were ", "refers to ", "serves as ", "acts as ", "consists of "]):
-                # Body already includes a linking verb
                 sentence = f"**{term_clean}** {body_clean}"
             elif re.match(r"^(?:used\s+to|used\s+for|responsible\s+for|designed\s+to|capable\s+of)\b", body_clean, re.I):
                 sentence = f"**{term_clean}** is {body_clean}"
@@ -137,15 +187,21 @@ class GeneralizedNLGReconstructor:
             return sentence
 
         # Pattern 2: Short fragment without explicit colon delimiter
-        # e.g. "High block replication for fault tolerance"
         if context_subject:
+            # Check if raw is a numbered heading marker like "1. Input" or "Step 2"
+            step_header_m = re.match(r"^(?:step\s*)?\d+[\.\)]\s*(.+)$", raw, re.I)
+            if step_header_m:
+                return f"**{step_header_m.group(1).strip()}**"
+
             clean_body = raw[0].lower() + raw[1:] if len(raw) > 1 and not raw[:2].isupper() else raw
             if clean_body.startswith(("for ", "to ", "with ", "by ")):
                 sentence = f"{context_subject} functions {clean_body}"
-            elif clean_body.startswith(("provides ", "enables ", "ensures ", "includes ")):
+            elif clean_body.startswith(("provides ", "enables ", "ensures ", "includes ", "contains ", "stores ", "regulates ")):
+                sentence = f"{context_subject} {clean_body}"
+            elif any(v in clean_body for v in cls.LINKING_VERBS):
                 sentence = f"{context_subject} {clean_body}"
             else:
-                sentence = f"{context_subject} is characterized by {clean_body}"
+                sentence = f"{context_subject} operates with {clean_body}"
             if not sentence.endswith(cls.SENTENCE_ENDINGS):
                 sentence += "."
             return sentence

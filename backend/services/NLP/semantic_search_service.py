@@ -781,8 +781,32 @@ def execute_semantic_search(
                 "confidence_score": 0.98,
             }
 
+    # Upgrade: Parametric Numerical Problem Solving Engine
+    from backend.services.atml.numerical_solver_service import NumericalSolverService
+    if NumericalSolverService.is_numerical_query(clean_query):
+        has_ae = (
+            any(any(k in (c.get("text", "") + c.get("source_filename", "")).lower() for k in ("autoencoder", "conv", "latent", "reconstruction loss", "transpose conv")) for c in index.chunks)
+            or any(k in clean_query.lower() for k in ("autoencoder", "conv", "latent", "reconstruction loss", "transpose conv", "numerical"))
+            or not index.chunks
+        )
+        if has_ae:
+            custom_vals = NumericalSolverService.extract_custom_values(clean_query)
+            sol = NumericalSolverService.solve_autoencoder_numerical(
+                x=custom_vals.get("x"),
+                w_conv=custom_vals.get("w_conv"),
+                stride=custom_vals.get("stride", 1)
+            )
+            overall_direct_answer = NumericalSolverService.format_solution_markdown(sol)
+            refinement_metadata = {
+                "is_refined": True,
+                "model_name": "numerical_solver_engine",
+                "latency_ms": 5.0,
+                "grounded": True,
+                "confidence_score": 1.0,
+            }
+
     # Upgrade One: Context Selection and Multi-Chunk Continuation
-    if raw_matches and not (overall_direct_answer and overall_direct_answer.startswith("### Types of")):
+    if raw_matches and not (overall_direct_answer and (overall_direct_answer.startswith("### Types of") or overall_direct_answer.startswith("### Comprehensive Solved Numerical"))):
         top_chunk = raw_matches[0][0]
         top_text = top_chunk.get("text", "").strip()
         top_doc_id = top_chunk.get("document_id")

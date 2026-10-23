@@ -988,6 +988,31 @@ function formatInlineMarkdown(str) {
   let esc = escapeHtml(str);
   esc = esc.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   esc = esc.replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px; font-family:monospace; font-size:0.9em;">$1</code>');
+
+  // Math & Typography enhancements: superscripts, subscripts, symbols
+  esc = esc.replace(/\\hat\{([a-zA-Z0-9]+)\}/g, '$1&#770;');
+  esc = esc.replace(/\\mathbf\{([^\}]+)\}/g, '<strong>$1</strong>');
+  esc = esc.replace(/\\text\{([^\}]+)\}/g, '$1');
+  esc = esc.replace(/\\times/g, '×');
+  esc = esc.replace(/\\cdot/g, '·');
+  esc = esc.replace(/\\to/g, '→');
+  esc = esc.replace(/\\frac\{([^\}]+)\}\{([^\}]+)\}/g, '($1)/($2)');
+  esc = esc.replace(/\\sum_\{([^}]+)\}\^\{([^}]+)\}/g, '∑<sub style="font-size:0.75em; vertical-align:sub;">$1</sub><sup style="font-size:0.75em; vertical-align:super;">$2</sup>');
+  esc = esc.replace(/\\sum/g, '∑');
+
+  // Caret superscripts: x^2, (a-b)^2, 10^6, ^{2}, ^2
+  esc = esc.replace(/\^\{([0-9a-zA-Z\+\-\(\)\.]+)\}/g, '<sup style="font-size:0.75em; vertical-align:super;">$1</sup>');
+  esc = esc.replace(/\^([0-9a-zA-Z\+\-\(\)\.]+)\^/g, '<sup style="font-size:0.75em; vertical-align:super;">$1</sup>');
+  esc = esc.replace(/([a-zA-Z0-9_\)])\^([0-9a-zA-Z\+\-]+|\([^\)]+\))/g, '$1<sup style="font-size:0.75em; vertical-align:super;">$2</sup>');
+
+  // Subscripts: W_{conv}, x_1, ~1~
+  esc = esc.replace(/_\{([0-9a-zA-Z\+\-\(\)\.\_]+)\}/g, '<sub style="font-size:0.75em; vertical-align:sub;">$1</sub>');
+  esc = esc.replace(/~([0-9a-zA-Z\+\-\(\)\.]+)~/g, '<sub style="font-size:0.75em; vertical-align:sub;">$1</sub>');
+  esc = esc.replace(/([a-zA-Z0-9])_([0-9a-zA-Z]+|\([^\)]+\))/g, '$1<sub style="font-size:0.75em; vertical-align:sub;">$2</sub>');
+
+  // Strip math $ delimiters from inline formulas
+  esc = esc.replace(/\$([^\$]+)\$/g, '$1');
+
   return esc;
 }
 
@@ -1021,6 +1046,13 @@ function formatDirectAnswerHtml(text) {
         inList = false;
       }
       htmlParts.push(`<div class="direct-answer-section-header" style="font-weight:700; margin-top:8px; margin-bottom:4px; color:var(--text-primary);">${formatInlineMarkdown(headingMatch[1])}</div>`);
+    } else if (line.startsWith("$$") && line.endsWith("$$")) {
+      if (inList) {
+        htmlParts.push("</ul>");
+        inList = false;
+      }
+      const rawEq = line.replace(/^\$\$\s*/, "").replace(/\s*\$\$$/, "");
+      htmlParts.push(`<div class="direct-answer-equation" style="background:rgba(99,102,241,0.08); border-left:3px solid var(--brand-primary); padding:10px 14px; margin:10px 0; font-family:monospace; font-size:1.0rem; border-radius:4px; overflow-x:auto;">${formatInlineMarkdown(rawEq)}</div>`);
     } else if (line.includes(" → ")) {
       if (inList) {
         htmlParts.push("</ul>");
@@ -2948,6 +2980,33 @@ function renderMarkdownToHtml(md) {
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
   html = html.replace(/`([^`]+)`/g, '<code class="notes-inline-code">$1</code>');
+
+  // Math & Typography enhancements: superscripts, subscripts, symbols
+  html = html.replace(/\\hat\{([a-zA-Z0-9]+)\}/g, '$1&#770;');
+  html = html.replace(/\\mathbf\{([^\}]+)\}/g, '<strong>$1</strong>');
+  html = html.replace(/\\text\{([^\}]+)\}/g, '$1');
+  html = html.replace(/\\times/g, '×');
+  html = html.replace(/\\cdot/g, '·');
+  html = html.replace(/\\to/g, '→');
+  html = html.replace(/\\frac\{([^\}]+)\}\{([^\}]+)\}/g, '($1)/($2)');
+  html = html.replace(/\\sum_\{([^}]+)\}\^\{([^}]+)\}/g, '∑<sub class="notes-sub">$1</sub><sup class="notes-sup">$2</sup>');
+  html = html.replace(/\\sum/g, '∑');
+
+  // Caret superscripts: x^2, (a-b)^2, 10^6, ^{2}, ^2
+  html = html.replace(/\^\{([0-9a-zA-Z\+\-\(\)\.]+)\}/g, '<sup class="notes-sup">$1</sup>');
+  html = html.replace(/\^([0-9a-zA-Z\+\-\(\)\.]+)\^/g, '<sup class="notes-sup">$1</sup>');
+  html = html.replace(/([a-zA-Z0-9_\)])\^([0-9a-zA-Z\+\-]+|\([^\)]+\))/g, '$1<sup class="notes-sup">$2</sup>');
+
+  // Subscripts: W_{conv}, x_1, ~1~
+  html = html.replace(/_\{([0-9a-zA-Z\+\-\(\)\.\_]+)\}/g, '<sub class="notes-sub">$1</sub>');
+  html = html.replace(/~([0-9a-zA-Z\+\-\(\)\.]+)~/g, '<sub class="notes-sub">$1</sub>');
+  html = html.replace(/([a-zA-Z0-9])_([0-9a-zA-Z]+|\([^\)]+\))/g, '$1<sub class="notes-sub">$2</sub>');
+
+  // Display equations ($$...$$) in notes
+  html = html.replace(/\$\$([\s\S]*?)\$\$/g, function(match, eq) {
+    return '<div class="notes-math-equation" style="background:rgba(99,102,241,0.08); border-left:3px solid var(--brand-primary); padding:10px 14px; margin:12px 0; font-family:monospace; font-size:1.0rem; border-radius:4px; overflow-x:auto;">' + eq.trim() + '</div>';
+  });
+  html = html.replace(/\$([^\$\n]+)\$/g, '$1');
 
   // Horizontal Rules
   html = html.replace(/^---$/gm, '<hr class="notes-hr">');

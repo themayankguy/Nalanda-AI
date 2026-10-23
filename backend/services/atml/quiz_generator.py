@@ -101,10 +101,11 @@ KNOWN_SINGLE_WORD_TECH_CONCEPTS = {
     # Software Engineering & Languages
     "polymorphism", "inheritance", "encapsulation", "abstraction", "compiler",
     "interpreter", "bytecode", "refactoring", "scrum", "waterfall", "agile",
-    # NLP & Linguistics
+    # NLP & Linguistics & Deep Learning
     "morphology", "morpheme", "phoneme", "syntax", "semantics", "pragmatics",
     "tokenization", "lemmatization", "stemming", "parsing", "corpus", "lexicon",
-    "ambiguity", "polysemy", "homonymy", "hyponymy", "synonymy", "antonymy"
+    "ambiguity", "polysemy", "homonymy", "hyponymy", "synonymy", "antonymy",
+    "autoencoder", "perceptron", "convolution", "transformer", "embeddings"
 }
 
 ENGLISH_STOPWORDS = {
@@ -167,7 +168,7 @@ def clean_academic_concept(text: str) -> Optional[str]:
     cleaned = text.strip()
 
     # 1. Reject meta slide notes, reviews, and assignments
-    if re.match(r"^(?:explanation|note|example|warning|caution|step\s*\d*[:\-]|agenda|overview|summary|introduction|quiz|exercise|exercises|homework|assignment|announcements?|references?|conclusion|conclusions?|questions?|q&a|review|outline)\b", cleaned, re.I):
+    if re.match(r"^(?:explanation|note|example|warning|caution|step\s*\d*|agenda|overview|summary|introduction|quiz|exercise|exercises|homework|assignment|announcements?|references?|conclusion|conclusions?|questions?|q&a|review|outline)(?:\b|[:\-\s])", cleaned, re.I):
         return None
 
     # 2. Reject commands and verbs
@@ -234,6 +235,14 @@ def clean_academic_concept(text: str) -> Optional[str]:
     if "." in cleaned:
         return None
 
+    # Reject numerical calculation concepts, mathematical variables, and step derivations
+    if re.search(r"\b(?:w_conv|w_fc|conv output|latent vector|mse loss|reconstruction loss|transpose conv|feature map expansion)\b", lower):
+        return None
+    if re.search(r"\b(?:step\s*\d+|window\s*\d+|x_\d+|z_\d+|y_\d+|f_\d+)\b", lower):
+        return None
+    if re.search(r"\b(?:numerical\s+problem|solved\s+numerical|numerical\s+derivation)\b", lower):
+        return None
+
     # Length & word count check: 1 to 4 words, 2 to 45 characters
     words = cleaned.split()
     if len(words) < 1 or len(words) > 4 or len(cleaned) < 2 or len(cleaned) > 45:
@@ -283,6 +292,16 @@ def is_valid_definition(text: str) -> bool:
     if re.match(r"^(?:docker\s+[a-z]+|kubectl\s+[a-z]+|npm\s+[a-z]+|git\s+[a-z]+|pip\s+[a-z]+|sudo\s+[a-z]+|t\s+<|<[a-z0-9_\-]+>|-[a-z]\b)", clean, re.I):
         return False
     if re.search(r"<[A-Za-z0-9_\-]+>|--[a-z]+|-[a-z]\s+\d+|-[a-z]\s+-[a-z]", clean):
+        return False
+
+    # Reject raw numerical vectors, intermediate convolution arithmetic, and math solver lines from MCQs
+    if re.search(r"\b(?:w_conv|w_fc|conv output|latent vector z|mse loss|reconstruction loss)\b", clean, re.I):
+        return False
+    if "·" in clean or re.search(r"=\s*\[[0-9\s,\.\-]+\]|\b\d+\s*\.\s*\d+\s*[·*+/\-]", clean):
+        return False
+    if re.search(r"[-+]?\d+\.?\d*\s*[·*+/\-]\s*[-+]?\d+\.?\d*\s*=", clean):
+        return False
+    if re.search(r"\[[0-9\s,\.\-]{5,}\]", clean):
         return False
 
     words = clean.split()
@@ -744,6 +763,14 @@ def validate_quiz_question(
 
     if "mode" in q_text.lower() and not re.search(r"\b(local mode|mapreduce mode|interactive mode|batch mode|hdfs mode|embedded mode)\b", q_text, re.I):
         failures.append("Question discusses mode without identifying which specific mode is being tested")
+
+    # Reject numerical calculations, math formulas, and raw vectors in MCQ questions
+    if re.search(r"\b(?:calculate|compute|recalculate|evaluate)\b.*\b(?:loss|mse|latent|vector|dot product|matrix|kernel)\b", q_text, re.I):
+        failures.append("Numerical calculations are excluded from practice MCQs")
+    if re.search(r"(?:w_conv|w_fc|\bconv\s*output\b|latent\s*vector\b|mse\s*loss|\\sum|\\hat|\[[\d\s,\.\-]+\])", q_text, re.I):
+        failures.append("Numerical vectors and formulas are excluded from practice MCQs")
+    if any(re.search(r"^[\d\s,\.\-\[\]]+$", opt.strip()) for opt in question.options):
+        failures.append("Numerical value options are excluded from practice MCQs")
 
     # 5. Answerability & Concept Validation
     if not question.correct_answer or len(question.correct_answer.strip()) < 2:
