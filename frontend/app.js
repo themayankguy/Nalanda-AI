@@ -986,32 +986,45 @@ async function copyChatMessage(btn, event) {
 
 function formatInlineMarkdown(str) {
   let esc = escapeHtml(str);
-  esc = esc.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  esc = esc.replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px; font-family:monospace; font-size:0.9em;">$1</code>');
 
-  // Math & Typography enhancements: superscripts, subscripts, symbols
-  esc = esc.replace(/\\hat\{([a-zA-Z0-9]+)\}/g, '$1&#770;');
-  esc = esc.replace(/\\mathbf\{([^\}]+)\}/g, '<strong>$1</strong>');
+  // 1. Bold text (e.g. **Heading**)
+  esc = esc.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  // 2. Strip math $ and $$ delimiters and LaTeX wrappers
+  esc = esc.replace(/\$\$([\s\S]*?)\$\$/g, '$1');
+  esc = esc.replace(/\$([^\$\n]+)\$/g, '$1');
   esc = esc.replace(/\\text\{([^\}]+)\}/g, '$1');
+  esc = esc.replace(/\\mathbf\{([^\}]+)\}/g, '<strong>$1</strong>');
+  esc = esc.replace(/\\hat\{([a-zA-Z0-9]+)\}/g, '$1&#770;');
   esc = esc.replace(/\\times/g, '×');
   esc = esc.replace(/\\cdot/g, '·');
   esc = esc.replace(/\\to/g, '→');
   esc = esc.replace(/\\frac\{([^\}]+)\}\{([^\}]+)\}/g, '($1)/($2)');
-  esc = esc.replace(/\\sum_\{([^}]+)\}\^\{([^}]+)\}/g, '∑<sub style="font-size:0.75em; vertical-align:sub;">$1</sub><sup style="font-size:0.75em; vertical-align:super;">$2</sup>');
   esc = esc.replace(/\\sum/g, '∑');
 
-  // Caret superscripts: x^2, (a-b)^2, 10^6, ^{2}, ^2
+  // 3. Subscripts: ~sub~, _{sub}, W_conv, 𝑊_conv, 𝑊_fc
+  esc = esc.replace(/~([0-9a-zA-Z\+\-\(\)\._]+)~/g, '<sub style="font-size:0.75em; vertical-align:sub;">$1</sub>');
+  esc = esc.replace(/_\{([0-9a-zA-Z\+\-\(\)\.\_]+)\}/g, '<sub style="font-size:0.75em; vertical-align:sub;">$1</sub>');
+  esc = esc.replace(/([a-zA-Z\uD835][\uDC00-\uDFFF]?)_([a-zA-Z0-9_]+)/g, '$1<sub style="font-size:0.75em; vertical-align:sub;">$2</sub>');
+
+  // 4. Superscripts: ^{sup}, ^sup
   esc = esc.replace(/\^\{([0-9a-zA-Z\+\-\(\)\.]+)\}/g, '<sup style="font-size:0.75em; vertical-align:super;">$1</sup>');
   esc = esc.replace(/\^([0-9a-zA-Z\+\-\(\)\.]+)\^/g, '<sup style="font-size:0.75em; vertical-align:super;">$1</sup>');
   esc = esc.replace(/([a-zA-Z0-9_\)])\^([0-9a-zA-Z\+\-]+|\([^\)]+\))/g, '$1<sup style="font-size:0.75em; vertical-align:super;">$2</sup>');
 
-  // Subscripts: W_{conv}, x_1, ~1~
-  esc = esc.replace(/_\{([0-9a-zA-Z\+\-\(\)\.\_]+)\}/g, '<sub style="font-size:0.75em; vertical-align:sub;">$1</sub>');
-  esc = esc.replace(/~([0-9a-zA-Z\+\-\(\)\.]+)~/g, '<sub style="font-size:0.75em; vertical-align:sub;">$1</sub>');
-  esc = esc.replace(/([a-zA-Z0-9])_([0-9a-zA-Z]+|\([^\)]+\))/g, '$1<sub style="font-size:0.75em; vertical-align:sub;">$2</sub>');
+  // 5. Code spans
+  esc = esc.replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px; font-family:monospace; font-size:0.9em;">$1</code>');
 
-  // Strip math $ delimiters from inline formulas
-  esc = esc.replace(/\$([^\$]+)\$/g, '$1');
+  // 6. Italicize letters and math variables (*x*, *z₁*, *w₀*, etc.)
+  esc = esc.replace(/\*([^\*]+)\*/g, '<em style="font-style:italic; font-family:serif;">$1</em>');
+
+  // 7. Auto-italicize letters with Unicode subscripts (e.g. z₁, f₁, w₀)
+  esc = esc.replace(/(?<!<em[^>]*>)\b([a-zA-Z])([₀-₉]+)\b/g, '<em style="font-style:italic; font-family:serif;">$1$2</em>');
+
+  // 8. Clean any remaining raw asterisks, stray backslashes, or dollar signs
+  esc = esc.replace(/\\([a-zA-Z_]+)/g, '$1');
+  esc = esc.replace(/\$/g, '');
+  esc = esc.replace(/\*/g, '');
 
   return esc;
 }
@@ -1025,6 +1038,33 @@ function formatDirectAnswerHtml(text) {
     .replace(/<div[^>]*>|<\/div>/gi, "")
     .replace(/<img[^>]*>/gi, "");
 
+  // Extract and render markdown tables
+  const tables = [];
+  cleanText = cleanText.replace(/((?:^[ \t]*\|[^\n]+\|[ \t]*(?:\r?\n|$))+)/gm, function (tableMatch) {
+    const rawLines = tableMatch.trim().split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    if (rawLines.length < 2) return tableMatch;
+
+    let tableHtml = '<div class="notes-table-container" style="overflow-x:auto; margin:14px 0;"><table class="notes-table" style="width:100%; border-collapse:collapse;">';
+    const headerCells = rawLines[0].split("|").slice(1, -1);
+    tableHtml += '<thead><tr>' + headerCells.map(c => `<th style="padding:8px 12px; border-bottom:2px solid var(--border-color); text-align:left;">${formatInlineMarkdown(c.trim())}</th>`).join('') + '</tr></thead><tbody>';
+
+    let startRow = 1;
+    if (rawLines[1].replace(/[\s\-|:]/g, "").length === 0) {
+      startRow = 2;
+    }
+
+    for (let r = startRow; r < rawLines.length; r++) {
+      const cells = rawLines[r].split("|").slice(1, -1);
+      if (cells.length > 0) {
+        tableHtml += '<tr>' + cells.map(c => `<td style="padding:8px 12px; border-bottom:1px solid rgba(255,255,255,0.06);">${formatInlineMarkdown(c.trim())}</td>`).join('') + '</tr>';
+      }
+    }
+    tableHtml += '</tbody></table></div>';
+    const token = `__TABLE_PLACEHOLDER_${tables.length}__`;
+    tables.push(tableHtml);
+    return `\n${token}\n`;
+  });
+
   // Ensure any accidentally joined inline headers or goals are broken into separate lines, but do not break '1. Goal' or '### Header'
   const normalizedText = cleanText
     .replace(/(?<!^)(?<!\n)(?<!#)\s{2,}(#{1,4}\s+)/g, "\n$1")
@@ -1035,30 +1075,42 @@ function formatDirectAnswerHtml(text) {
   let inList = false;
 
   for (const line of lines) {
+    if (line.startsWith("__TABLE_PLACEHOLDER_")) {
+      if (inList) {
+        htmlParts.push("</ul>");
+        inList = false;
+      }
+      const idx = parseInt(line.replace(/[^0-9]/g, ""), 10);
+      if (!isNaN(idx) && tables[idx]) {
+        htmlParts.push(tables[idx]);
+      }
+      continue;
+    }
+
     const headingMatch = line.match(/^#{1,4}\s+(.+)$/);
     const combinedStepGoal = line.match(/^(?:\d+[\.\)]\s+)?(?:\*{0,2}(Goal|Objective|Feature|Stage|Phase|Rule|Step)\s+(\d+)[:.]?\*{0,2})\s*(.*)$/i);
     const stepMatch = line.match(/^(\d+[\.\)])\s*(.+)$/);
-    const bulletMatch = line.match(/^(?:[-•+]|\*(?!\*))\s*(.+)$/);
+    const bulletMatch = line.match(/^(?:[-•+]|\*(?!\*))\s+(.+)$/);
 
     if (headingMatch && !combinedStepGoal) {
       if (inList) {
         htmlParts.push("</ul>");
         inList = false;
       }
-      htmlParts.push(`<div class="direct-answer-section-header" style="font-weight:700; margin-top:8px; margin-bottom:4px; color:var(--text-primary);">${formatInlineMarkdown(headingMatch[1])}</div>`);
-    } else if (line.startsWith("$$") && line.endsWith("$$")) {
+      htmlParts.push(`<div class="direct-answer-section-header" style="font-weight:700; margin-top:14px; margin-bottom:6px; color:var(--text-primary);">${formatInlineMarkdown(headingMatch[1])}</div>`);
+    } else if (line.startsWith("> ")) {
       if (inList) {
         htmlParts.push("</ul>");
         inList = false;
       }
-      const rawEq = line.replace(/^\$\$\s*/, "").replace(/\s*\$\$$/, "");
-      htmlParts.push(`<div class="direct-answer-equation" style="background:rgba(99,102,241,0.08); border-left:3px solid var(--brand-primary); padding:10px 14px; margin:10px 0; font-family:monospace; font-size:1.0rem; border-radius:4px; overflow-x:auto;">${formatInlineMarkdown(rawEq)}</div>`);
-    } else if (line.includes(" → ")) {
-      if (inList) {
-        htmlParts.push("</ul>");
-        inList = false;
+      const quoteContent = line.replace(/^>\s*/, "");
+      htmlParts.push(`<div class="direct-answer-callout" style="background:rgba(99,102,241,0.12); border-left:4px solid var(--brand-primary); border-radius:6px; padding:10px 14px; margin:8px 0; font-size:0.95rem; line-height:1.6; color:var(--text-primary);">${formatInlineMarkdown(quoteContent)}</div>`);
+    } else if (bulletMatch) {
+      if (!inList) {
+        htmlParts.push('<ul class="direct-answer-bullet-list">');
+        inList = true;
       }
-      htmlParts.push(`<div class="direct-answer-flow" style="background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.25); border-radius:8px; padding:10px 14px; margin:10px 0; font-size:0.95rem; line-height:1.6; color:var(--text-primary);">${formatInlineMarkdown(line)}</div>`);
+      htmlParts.push(`<li>${formatInlineMarkdown(bulletMatch[1])}</li>`);
     } else if (combinedStepGoal) {
       if (inList) {
         htmlParts.push("</ul>");
@@ -1086,18 +1138,18 @@ function formatDirectAnswerHtml(text) {
           <span class="direct-answer-step-text">${formatInlineMarkdown(rest)}</span>
         </div>
       `);
-    } else if (bulletMatch) {
-      if (!inList) {
-        htmlParts.push('<ul class="direct-answer-bullet-list">');
-        inList = true;
+    } else if (line.includes(" → ") && line.length < 120 && !line.includes("=")) {
+      if (inList) {
+        htmlParts.push("</ul>");
+        inList = false;
       }
-      htmlParts.push(`<li>${formatInlineMarkdown(bulletMatch[1])}</li>`);
+      htmlParts.push(`<div class="direct-answer-flow" style="background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.25); border-radius:8px; padding:10px 14px; margin:10px 0; font-size:0.95rem; line-height:1.6; color:var(--text-primary);">${formatInlineMarkdown(line)}</div>`);
     } else {
       if (inList) {
         htmlParts.push("</ul>");
         inList = false;
       }
-      if (line.length < 80 && !/[.:;]$/.test(line) && /^[A-Z]/.test(line) && !line.startsWith("Based on") && !line.startsWith("According to") && !line.startsWith("Example:")) {
+      if (line.length < 80 && !/[.:;]$/.test(line) && /^[A-Z]/.test(line) && !line.startsWith("Based on") && !line.startsWith("According to") && !line.startsWith("Example:") && !line.includes("=")) {
         htmlParts.push(`<div class="direct-answer-section-header">${formatInlineMarkdown(line)}</div>`);
       } else {
         htmlParts.push(`<p class="direct-answer-para">${formatInlineMarkdown(line)}</p>`);
@@ -2997,10 +3049,10 @@ function renderMarkdownToHtml(md) {
   html = html.replace(/\^([0-9a-zA-Z\+\-\(\)\.]+)\^/g, '<sup class="notes-sup">$1</sup>');
   html = html.replace(/([a-zA-Z0-9_\)])\^([0-9a-zA-Z\+\-]+|\([^\)]+\))/g, '$1<sup class="notes-sup">$2</sup>');
 
-  // Subscripts: W_{conv}, x_1, ~1~
+  // Subscripts: W_{conv}, x_1, ~1~, 𝑊_conv, 𝑊_fc
   html = html.replace(/_\{([0-9a-zA-Z\+\-\(\)\.\_]+)\}/g, '<sub class="notes-sub">$1</sub>');
   html = html.replace(/~([0-9a-zA-Z\+\-\(\)\.]+)~/g, '<sub class="notes-sub">$1</sub>');
-  html = html.replace(/([a-zA-Z0-9])_([0-9a-zA-Z]+|\([^\)]+\))/g, '$1<sub class="notes-sub">$2</sub>');
+  html = html.replace(/([a-zA-Z0-9\uD835][\uDC00-\uDFFF]?)_([0-9a-zA-Z_]+|\([^\)]+\))/g, '$1<sub class="notes-sub">$2</sub>');
 
   // Display equations ($$...$$) in notes
   html = html.replace(/\$\$([\s\S]*?)\$\$/g, function(match, eq) {

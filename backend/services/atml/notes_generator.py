@@ -1001,11 +1001,11 @@ class NotesGenerator:
                 definition="A complete end-to-end mathematical numerical walkthrough of a 1D Convolutional Autoencoder, evaluating the forward convolution encoder, latent bottleneck projection, decoder expansion, transpose convolution upsampling, and Mean Squared Error (MSE) reconstruction loss.",
                 explanation=full_solution_md,
                 key_points=[
-                    f"Input representation vector x = {solution['input_x']} with dimensions 1 x {len(solution['input_x'])}.",
-                    f"Convolutional encoder kernel W_conv = {solution['kernel_w']} with stride 1 and valid boundary condition (no padding).",
+                    f"Input representation vector 𝑥 = {solution['input_x']} with dimensions 1 × {len(solution['input_x'])}.",
+                    f"Convolutional encoder kernel 𝑊_conv = {solution['kernel_w']} with stride 1 and valid boundary condition (no padding).",
                     f"Computed intermediate feature map = {solution['conv_output']}.",
-                    f"Linear bottleneck projection yielding compressed 2D latent vector z = {solution['latent_z']}.",
-                    f"Reconstructed signal vector x_hat = {solution['reconstructed']}.",
+                    f"Linear bottleneck projection yielding compressed 2D latent vector 𝑧 = {solution['latent_z']}.",
+                    f"Reconstructed signal vector 𝑥̂ = {solution['reconstructed']}.",
                     f"Final Mean Squared Error (MSE) reconstruction loss evaluates to {solution['mse_loss']}."
                 ],
                 components_or_steps=[
@@ -1013,20 +1013,20 @@ class NotesGenerator:
                     "Stage 2 (Latent Bottleneck): Dense linear projection into compressed representation.",
                     "Stage 3 (Decoder Feature Map): Expanding latent vector to match encoder dimensions.",
                     "Stage 4 (Transpose Convolution): Reconstructing output to match input dimensions.",
-                    "Stage 5 (MSE Loss): Evaluating discrepancy between original input x and reconstructed signal."
+                    "Stage 5 (MSE Loss): Evaluating discrepancy between original input 𝑥 and reconstructed signal."
                 ],
                 table_markdown="""| Pipeline Stage | Mathematical Operation | Output Vector | Dimensions |
 | :--- | :--- | :--- | :--- |
-| **1. Input** | Raw Image Sequence | `[1.0, 2.0, 3.0, 4.0]` | $1 \\times 4$ |
-| **2. Encoder Conv** | Valid 1D Convolution ($W = [0.5, -0.5]$) | `[-0.5, -0.5, -0.5]` | $1 \\times 3$ |
-| **3. Latent Bottleneck** | Linear Projection ($W_{fc}$) | `[0, -0.75]` | $1 \\times 2$ |
-| **4. Decoder FC** | Feature Expansion ($W_{fc\\_decoder}$) | `[0, -0.75, -0.375]` | $1 \\times 3$ |
-| **5. Transpose Conv** | Symmetry Upsampling | `[0, -0.375, 0.1875, 0.1875]` | $1 \\times 4$ |
-| **6. Final Evaluation** | Mean Squared Error (MSE) | **7.2586 (or 7.26)** | Scalar Loss |""",
+| **1. Input** | Raw Image Sequence | `[1.0, 2.0, 3.0, 4.0]` | 1 × 4 |
+| **2. Encoder Conv** | Valid 1D Convolution (𝑊 = [0.5, -0.5]) | `[-0.5, -0.5, -0.5]` | 1 × 3 |
+| **3. Latent Bottleneck** | Linear Projection (𝑊_fc) | `[0, -0.75]` | 1 × 2 |
+| **4. Decoder FC** | Feature Expansion (𝑊_fc_decoder) | `[0, -0.75, -0.375]` | 1 × 3 |
+| **5. Transpose Conv** | Symmetry Upsampling | `[0, -0.375, 0.1875, 0.1875]` | 1 × 4 |
+| **6. Final Evaluation** | Mean Squared Error (MSE) | **7.2715** | Scalar Loss |""",
                 exam_points=[
-                    "State the formula for 1D convolution output length: L_out = (N - K) / S + 1.",
+                    "State the formula for 1D convolution output length: 𝐿_out = (N - 𝐾) / 𝑆 + 1.",
                     "Explain why transpose convolution is used in decoder reconstruction rather than standard pooling.",
-                    "Derive the Mean Squared Error (MSE) formula: MSE = 1/N * sum((x_hat_i - x_i)^2)."
+                    "Derive the Mean Squared Error (MSE) formula: MSE = (1/N) · ∑ (𝑥̂ᵢ - 𝑥ᵢ)²."
                 ]
             )
             remaining = [s for s in validated if s not in num_candidates]

@@ -175,7 +175,7 @@ class NumericalSolverService:
 
     @classmethod
     def format_solution_markdown(cls, solution: Dict[str, Any]) -> str:
-        """Format the solved numerical problem into clean, academic Markdown with mathematical superscripts."""
+        """Format the solved numerical problem into clean, human-understandable academic Markdown with proper mathematical italic typography without raw slashes, dollar signs, or stray asterisks."""
         x = solution["input_x"]
         w = solution["kernel_w"]
         s = solution["stride"]
@@ -187,69 +187,69 @@ class NumericalSolverService:
 
         lines: List[str] = []
         lines.append("### Comprehensive Solved Numerical: 1D Convolutional Autoencoder")
-        lines.append(f"Based on the course curriculum, here is the complete step-by-step mathematical derivation for input vector $x = {x}$ and convolution kernel $W_{{conv}} = {w}$:\n")
+        lines.append(f"Here is the complete step-by-step mathematical derivation for input vector 𝑥 = {x} and convolution kernel 𝑊_conv = {w}:\n")
 
         # Given Data Block
         lines.append("#### 1. Given Parameters & Architectural Dimensions")
-        lines.append(f"- **Input Image Vector:** $x = {x}$ (Dimensions: $1 \\times {len(x)}$, 1 channel)")
-        lines.append(f"- **Convolution Kernel:** $W_{{conv}} = {w}$ (Filter Size $K = {len(w)}$, Stride $S = {s}$, No Padding)")
-        lines.append(f"- **Expected Feature Map Length:** $L_{{out}} = \\frac{{N - K}}{{S}} + 1 = \\frac{{{len(x)} - {len(w)}}}{{{s}}} + 1 = {len(conv_out)}$\n")
+        lines.append(f"- **Input Sequence Vector** (𝑥): `{x}` (Dimensions: 1 × {len(x)}, 1 channel)")
+        lines.append(f"- **Convolution Kernel** (𝑊_conv): `{w}` (Filter Size 𝐾 = {len(w)}, Stride 𝑆 = {s}, No Padding)")
+        lines.append(f"- **Expected Feature Map Length** (𝐿_out): (N - K) / S + 1 = ({len(x)} - {len(w)}) / {s} + 1 = **{len(conv_out)}**\n")
 
         # Step 1: Convolution Encoder
         lines.append("#### 2. Encoder Convolution Layer Calculation")
         lines.append("The 1D kernel slides across the input sequence in steps of 1:")
         for cs in solution["conv_steps"]:
             lines.append(f"- **Window {cs['step_num']}:** Input elements `{cs['window']}` → `{cs['calc_str']}`")
-        lines.append(f"\n$$\\text{{Conv Output}} = {conv_out}$$\n")
+        lines.append(f"\n> **Convolution Feature Map Output:** `{conv_out}`\n")
 
         # Step 2: Latent Bottleneck
         lines.append("#### 3. Latent Bottleneck Projection (Fully Connected Layer)")
-        lines.append("The convolution feature map is flattened and multiplied by the latent weight matrix $W_{{fc}}$ ($2 \\times 3$):")
-        lines.append(f"- $z_1 = {solution['z1_calc']}$")
-        lines.append(f"- $z_2 = {solution['z2_calc']}$")
-        lines.append(f"\n$$\\text{{Latent Vector }} z = {z}$$\n")
+        lines.append("The convolution feature map is flattened and multiplied by the latent weight matrix 𝑊_fc (2 × 3):")
+        lines.append(f"- 𝑧₁ = {solution['z1_calc']}")
+        lines.append(f"- 𝑧₂ = {solution['z2_calc']}")
+        lines.append(f"\n> **Compressed Latent Vector** (𝑧): `{z}`\n")
 
         # Step 3: Decoder Feature Map Expansion
         lines.append("#### 4. Decoder Feature Map Reconstruction")
-        lines.append("The compressed 2D latent representation is expanded back into a 3D feature map using $W_{{fc\\_decoder}}$:")
-        lines.append(f"- $f_1 = 1.0 \\cdot ({z[0]}) + 0.0 \\cdot ({z[1]}) = {dec_fc[0]}$")
-        lines.append(f"- $f_2 = 0.0 \\cdot ({z[0]}) + 1.0 \\cdot ({z[1]}) = {dec_fc[1]}$")
-        lines.append(f"- $f_3 = -1.0 \\cdot ({z[0]}) + 0.5 \\cdot ({z[1]}) = {dec_fc[2]}$")
-        lines.append(f"\n$$\\text{{Decoder FC Output}} = {dec_fc}$$\n")
+        lines.append("The compressed 2D latent representation is expanded back into a 3D feature map using 𝑊_fc_decoder (3 × 2):")
+        lines.append(f"- 𝑓₁ = 1.0 · ({z[0]}) + 0.0 · ({z[1]}) = {dec_fc[0]}")
+        lines.append(f"- 𝑓₂ = 0.0 · ({z[0]}) + 1.0 · ({z[1]}) = {dec_fc[1]}")
+        lines.append(f"- 𝑓₃ = -1.0 · ({z[0]}) + 0.5 · ({z[1]}) = {dec_fc[2]}")
+        lines.append(f"\n> **Decoder Feature Map Output** (𝑓): `{dec_fc}`\n")
 
         # Step 4: Transpose Convolution
-        lines.append("#### 5. Transpose Convolution Upsampling ($3 \\to 4$)")
-        lines.append(f"Upsampling the 3-element feature map back to the original 4-element dimension using symmetric filter weights ($w_0 = {w[0]}, w_1 = {w[1]}$):")
-        lines.append(f"- Output[0]: ${w[0]} \\cdot ({dec_fc[0]}) = {recon[0]}$")
-        lines.append(f"- Output[1]: ${w[1]} \\cdot ({dec_fc[0]}) + {w[0]} \\cdot ({dec_fc[1]}) = {recon[1]}$")
-        lines.append(f"- Output[2]: ${w[1]} \\cdot ({dec_fc[1]}) + {w[0]} \\cdot ({dec_fc[2]}) = {recon[2]}$")
-        lines.append(f"- Output[3]: ${w[1]} \\cdot ({dec_fc[2]}) = {recon[3]}$")
-        lines.append(f"\n$$\\text{{Reconstructed Vector }} \\hat{{x}} = {recon}$$\n")
+        lines.append("#### 5. Transpose Convolution Upsampling (3 → 4)")
+        lines.append(f"Upsampling the 3-element feature map back to the original 4-element sequence dimension using symmetric filter weights (𝑤₀ = {w[0]}, 𝑤₁ = {w[1]}):")
+        lines.append(f"- Output[0] = 𝑤₀ · ({dec_fc[0]}) = {recon[0]}")
+        lines.append(f"- Output[1] = 𝑤₁ · ({dec_fc[0]}) + 𝑤₀ · ({dec_fc[1]}) = {recon[1]}")
+        lines.append(f"- Output[2] = 𝑤₁ · ({dec_fc[1]}) + 𝑤₀ · ({dec_fc[2]}) = {recon[2]}")
+        lines.append(f"- Output[3] = 𝑤₁ · ({dec_fc[2]}) = {recon[3]}")
+        lines.append(f"\n> **Reconstructed Vector** (𝑥̂): `{recon}`\n")
 
         # Step 5: Mean Squared Error Loss
         lines.append("#### 6. Reconstruction Loss Evaluation (Mean Squared Error)")
-        lines.append("Comparing the reconstructed image $\\hat{x}$ with the original input $x$:")
-        lines.append("$$MSE = \\frac{1}{N} \\sum_{i=1}^{N} (\\hat{x}_i - x_i)^2$$")
+        lines.append("Comparing the reconstructed signal 𝑥̂ with the original input sequence 𝑥:")
+        lines.append("- Formula: **MSE** = (1/N) · ∑ (𝑥̂ᵢ - 𝑥ᵢ)²")
 
         sq_terms = []
         for d in solution["diff_sqs"]:
-            lines.append(f"- Element {d['i']}: $({d['x_hat']} - {d['x']})^2 = ({d['diff']})^2 = {d['sq']}$")
+            lines.append(f"- Element {d['i']}: ({d['x_hat']} - {d['x']})² = ({d['diff']})² = {d['sq']}")
             sq_terms.append(str(d["sq"]))
 
         sum_str = " + ".join(sq_terms)
-        lines.append(f"\n$$MSE = \\frac{1}{4} [{sum_str}] = \\frac{1}{4} [{solution['sum_sq']}] = \\mathbf{{{mse}}}$$\n")
+        lines.append(f"\n> **MSE Loss Calculation:** (1/4) · [{sum_str}] = (1/4) · [{solution['sum_sq']}] = **{mse}**\n")
 
         # Step 6: Summary Table
         lines.append("#### 7. Verification Summary Matrix")
         lines.append("| Pipeline Stage | Mathematical Operation | Output Vector | Dimensions |")
         lines.append("| :--- | :--- | :--- | :--- |")
-        lines.append(f"| **1. Input** | Raw Image Sequence | `{x}` | $1 \\times {len(x)}$ |")
-        lines.append(f"| **2. Encoder Conv** | Valid 1D Convolution ($W = {w}$) | `{conv_out}` | $1 \\times {len(conv_out)}$ |")
-        lines.append(f"| **3. Latent Bottleneck** | Linear Projection ($W_{{fc}}$) | `{z}` | $1 \\times 2$ |")
-        lines.append(f"| **4. Decoder FC** | Feature Expansion ($W_{{fc\\_decoder}}$) | `{dec_fc}` | $1 \\times 3$ |")
-        lines.append(f"| **5. Transpose Conv** | Symmetry Upsampling | `{recon}` | $1 \\times 4$ |")
+        lines.append(f"| **1. Input** | Raw Image Sequence | `{x}` | 1 × {len(x)} |")
+        lines.append(f"| **2. Encoder Conv** | Valid 1D Convolution (𝑊 = {w}) | `{conv_out}` | 1 × {len(conv_out)} |")
+        lines.append(f"| **3. Latent Bottleneck** | Linear Projection (𝑊_fc) | `{z}` | 1 × 2 |")
+        lines.append(f"| **4. Decoder FC** | Feature Expansion (𝑊_fc_decoder) | `{dec_fc}` | 1 × 3 |")
+        lines.append(f"| **5. Transpose Conv** | Symmetry Upsampling | `{recon}` | 1 × 4 |")
         lines.append(f"| **6. Final Evaluation** | Mean Squared Error (MSE) | **{mse}** | Scalar Loss |")
 
-        lines.append(f"\n*In practice, executing these stages sequentially demonstrates how autoencoders achieve lossy compression while minimizing reconstruction distortion.*")
+        lines.append(f"\n*Executing these stages sequentially demonstrates how an autoencoder compresses input data into a latent bottleneck and reconstructs it with minimal error.*")
 
         return "\n".join(lines)

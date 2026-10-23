@@ -840,7 +840,8 @@ def execute_semantic_search(
 
     # ATML Answer Refinement Integration:
     # Synthesizes, rewrites, structures, and validates answer using Seq2Seq Transformer
-    if raw_matches and not (overall_direct_answer and overall_direct_answer.startswith("### Types of")):
+    is_solved_numerical = bool(overall_direct_answer and overall_direct_answer.startswith("### Comprehensive Solved Numerical"))
+    if raw_matches and not (overall_direct_answer and overall_direct_answer.startswith("### Types of")) and not is_solved_numerical:
         try:
             from backend.services.atml.answer_refiner import AnswerRefinementEngine
             from backend.services.atml.config import default_config
